@@ -59,5 +59,11 @@ export interface StreamChunk {
     reasoningStart?: boolean // 推理块开始标记
     reasoningEnd?: boolean // 推理块结束标记
     reasoningId?: string // 推理块 ID
+    // 性能指标（由 StreamAdapter 自动追踪）
+    metrics?: {
+      firstTokenTime: number // 首 token 时间（毫秒）
+      completionTime: number // 完成时间（毫秒）
+      tokensPerSecond?: number // tokens/秒
+    }
   }
 }

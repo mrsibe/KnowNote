@@ -9,7 +9,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createQwen } from 'qwen-ai-provider'
 import { createOllama } from 'ollama-ai-provider-v2'
-import { streamText, embed, embedMany } from 'ai'
+import { streamText, embed, embedMany, wrapLanguageModel } from 'ai'
 import type { BaseProvider, LLMProviderConfig } from '../capabilities/BaseProvider'
 import type { ChatCapability } from '../capabilities/ChatCapability'
 import type { EmbeddingCapability } from '../capabilities/EmbeddingCapability'
@@ -17,6 +17,8 @@ import type { APIMessage, StreamChunk } from '../../../shared/types/chat'
 import type { EmbeddingConfig, EmbeddingResult } from '../capabilities/EmbeddingCapability'
 import type { ProviderDescriptor } from '../registry/ProviderDescriptor'
 import Logger from '../../../shared/utils/logger'
+import { StreamAdapter } from '../../stream/StreamAdapter'
+import { buildMiddlewares } from '../../middleware/MiddlewareBuilder'
 
 /**
  * 将 APIMessage 转换为 AI SDK 的 CoreMessage 格式
@@ -145,6 +147,7 @@ export class AISDKProvider implements BaseProvider {
   /**
    * 流式发送消息
    * 如果不支持对话能力会抛出错误
+   * 使用 StreamAdapter 处理流式响应，自动追踪性能指标
    */
   async sendMessageStream(
     messages: APIMessage[],
@@ -184,7 +187,19 @@ export class AISDKProvider implements BaseProvider {
         const coreMessages = convertToCoreMessages(messages)
 
         // 获取语言模型
-        const model = this.aiProvider!(modelId) as any
+        let model = this.aiProvider!(modelId) as any
+
+        // 构建并应用中间件
+        const middlewares = buildMiddlewares({
+          providerName: this.name,
+          modelId: modelId,
+          enableReasoning: this.detectReasoningCapability(modelId)
+        })
+
+        if (middlewares.length > 0) {
+          Logger.debug('AISDKProvider', `Applying ${middlewares.length} middlewares`)
+          model = wrapLanguageModel({ model, middleware: middlewares })
+        }
 
         // 调用 AI SDK streamText
         const result = streamText({
@@ -195,82 +210,74 @@ export class AISDKProvider implements BaseProvider {
           abortSignal: abortController.signal
         })
 
-        // 处理流式响应
-        // 使用 fullStream 而不是 textStream 以支持推理过程展示
-        for await (const part of result.fullStream) {
-          if (abortController.signal.aborted) {
-            Logger.debug('AISDKProvider', 'Stream aborted by user')
-            break
-          }
+        // 使用 StreamAdapter 处理流式响应
+        const adapter = new StreamAdapter(
+          (adapterChunk) => {
+            // 将 StreamAdapter 的 chunk 格式转换为现有的 StreamChunk 格式
+            switch (adapterChunk.type) {
+              case 'reasoning-start':
+                onChunk({
+                  content: '',
+                  done: false,
+                  metadata: {
+                    reasoningStart: true,
+                    reasoningId: adapterChunk.metadata?.reasoningId
+                  }
+                })
+                break
 
-          // 处理不同类型的流式部分
-          switch (part.type) {
-            case 'reasoning-start':
-              // 推理块开始
-              onChunk({
-                content: '',
-                done: false,
-                metadata: {
-                  reasoningStart: true,
-                  reasoningId: part.id
-                }
-              })
-              break
+              case 'reasoning-delta':
+                onChunk({
+                  content: adapterChunk.content || '',
+                  done: false,
+                  metadata: {
+                    isReasoning: true,
+                    reasoningId: adapterChunk.metadata?.reasoningId
+                  }
+                })
+                break
 
-            case 'reasoning-delta':
-              // 推理增量内容
-              onChunk({
-                content: part.text,
-                done: false,
-                metadata: {
-                  isReasoning: true,
-                  reasoningId: part.id
-                }
-              })
-              break
+              case 'reasoning-end':
+                onChunk({
+                  content: '',
+                  done: false,
+                  metadata: {
+                    reasoningEnd: true,
+                    reasoningId: adapterChunk.metadata?.reasoningId
+                  }
+                })
+                break
 
-            case 'reasoning-end':
-              // 推理块结束
-              onChunk({
-                content: '',
-                done: false,
-                metadata: {
-                  reasoningEnd: true,
-                  reasoningId: part.id
-                }
-              })
-              break
+              case 'text-delta':
+                onChunk({
+                  content: adapterChunk.content || '',
+                  done: false
+                })
+                break
 
-            case 'text-delta':
-              // 文本增量内容（最终答案）
-              onChunk({
-                content: part.text,
-                done: false
-              })
-              break
-          }
-        }
-
-        // 等待结果完成，获取 metadata
-        const finalResult = await result
-        const usage = await finalResult.usage
-        const finishReason = await finalResult.finishReason
-
-        // 发送完成标记，包含 metadata
-        onChunk({
-          content: '',
-          done: true,
-          metadata: {
-            model: modelId,
-            finishReason: finishReason,
-            usage: {
-              promptTokens: usage.inputTokens || 0,
-              completionTokens: usage.outputTokens || 0,
-              totalTokens: usage.totalTokens || (usage.inputTokens || 0) + (usage.outputTokens || 0)
+              case 'finish':
+                // 发送完成标记，包含 usage 和性能指标
+                onChunk({
+                  content: '',
+                  done: true,
+                  metadata: {
+                    model: modelId,
+                    finishReason: adapterChunk.metadata?.finishReason,
+                    usage: adapterChunk.metadata?.usage,
+                    // 添加性能指标到 metadata（扩展现有格式）
+                    metrics: adapterChunk.metadata?.metrics
+                  }
+                })
+                break
             }
-          }
-        })
+          },
+          { accumulate: false }
+        )
 
+        // 处理流式响应并获取性能指标
+        await adapter.processStream(result.fullStream)
+
+        Logger.debug('AISDKProvider', 'Stream completed successfully')
         onComplete()
       } catch (error) {
         if (abortController.signal.aborted) {
@@ -284,6 +291,20 @@ export class AISDKProvider implements BaseProvider {
     })()
 
     return abortController
+  }
+
+  /**
+   * 检测模型是否支持推理能力
+   */
+  private detectReasoningCapability(modelId: string): boolean {
+    const lowerModelId = modelId.toLowerCase()
+    return (
+      lowerModelId.includes('o1') ||
+      lowerModelId.includes('o3') ||
+      lowerModelId.includes('deepseek-reasoner') ||
+      lowerModelId.includes('qwen-plus') ||
+      lowerModelId.includes('qwen-max')
+    )
   }
 
   /**

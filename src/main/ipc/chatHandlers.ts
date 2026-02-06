@@ -176,10 +176,11 @@ export function registerChatHandlers(
     let fullReasoningContent = ''
     let usageMetadata: any = null
 
-    // 调用 Provider 流式生成,获取 AbortController（基于 AI SDK fullStream）
+    // 调用 Provider 流式生成,获取 AbortController
+    // 注意：StreamAdapter 会自动追踪性能指标（首 token 时间、完成时间、tokens/秒）
     const abortController = await provider.sendMessageStream(
       messages,
-      // onChunk - 处理 AI SDK fullStream 的各种 part 类型
+      // onChunk - 处理流式响应
       (chunk) => {
         const { metadata, content, done } = chunk
 
@@ -223,12 +224,21 @@ export function registerChatHandlers(
 
         // 5. 流式传输完成
         if (done) {
-          // 保存 usage metadata
+          // 保存 usage metadata（包含性能指标）
           if (metadata?.usage) {
             usageMetadata = metadata
           }
 
-          // 发送完成事件
+          // 记录性能指标（由 StreamAdapter 自动追踪）
+          if (metadata?.metrics) {
+            Logger.info('ChatHandlers', 'Performance metrics:', {
+              firstTokenTime: `${metadata.metrics.firstTokenTime}ms`,
+              completionTime: `${metadata.metrics.completionTime}ms`,
+              tokensPerSecond: metadata.metrics.tokensPerSecond?.toFixed(2)
+            })
+          }
+
+          // 发送完成事件（包含性能指标）
           event.sender.send('message-chunk', {
             messageId: assistantMessage.id,
             type: 'finish',
