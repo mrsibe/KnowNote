@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import GeneralSettings from './GeneralSettings'
 import { useUIStore } from '../../store/uiStore'
-import ProvidersSettings from './ProvidersSettings'
+import ProviderSettings from '../../pages/settings/ProviderSettings'
 import PromptsSettings from './PromptsSettings'
 import ShortcutSettings from './ShortcutSettings'
 import AboutSettings from './AboutSettings'
@@ -19,21 +19,12 @@ import {
 } from '../ui/sidebar'
 import type { AppSettings } from '../../../../shared/types'
 
-interface ProviderConfig {
-  providerName: string
-  config: Record<string, any>
-  enabled: boolean
-  updatedAt: number
-}
-
 export default function SettingsDialog(): ReactElement {
   const { t } = useTranslation('settings')
   const { isSettingsOpen, closeSettings } = useUIStore()
   const [activeSection, setActiveSection] = useState<string>('general')
   const [originalSettings, setOriginalSettings] = useState<AppSettings | null>(null)
   const [pendingSettings, setPendingSettings] = useState<AppSettings | null>(null)
-  const [originalProviders, setOriginalProviders] = useState<ProviderConfig[]>([])
-  const [pendingProviders, setPendingProviders] = useState<ProviderConfig[]>([])
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -47,24 +38,17 @@ export default function SettingsDialog(): ReactElement {
       const settings = await window.api.settings.getAll()
       setOriginalSettings(settings)
       setPendingSettings(settings)
-
-      const providers = await window.api.getAllProviderConfigs()
-      setOriginalProviders(providers)
-      setPendingProviders(providers)
     }
     loadSettings()
   }, [])
 
   // 使用 useMemo 计算是否有变化
   const hasChanges = useMemo(() => {
-    if (originalSettings && pendingSettings && originalProviders && pendingProviders) {
-      const settingsChanged = JSON.stringify(originalSettings) !== JSON.stringify(pendingSettings)
-      const providersChanged =
-        JSON.stringify(originalProviders) !== JSON.stringify(pendingProviders)
-      return settingsChanged || providersChanged
+    if (originalSettings && pendingSettings) {
+      return JSON.stringify(originalSettings) !== JSON.stringify(pendingSettings)
     }
     return false
-  }, [originalSettings, pendingSettings, originalProviders, pendingProviders])
+  }, [originalSettings, pendingSettings])
 
   const menuItems = [
     {
@@ -111,18 +95,6 @@ export default function SettingsDialog(): ReactElement {
     }
   }
 
-  // 更新临时提供商配置
-  const updatePendingProviders = (updatedProviders: ProviderConfig[]) => {
-    setPendingProviders(updatedProviders)
-  }
-
-  // 刷新提供商配置（用于新增/删除后同步状态）
-  const refreshProviders = async () => {
-    const providers = await window.api.getAllProviderConfigs()
-    setOriginalProviders(providers)
-    setPendingProviders(providers)
-  }
-
   // 确认保存
   const handleConfirm = async () => {
     // 保存通用设置
@@ -130,21 +102,12 @@ export default function SettingsDialog(): ReactElement {
       await window.api.settings.update(pendingSettings)
       setOriginalSettings(pendingSettings)
     }
-
-    // 保存提供商配置（新增/删除已经立即保存，这里只保存修改）
-    for (const provider of pendingProviders) {
-      await window.api.saveProviderConfig(provider)
-    }
-    setOriginalProviders(pendingProviders)
   }
 
   // 取消变更
   const handleCancel = () => {
     if (originalSettings) {
       setPendingSettings(originalSettings)
-    }
-    if (originalProviders) {
-      setPendingProviders(originalProviders)
     }
   }
 
@@ -202,16 +165,10 @@ export default function SettingsDialog(): ReactElement {
                     <GeneralSettings
                       settings={pendingSettings}
                       onSettingsChange={updatePendingSettings}
-                      providers={pendingProviders}
+                      providers={[]}
                     />
                   )}
-                  {activeSection === 'provider' && (
-                    <ProvidersSettings
-                      providers={pendingProviders}
-                      onProvidersChange={updatePendingProviders}
-                      onRefresh={refreshProviders}
-                    />
-                  )}
+                  {activeSection === 'provider' && <ProviderSettings />}
                   {pendingSettings && activeSection === 'prompts' && (
                     <PromptsSettings
                       settings={pendingSettings}

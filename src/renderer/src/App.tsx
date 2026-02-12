@@ -13,6 +13,7 @@ import { useThemeStore } from './store/themeStore'
 import { useNotebookStore } from './store/notebookStore'
 import { useI18nStore } from './store/i18nStore'
 import { useOnboardingStore } from './store/onboardingStore'
+import { useProviderStore } from './store/providerStore'
 import { useShortcutExecutor } from './hooks/useShortcutExecutor'
 import { initPlatform } from './lib/platform'
 import i18n from './i18n'
@@ -26,6 +27,7 @@ function App(): React.JSX.Element {
     isLoading: onboardingLoading,
     initOnboarding
   } = useOnboardingStore()
+  const initializeProviders = useProviderStore((state) => state.initialize)
 
   // 激活快捷键执行器
   useShortcutExecutor()
@@ -72,6 +74,14 @@ function App(): React.JSX.Element {
   useEffect(() => {
     initOnboarding()
   }, [initOnboarding])
+
+  // 初始化供应商配置
+  useEffect(() => {
+    console.log('[App] Initializing providers...')
+    initializeProviders().catch((error) => {
+      console.error('[App] Failed to initialize providers:', error)
+    })
+  }, [initializeProviders])
 
   // 如果正在加载引导状态，显示加载中
   if (onboardingLoading) {

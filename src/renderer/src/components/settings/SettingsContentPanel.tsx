@@ -1,7 +1,6 @@
 import { ReactElement, ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { ScrollArea } from '../ui/scroll-area'
 import { Separator } from '../ui/separator'
 import { Button } from '../ui/button'
 
@@ -54,11 +53,7 @@ export default function SettingsContentPanel({
       <Separator />
 
       {/* 内容区域 */}
-      <div className="flex-1 min-h-0 overflow-hidden">
-        <ScrollArea className="h-full">
-          <div className="p-6">{children}</div>
-        </ScrollArea>
-      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto themed-scrollbar p-6">{children}</div>
     </div>
   )
 }
