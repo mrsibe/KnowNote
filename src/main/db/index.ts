@@ -11,34 +11,34 @@ let sqlite: Database.Database | null = null
 let db: ReturnType<typeof drizzle> | null = null
 let checkpointTimer: NodeJS.Timeout | null = null
 let truncateTimer: NodeJS.Timeout | null = null
-let isClosing = false // 防止重复关闭
+let isClosing = false // 중복 종료 방지
 
 /**
- * 初始化数据库连接
- * 在 Electron 主进程的 app.whenReady() 中调用
+ * 데이터베이스 연결 초기화
+ * Electron 메인 프로세스의 app.whenReady()에서 호출
  */
 export function initDatabase() {
-  // 数据库文件存放在用户数据目录
+  // 데이터베이스 파일은 사용자 데이터 디렉토리에 저장
   const dbPath = join(app.getPath('userData'), 'knownote.db')
 
   console.log('[Database] Initializing database at:', dbPath)
 
   try {
-    // 创建 SQLite 数据库实例
+    // SQLite 데이터베이스 인스턴스 생성
     sqlite = new Database(dbPath)
 
-    // 加载 sqlite-vec 扩展
+    // sqlite-vec 확장 로드
     if (app.isPackaged) {
-      // 打包环境：手动构建到 .asar.unpacked 的路径
+      // 패키징 환경: .asar.unpacked 경로를 수동으로 구성
       const platform = process.platform
       const arch = process.arch
 
-      // 映射平台和架构名称
+      // 플랫폼 및 아키텍처 이름 매핑
       const platformName = platform === 'win32' ? 'windows' : platform
       const packageName = `sqlite-vec-${platformName}-${arch}`
       const extension = platform === 'win32' ? 'dll' : platform === 'darwin' ? 'dylib' : 'so'
 
-      // 构建到解包目录的路径
+      // 언팩 디렉토리 경로 구성
       const vecPath = join(
         process.resourcesPath,
         'app.asar.unpacked',
@@ -50,26 +50,26 @@ export function initDatabase() {
       console.log('[Database] Loading sqlite-vec from:', vecPath)
       sqlite.loadExtension(vecPath)
     } else {
-      // 开发环境：使用 sqlite-vec 默认加载
+      // 개발 환경: sqlite-vec 기본 로드 사용
       sqliteVec.load(sqlite)
     }
     console.log('[Database] sqlite-vec extension loaded')
 
-    // 验证 sqlite-vec 版本
+    // sqlite-vec 버전 확인
     const vecVersion = sqlite.prepare('SELECT vec_version() as version').get() as {
       version: string
     }
     console.log('[Database] sqlite-vec version:', vecVersion?.version)
 
-    // 启用 WAL 模式以提高性能
+    // 성능 향상을 위해 WAL 모드 활성화
     sqlite.pragma('journal_mode = WAL')
 
-    // 优化 WAL 配置
-    sqlite.pragma('wal_autocheckpoint = 100') // 每 100 页自动 checkpoint（降低默认值）
-    sqlite.pragma('synchronous = NORMAL') // WAL 模式推荐设置
-    sqlite.pragma('busy_timeout = 5000') // 5 秒超时，防止并发冲突
+    // WAL 설정 최적화
+    sqlite.pragma('wal_autocheckpoint = 100') // 100페이지마다 자동 checkpoint (기본값 축소)
+    sqlite.pragma('synchronous = NORMAL') // WAL 모드 권장 설정
+    sqlite.pragma('busy_timeout = 5000') // 5초 타임아웃, 동시성 충돌 방지
 
-    // 记录当前配置
+    // 현재 설정 기록
     const journalMode = sqlite.pragma('journal_mode', { simple: true })
     const walCheckpoint = sqlite.pragma('wal_autocheckpoint', { simple: true })
     const syncMode = sqlite.pragma('synchronous', { simple: true })
@@ -79,10 +79,10 @@ export function initDatabase() {
       synchronous: syncMode
     })
 
-    // 创建 Drizzle 实例
+    // Drizzle 인스턴스 생성
     db = drizzle(sqlite, { schema })
 
-    // 数据库完整性检查
+    // 데이터베이스 무결성 검사
     const integrityCheck = sqlite.pragma('integrity_check', { simple: true })
     if (integrityCheck !== 'ok') {
       console.error('[Database] Integrity check failed:', integrityCheck)
@@ -90,7 +90,7 @@ export function initDatabase() {
       console.log('[Database] Integrity check passed')
     }
 
-    // 启动定期 checkpoint 机制
+    // 정기 checkpoint 메커니즘 시작
     startPeriodicCheckpoint(dbPath)
 
     console.log('[Database] Database initialized successfully')
@@ -102,12 +102,12 @@ export function initDatabase() {
 }
 
 /**
- * 启动定期 checkpoint 机制
+ * 정기 checkpoint 메커니즘 시작
  */
 function startPeriodicCheckpoint(dbPath: string) {
   const walPath = `${dbPath}-wal`
 
-  // 每 30 秒检查 WAL 文件大小并执行 PASSIVE checkpoint
+  // 30초마다 WAL 파일 크기를 확인하고 PASSIVE checkpoint 실행
   checkpointTimer = setInterval(async () => {
     try {
       if (!sqlite || isClosing) return
@@ -124,11 +124,11 @@ function startPeriodicCheckpoint(dbPath: string) {
     } catch (error) {
       console.error('[Database] Error during periodic checkpoint:', error)
     }
-  }, 30000) // 30 秒
+  }, 30000) // 30초
 
-  checkpointTimer.unref() // 不阻止进程退出
+  checkpointTimer.unref() // 프로세스 종료를 차단하지 않음
 
-  // 每 5 分钟执行一次 TRUNCATE checkpoint，清理 WAL 文件
+  // 5분마다 TRUNCATE checkpoint를 실행하여 WAL 파일 정리
   truncateTimer = setInterval(() => {
     try {
       if (!sqlite || isClosing) return
@@ -139,13 +139,13 @@ function startPeriodicCheckpoint(dbPath: string) {
     } catch (error) {
       console.error('[Database] Error during truncate checkpoint:', error)
     }
-  }, 300000) // 5 分钟
+  }, 300000) // 5분
 
   truncateTimer.unref()
 }
 
 /**
- * 执行主动 checkpoint（供外部调用）
+ * 능동적 checkpoint 실행 (외부 호출용)
  */
 export function executeCheckpoint(mode: 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE' = 'PASSIVE') {
   if (!sqlite) return
@@ -160,16 +160,16 @@ export function executeCheckpoint(mode: 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCA
 }
 
 /**
- * 运行数据库迁移
- * 在初始化数据库后立即调用
+ * 데이터베이스 마이그레이션 실행
+ * 데이터베이스 초기화 직후 호출
  */
 export function runMigrations() {
   if (!db) {
     throw new Error('[Database] Database not initialized. Call initDatabase() first.')
   }
 
-  // __dirname 在编译后指向 out/main（所有代码打包到 out/main/index.js）
-  // 而 migrations 文件被复制到 out/main/db/migrations
+  // __dirname은 컴파일 후 out/main을 가리킴 (모든 코드가 out/main/index.js에 번들링됨)
+  // migrations 파일은 out/main/db/migrations로 복사됨
   const migrationsFolder = join(__dirname, 'db', 'migrations')
   console.log('[Database] Running migrations from:', migrationsFolder)
 
@@ -183,9 +183,9 @@ export function runMigrations() {
 }
 
 /**
- * 初始化向量存储表
- * 创建 sqlite-vec 的 vec0 虚拟表用于向量检索
- * 在 runMigrations 后调用
+ * 벡터 저장소 테이블 초기화
+ * 벡터 검색을 위한 sqlite-vec의 vec0 가상 테이블 생성
+ * runMigrations 이후 호출
  */
 export function initVectorStore() {
   if (!sqlite) {
@@ -195,8 +195,8 @@ export function initVectorStore() {
   console.log('[Database] Initializing vector store...')
 
   try {
-    // 创建向量索引虚拟表（如果不存在）
-    // 使用 cosine 距离度量，1024 维度（BAAI/bge-m3 默认维度）
+    // 벡터 인덱스 가상 테이블 생성 (존재하지 않는 경우)
+    // 코사인 거리 측정 사용, 1024 차원 (BAAI/bge-m3 기본 차원)
     sqlite.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
         embedding_id TEXT PRIMARY KEY,
@@ -214,8 +214,8 @@ export function initVectorStore() {
 }
 
 /**
- * 获取数据库实例
- * 在需要执行数据库操作时调用
+ * 데이터베이스 인스턴스 조회
+ * 데이터베이스 작업 실행 시 호출
  */
 export function getDatabase() {
   if (!db) {
@@ -225,8 +225,8 @@ export function getDatabase() {
 }
 
 /**
- * 优雅关闭数据库连接
- * 在 Electron app.on('before-quit') 中调用
+ * 데이터베이스 연결 정상 종료
+ * Electron app.on('before-quit')에서 호출
  */
 export function closeDatabase() {
   if (isClosing || !sqlite) {
@@ -238,7 +238,7 @@ export function closeDatabase() {
   console.log('[Database] Starting graceful database closure...')
 
   try {
-    // 清除定时器
+    // 타이머 정리
     if (checkpointTimer) {
       clearInterval(checkpointTimer)
       checkpointTimer = null
@@ -248,12 +248,12 @@ export function closeDatabase() {
       truncateTimer = null
     }
 
-    // 执行最终 checkpoint，强制合并所有 WAL 数据到主数据库
+    // 최종 checkpoint 실행, 모든 WAL 데이터를 메인 데이터베이스에 강제 병합
     console.log('[Database] Executing final RESTART checkpoint before closing...')
     const checkpointResult = sqlite.pragma('wal_checkpoint(RESTART)')
     console.log('[Database] Final checkpoint result:', checkpointResult)
 
-    // 关闭数据库连接
+    // 데이터베이스 연결 종료
     sqlite.close()
     console.log('[Database] Database connection closed successfully')
 
@@ -261,7 +261,7 @@ export function closeDatabase() {
     db = null
   } catch (error) {
     console.error('[Database] Error during database closure:', error)
-    // 即使出错也要清理引用
+    // 오류가 발생해도 참조 정리
     sqlite = null
     db = null
   } finally {
@@ -270,11 +270,11 @@ export function closeDatabase() {
 }
 
 /**
- * 获取原始 SQLite 实例（用于 pragma 等操作）
+ * 원시 SQLite 인스턴스 조회 (pragma 등의 작업용)
  */
 export function getSqlite() {
   return sqlite
 }
 
-// 导出类型供其他模块使用
+// 다른 모듈에서 사용할 타입 내보내기
 export type Database = NonNullable<typeof db>

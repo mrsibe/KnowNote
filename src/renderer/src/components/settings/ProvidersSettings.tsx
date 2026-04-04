@@ -34,7 +34,7 @@ export default function ProvidersSettings({
   onRefresh
 }: ProvidersSettingsProps): ReactElement {
   const { t } = useTranslation('settings')
-  const [activeProvider, setActiveProvider] = useState<string>('deepseek')
+  const [activeProvider, setActiveProvider] = useState<string>('lmstudio')
   const [searchQuery, setSearchQuery] = useState('')
   const [models, setModels] = useState<Record<string, Model[]>>({})
   const [fetchingModels, setFetchingModels] = useState<Record<string, boolean>>({})
@@ -42,21 +42,18 @@ export default function ProvidersSettings({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [providerToDelete, setProviderToDelete] = useState<string>('')
 
-  // 定义每个提供商的默认 baseUrl
+  // 각 프로바이더의 기본 baseUrl 정의
   const defaultBaseUrls: Record<string, string> = {
-    openai: 'https://api.openai.com/v1',
-    deepseek: 'https://api.deepseek.com',
-    siliconflow: 'https://api.siliconflow.cn/v1',
-    qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    kimi: 'https://api.moonshot.cn/v1',
+    lmstudio: 'http://localhost:1234/v1',
     ollama: 'http://localhost:11434/api',
-    zhipu: 'https://open.bigmodel.cn/api/paas/v4'
+    openai: 'https://api.openai.com/v1',
+    deepseek: 'https://api.deepseek.com'
   }
 
-  // 加载已缓存的模型列表
+  // 캐시된 모델 목록 로드
   useEffect(() => {
     const loadCachedModels = async () => {
-      const providerList = ['deepseek', 'openai', 'siliconflow', 'qwen', 'kimi', 'ollama', 'zhipu']
+      const providerList = ['lmstudio', 'ollama', 'openai', 'deepseek']
       const loadedModels: Record<string, Model[]> = {}
 
       for (const providerName of providerList) {
@@ -64,10 +61,10 @@ export default function ProvidersSettings({
           const cachedModels = await window.api.getProviderModels(providerName)
           loadedModels[providerName] = cachedModels
 
-          // 同步到 provider.config.modelDetails，以便 GeneralSettings 可以读取模型类型
+          // provider.config.modelDetails에 동기화하여 GeneralSettings에서 모델 타입을 읽을 수 있도록 함
           const provider = providers.find((p) => p.providerName === providerName)
           if (provider && cachedModels.length > 0) {
-            // 检查是否已经有 modelDetails，避免重复更新
+            // 이미 modelDetails가 있는 경우 중복 업데이트 방지
             if (!provider.config.modelDetails || provider.config.modelDetails.length === 0) {
               console.log(
                 `[Sync] Syncing ${cachedModels.length} cached models to ${providerName}.config.modelDetails`
@@ -91,12 +88,12 @@ export default function ProvidersSettings({
     loadCachedModels()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Get specific provider configuration
+  // 프로바이더 설정 조회
   const getProviderConfig = (providerName: string) => {
     const existingProvider = providers.find((p) => p.providerName === providerName)
 
     if (existingProvider) {
-      // 如果提供商存在，但没有设置 baseUrl，则添加默认值
+      // 프로바이더가 존재하지만 baseUrl이 설정되지 않은 경우 기본값 추가
       return {
         ...existingProvider,
         config: {
@@ -106,7 +103,7 @@ export default function ProvidersSettings({
       }
     }
 
-    // 如果提供商不存在，创建一个带有默认配置的对象
+    // 프로바이더가 존재하지 않는 경우 기본 설정 객체 생성
     return {
       providerName,
       config: {
@@ -120,7 +117,7 @@ export default function ProvidersSettings({
     }
   }
 
-  // Update provider configuration
+  // 프로바이더 설정 업데이트
   const updateProviderConfig = (
     providerName: string,
     updates: Partial<Pick<ProviderConfig, 'config' | 'enabled'>>
@@ -136,7 +133,6 @@ export default function ProvidersSettings({
         updatedAt: Date.now()
       }
     } else {
-      // If doesn't exist, create new configuration
       updatedProviders.push({
         providerName,
         config: updates.config || {},
@@ -148,13 +144,14 @@ export default function ProvidersSettings({
     onProvidersChange(updatedProviders)
   }
 
-  // Fetch model list
+  // 모델 목록 가져오기
   const fetchModels = async (providerName: string) => {
     const provider = getProviderConfig(providerName)
     const apiKey = provider.config.apiKey
 
-    // 检查是否有API Key
-    if (!apiKey) {
+    // 로컬 프로바이더는 API 키 없이도 모델 목록을 가져올 수 있음
+    const isLocalProvider = providerName === 'lmstudio' || providerName === 'ollama'
+    if (!apiKey && !isLocalProvider) {
       alert(t('enterApiKey'))
       return
     }
@@ -162,9 +159,9 @@ export default function ProvidersSettings({
     setFetchingModels((prev) => ({ ...prev, [providerName]: true }))
 
     try {
-      const result = await window.api.fetchModels(providerName, apiKey)
+      const result = await window.api.fetchModels(providerName, apiKey || '')
 
-      // 类型守卫：检查是否是新格式（包含 models 和 source 字段）
+      // 타입 가드: 새 형식인지 확인 (models와 source 필드 포함)
       const isNewFormat = (
         res: any
       ): res is {
@@ -178,11 +175,10 @@ export default function ProvidersSettings({
       }
 
       if (isNewFormat(result)) {
-        // 新格式：包含 models 和 source
         const modelList = result.models
         setModels((prev) => ({ ...prev, [providerName]: modelList }))
 
-        // 保存完整的模型信息到 config
+        // 전체 모델 정보를 config에 저장
         updateProviderConfig(providerName, {
           config: {
             ...provider.config,
@@ -190,22 +186,14 @@ export default function ProvidersSettings({
           }
         })
 
-        // 根据来源显示不同的提示
         if (result.source === 'merged') {
           console.log(
-            `[Models Updated] ${providerName}: 已智能合并 ${result.builtinCount} 个内置模型和 ${result.remoteCount} 个远程模型`
-          )
-          alert(
-            `✅ 模型列表已更新 (智能合并)\n\n内置模型: ${result.builtinCount} 个\n远程模型: ${result.remoteCount} 个\n合并后: ${modelList.length} 个\n\n策略: 远程信息 + 内置元数据`
+            `[Models Updated] ${providerName}: 내장 ${result.builtinCount}개 + 원격 ${result.remoteCount}개 병합 완료`
           )
         } else if (result.source === 'builtin') {
-          console.warn(`[Models Fallback] ${providerName}: 网络请求失败，使用内置模型`)
-          alert(
-            `⚠️ 网络请求失败\n已加载 ${modelList.length} 个内置模型\n\n错误: ${result.error || '未知'}`
-          )
+          console.warn(`[Models Fallback] ${providerName}: 네트워크 요청 실패, 내장 모델 사용`)
         }
       } else {
-        // 旧格式：直接返回 Model[]（向后兼容）
         const modelList = result
         setModels((prev) => ({ ...prev, [providerName]: modelList }))
 
@@ -215,8 +203,6 @@ export default function ProvidersSettings({
             modelDetails: modelList
           }
         })
-
-        console.log(`[Models Fetched] ${providerName}: ${modelList.length} 个模型`)
       }
     } catch (error) {
       console.error('Failed to fetch model list:', error)
@@ -226,21 +212,25 @@ export default function ProvidersSettings({
     }
   }
 
+  const lmstudioProvider = getProviderConfig('lmstudio')
+  const ollamaProvider = getProviderConfig('ollama')
   const openaiProvider = getProviderConfig('openai')
   const deepseekProvider = getProviderConfig('deepseek')
-  const siliconflowProvider = getProviderConfig('siliconflow')
-  const qwenProvider = getProviderConfig('qwen')
-  const kimiProvider = getProviderConfig('kimi')
-  const ollamaProvider = getProviderConfig('ollama')
-  const zhipuProvider = getProviderConfig('zhipu')
 
   const providerList = [
     {
-      id: 'deepseek',
-      name: t('deepseekName'),
-      description: t('deepseekDesc'),
-      platformUrl: 'https://platform.deepseek.com',
-      enabled: deepseekProvider.enabled
+      id: 'lmstudio',
+      name: 'LM Studio',
+      description: t('lmstudioDesc', { defaultValue: 'Local LLM server (OpenAI compatible)' }),
+      platformUrl: 'https://lmstudio.ai',
+      enabled: lmstudioProvider.enabled
+    },
+    {
+      id: 'ollama',
+      name: 'Ollama',
+      description: t('ollamaDesc', { defaultValue: 'Local LLM runner' }),
+      platformUrl: 'https://ollama.com',
+      enabled: ollamaProvider.enabled
     },
     {
       id: 'openai',
@@ -250,53 +240,17 @@ export default function ProvidersSettings({
       enabled: openaiProvider.enabled
     },
     {
-      id: 'siliconflow',
-      name: t('siliconflowName'),
-      description: t('siliconflowDesc'),
-      platformUrl: 'https://siliconflow.cn',
-      enabled: siliconflowProvider.enabled
-    },
-    {
-      id: 'qwen',
-      name: t('qwenName'),
-      description: t('qwenDesc'),
-      platformUrl: 'https://dashscope.aliyun.com',
-      enabled: qwenProvider.enabled
-    },
-    {
-      id: 'kimi',
-      name: t('kimiName'),
-      description: t('kimiDesc'),
-      platformUrl: 'https://platform.moonshot.cn',
-      enabled: kimiProvider.enabled
-    },
-    {
-      id: 'ollama',
-      name: 'Ollama',
-      description: 'Local LLM runner',
-      platformUrl: 'https://ollama.com',
-      enabled: ollamaProvider.enabled
-    },
-    {
-      id: 'zhipu',
-      name: t('zhipuName'),
-      description: t('zhipuDesc'),
-      platformUrl: 'https://open.bigmodel.cn',
-      enabled: zhipuProvider.enabled
+      id: 'deepseek',
+      name: t('deepseekName'),
+      description: t('deepseekDesc'),
+      platformUrl: 'https://platform.deepseek.com',
+      enabled: deepseekProvider.enabled
     }
   ]
 
-  // 获取自定义供应商列表
+  // 사용자 정의 프로바이더 목록 가져오기
   const getCustomProviders = () => {
-    const builtInProviders = [
-      'deepseek',
-      'openai',
-      'siliconflow',
-      'qwen',
-      'kimi',
-      'ollama',
-      'zhipu'
-    ]
+    const builtInProviders = ['lmstudio', 'ollama', 'openai', 'deepseek']
     return providers
       .filter((p) => !builtInProviders.includes(p.providerName))
       .map((p) => ({
@@ -308,7 +262,7 @@ export default function ProvidersSettings({
 
   const customProviders = getCustomProviders()
 
-  // 处理添加供应商
+  // 프로바이더 추가 처리
   const handleAddProvider = async (data: {
     providerName: string
     apiKey: string
@@ -326,39 +280,39 @@ export default function ProvidersSettings({
       updatedAt: Date.now()
     }
 
-    // 立即保存到后端
+    // 백엔드에 즉시 저장
     await window.api.saveProviderConfig(newProvider)
 
-    // 刷新状态（同步 original 和 pending）
+    // 상태 새로고침 (original과 pending 동기화)
     await onRefresh()
 
-    // 切换到新供应商
+    // 새 프로바이더로 전환
     setActiveProvider(data.providerName)
   }
 
-  // 打开删除确认对话框
+  // 삭제 확인 다이얼로그 열기
   const handleDeleteClick = (providerName: string) => {
     setProviderToDelete(providerName)
     setIsDeleteDialogOpen(true)
   }
 
-  // 确认删除供应商
+  // 프로바이더 삭제 확인
   const handleDeleteConfirm = async () => {
-    // 立即从后端删除
+    // 백엔드에서 즉시 삭제
     await window.api.deleteProviderConfig(providerToDelete)
 
-    // 刷新状态（同步 original 和 pending）
+    // 상태 새로고침
     await onRefresh()
 
-    // 如果删除的是当前选中的供应商，切换到 deepseek
+    // 삭제된 프로바이더가 현재 선택된 경우 lmstudio로 전환
     if (activeProvider === providerToDelete) {
-      setActiveProvider('deepseek')
+      setActiveProvider('lmstudio')
     }
 
     setProviderToDelete('')
   }
 
-  // 自定义供应商模型获取（使用后端 API 避免 CORS 问题）
+  // 사용자 정의 프로바이더 모델 가져오기 (CORS 문제 회피를 위해 백엔드 API 사용)
   const fetchCustomProviderModels = async (providerName: string) => {
     const provider = getProviderConfig(providerName)
     const apiKey = provider.config.apiKey
@@ -374,7 +328,7 @@ export default function ProvidersSettings({
       return
     }
 
-    // 检查 URL 是否包含非 ASCII 字符
+    // URL에 비 ASCII 문자가 포함되어 있는지 확인
     // eslint-disable-next-line no-control-regex
     if (/[^\x00-\x7F]/.test(baseUrl)) {
       alert(t('apiUrlInvalid'))
@@ -384,7 +338,7 @@ export default function ProvidersSettings({
     setFetchingModels((prev) => ({ ...prev, [providerName]: true }))
 
     try {
-      // 先将当前配置保存到后端，确保后端能读取到 baseUrl
+      // 현재 설정을 백엔드에 저장하여 baseUrl을 읽을 수 있도록 함
       await window.api.saveProviderConfig({
         providerName,
         config: provider.config,
@@ -392,10 +346,10 @@ export default function ProvidersSettings({
         updatedAt: Date.now()
       })
 
-      // 使用后端 API，后端会从配置中读取 baseUrl
+      // 백엔드 API 사용
       const result = await window.api.fetchModels(providerName, apiKey)
 
-      // 类型守卫：检查是否是新格式
+      // 타입 가드: 새 형식인지 확인
       const isNewFormat = (
         res: any
       ): res is {
@@ -411,7 +365,7 @@ export default function ProvidersSettings({
       const modelList = isNewFormat(result) ? result.models : result
       setModels((prev) => ({ ...prev, [providerName]: modelList }))
 
-      // 保存完整的模型信息到 config
+      // 전체 모델 정보를 config에 저장
       updateProviderConfig(providerName, {
         config: {
           ...provider.config,
@@ -432,9 +386,9 @@ export default function ProvidersSettings({
 
   return (
     <div className="flex h-full gap-6 overflow-hidden">
-      {/* 左侧供应商列表 */}
+      {/* 좌측 프로바이더 목록 */}
       <div className="w-48 shrink-0 flex flex-col gap-4">
-        {/* 搜索框 */}
+        {/* 검색창 */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
           <Input
@@ -446,9 +400,9 @@ export default function ProvidersSettings({
           />
         </div>
 
-        {/* 供应商列表 */}
+        {/* 프로바이더 목록 */}
         <div className="flex flex-col gap-2">
-          {/* 内置供应商 */}
+          {/* 내장 프로바이더 */}
           {filteredProviders.map((provider) => (
             <Button
               key={provider.id}
@@ -467,10 +421,10 @@ export default function ProvidersSettings({
             </Button>
           ))}
 
-          {/* 分隔线 */}
+          {/* 구분선 */}
           {customProviders.length > 0 && <div className="border-t border-border my-2" />}
 
-          {/* 自定义供应商 */}
+          {/* 사용자 정의 프로바이더 */}
           {customProviders
             .filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
             .map((provider) => (
@@ -492,7 +446,7 @@ export default function ProvidersSettings({
             ))}
         </div>
 
-        {/* 添加自定义提供商按钮 */}
+        {/* 사용자 정의 프로바이더 추가 버튼 */}
         <Button
           className="w-full py-3 rounded-xl text-sm font-medium h-auto"
           onClick={() => setIsAddDialogOpen(true)}
@@ -501,20 +455,35 @@ export default function ProvidersSettings({
         </Button>
       </div>
 
-      {/* 右侧配置区域 */}
+      {/* 우측 설정 영역 */}
       <ScrollArea className="flex-1 min-w-0">
-        {activeProvider === 'deepseek' && (
+        {activeProvider === 'lmstudio' && (
           <ProviderConfigPanel
-            displayName={t('deepseekName')}
-            description={t('deepseekDesc')}
-            platformUrl="https://platform.deepseek.com"
-            provider={deepseekProvider}
-            models={models.deepseek || []}
-            isFetching={fetchingModels.deepseek || false}
-            onConfigChange={(config) => updateProviderConfig('deepseek', { config })}
-            onEnabledChange={(enabled) => updateProviderConfig('deepseek', { enabled })}
-            onFetchModels={() => fetchModels('deepseek')}
-            defaultBaseUrl={defaultBaseUrls.deepseek}
+            displayName="LM Studio"
+            description={t('lmstudioDesc', { defaultValue: 'Local LLM server (OpenAI compatible)' })}
+            platformUrl="https://lmstudio.ai"
+            provider={lmstudioProvider}
+            models={models.lmstudio || []}
+            isFetching={fetchingModels.lmstudio || false}
+            onConfigChange={(config) => updateProviderConfig('lmstudio', { config })}
+            onEnabledChange={(enabled) => updateProviderConfig('lmstudio', { enabled })}
+            onFetchModels={() => fetchModels('lmstudio')}
+            defaultBaseUrl={defaultBaseUrls.lmstudio}
+          />
+        )}
+
+        {activeProvider === 'ollama' && (
+          <ProviderConfigPanel
+            displayName="Ollama"
+            description={t('ollamaDesc', { defaultValue: 'Local LLM runner' })}
+            platformUrl="https://ollama.com"
+            provider={ollamaProvider}
+            models={models.ollama || []}
+            isFetching={fetchingModels.ollama || false}
+            onConfigChange={(config) => updateProviderConfig('ollama', { config })}
+            onEnabledChange={(enabled) => updateProviderConfig('ollama', { enabled })}
+            onFetchModels={() => fetchModels('ollama')}
+            defaultBaseUrl={defaultBaseUrls.ollama}
           />
         )}
 
@@ -533,85 +502,23 @@ export default function ProvidersSettings({
           />
         )}
 
-        {activeProvider === 'siliconflow' && (
+        {activeProvider === 'deepseek' && (
           <ProviderConfigPanel
-            displayName={t('siliconflowName')}
-            description={t('siliconflowDesc')}
-            platformUrl="https://siliconflow.cn"
-            provider={siliconflowProvider}
-            models={models.siliconflow || []}
-            isFetching={fetchingModels.siliconflow || false}
-            onConfigChange={(config) => updateProviderConfig('siliconflow', { config })}
-            onEnabledChange={(enabled) => updateProviderConfig('siliconflow', { enabled })}
-            onFetchModels={() => fetchModels('siliconflow')}
-            defaultBaseUrl={defaultBaseUrls.siliconflow}
+            displayName={t('deepseekName')}
+            description={t('deepseekDesc')}
+            platformUrl="https://platform.deepseek.com"
+            provider={deepseekProvider}
+            models={models.deepseek || []}
+            isFetching={fetchingModels.deepseek || false}
+            onConfigChange={(config) => updateProviderConfig('deepseek', { config })}
+            onEnabledChange={(enabled) => updateProviderConfig('deepseek', { enabled })}
+            onFetchModels={() => fetchModels('deepseek')}
+            defaultBaseUrl={defaultBaseUrls.deepseek}
           />
         )}
 
-        {activeProvider === 'qwen' && (
-          <ProviderConfigPanel
-            displayName={t('qwenName')}
-            description={t('qwenDesc')}
-            platformUrl="https://dashscope.aliyun.com"
-            provider={qwenProvider}
-            models={models.qwen || []}
-            isFetching={fetchingModels.qwen || false}
-            onConfigChange={(config) => updateProviderConfig('qwen', { config })}
-            onEnabledChange={(enabled) => updateProviderConfig('qwen', { enabled })}
-            onFetchModels={() => fetchModels('qwen')}
-            defaultBaseUrl={defaultBaseUrls.qwen}
-          />
-        )}
-
-        {activeProvider === 'kimi' && (
-          <ProviderConfigPanel
-            displayName={t('kimiName')}
-            description={t('kimiDesc')}
-            platformUrl="https://platform.moonshot.cn"
-            provider={kimiProvider}
-            models={models.kimi || []}
-            isFetching={fetchingModels.kimi || false}
-            onConfigChange={(config) => updateProviderConfig('kimi', { config })}
-            onEnabledChange={(enabled) => updateProviderConfig('kimi', { enabled })}
-            onFetchModels={() => fetchModels('kimi')}
-            defaultBaseUrl={defaultBaseUrls.kimi}
-          />
-        )}
-
-        {activeProvider === 'ollama' && (
-          <ProviderConfigPanel
-            displayName="Ollama"
-            description="Local LLM runner"
-            platformUrl="https://ollama.com"
-            provider={ollamaProvider}
-            models={models.ollama || []}
-            isFetching={fetchingModels.ollama || false}
-            onConfigChange={(config) => updateProviderConfig('ollama', { config })}
-            onEnabledChange={(enabled) => updateProviderConfig('ollama', { enabled })}
-            onFetchModels={() => fetchModels('ollama')}
-            defaultBaseUrl={defaultBaseUrls.ollama}
-          />
-        )}
-
-        {activeProvider === 'zhipu' && (
-          <ProviderConfigPanel
-            displayName={t('zhipuName')}
-            description={t('zhipuDesc')}
-            platformUrl="https://open.bigmodel.cn"
-            provider={zhipuProvider}
-            models={models.zhipu || []}
-            isFetching={fetchingModels.zhipu || false}
-            onConfigChange={(config) => updateProviderConfig('zhipu', { config })}
-            onEnabledChange={(enabled) => updateProviderConfig('zhipu', { enabled })}
-            onFetchModels={() => fetchModels('zhipu')}
-            defaultBaseUrl={defaultBaseUrls.zhipu}
-          />
-        )}
-
-        {/* 自定义供应商配置 */}
-        {!['deepseek', 'openai', 'siliconflow', 'qwen', 'kimi', 'ollama', 'zhipu'].includes(
-          activeProvider
-        ) &&
+        {/* 사용자 정의 프로바이더 설정 */}
+        {!['lmstudio', 'ollama', 'openai', 'deepseek'].includes(activeProvider) &&
           (() => {
             const customProvider = getProviderConfig(activeProvider)
             return customProvider && customProvider.providerName ? (
@@ -631,7 +538,7 @@ export default function ProvidersSettings({
           })()}
       </ScrollArea>
 
-      {/* 添加供应商对话框 */}
+      {/* 프로바이더 추가 다이얼로그 */}
       <AddProviderDialog
         isOpen={isAddDialogOpen}
         onClose={() => setIsAddDialogOpen(false)}
@@ -639,7 +546,7 @@ export default function ProvidersSettings({
         existingProviders={[...providerList.map((p) => p.id), ...customProviders.map((p) => p.id)]}
       />
 
-      {/* 删除供应商对话框 */}
+      {/* 프로바이더 삭제 다이얼로그 */}
       <DeleteProviderDialog
         isOpen={isDeleteDialogOpen}
         providerName={providerToDelete}

@@ -5,7 +5,7 @@ import { chatSessions, chatMessages, notebooks, notes, documents, items } from '
 // ==================== Chat Sessions ====================
 
 /**
- * 创建新的聊天会话
+ * 새 채팅 세션 생성
  */
 export function createSession(notebookId: string, title: string, parentSessionId?: string) {
   const db = getDatabase()
@@ -29,8 +29,8 @@ export function createSession(notebookId: string, title: string, parentSessionId
 }
 
 /**
- * 获取指定笔记本的活跃会话（栈顶）
- * 每个笔记本只有一个 active session
+ * 지정된 노트북의 활성 세션 조회 (스택 최상위)
+ * 각 노트북에는 하나의 active 세션만 존재
  */
 export function getActiveSessionByNotebook(notebookId: string) {
   const db = getDatabase()
@@ -43,8 +43,8 @@ export function getActiveSessionByNotebook(notebookId: string) {
 }
 
 /**
- * 获取指定笔记本的所有会话
- * 按更新时间倒序排列
+ * 지정된 노트북의 모든 세션 조회
+ * 업데이트 시간 역순으로 정렬
  */
 export function getSessionsByNotebook(notebookId: string) {
   const db = getDatabase()
@@ -58,7 +58,7 @@ export function getSessionsByNotebook(notebookId: string) {
 }
 
 /**
- * 更新会话标题
+ * 세션 제목 업데이트
  */
 export function updateSessionTitle(sessionId: string, title: string) {
   const db = getDatabase()
@@ -73,8 +73,8 @@ export function updateSessionTitle(sessionId: string, title: string) {
 }
 
 /**
- * 删除会话
- * 外键级联会自动删除该会话的所有消息
+ * 세션 삭제
+ * 외래 키 캐스케이드로 해당 세션의 모든 메시지가 자동 삭제됨
  */
 export function deleteSession(sessionId: string) {
   const db = getDatabase()
@@ -82,7 +82,7 @@ export function deleteSession(sessionId: string) {
   try {
     db.delete(chatSessions).where(eq(chatSessions.id, sessionId)).run()
 
-    // 删除会话后执行 checkpoint，确保数据及时持久化
+    // 세션 삭제 후 checkpoint 실행하여 데이터 적시 영구 저장 보장
     executeCheckpoint('PASSIVE')
   } catch (error) {
     console.error('[Database] Error deleting session:', error)
@@ -91,7 +91,7 @@ export function deleteSession(sessionId: string) {
 }
 
 /**
- * 获取单个会话信息
+ * 단일 세션 정보 조회
  */
 export function getSessionById(sessionId: string) {
   const db = getDatabase()
@@ -100,12 +100,12 @@ export function getSessionById(sessionId: string) {
 }
 
 /**
- * 更新会话的 token 计数
+ * 세션 토큰 카운트 업데이트
  */
 export function updateSessionTokens(sessionId: string, tokensToAdd: number) {
   const db = getDatabase()
 
-  // 获取当前 token 数
+  // 현재 토큰 수 조회
   const session = getSessionById(sessionId)
   if (!session) return
 
@@ -123,7 +123,7 @@ export function updateSessionTokens(sessionId: string, tokensToAdd: number) {
 }
 
 /**
- * 更新会话的摘要和状态
+ * 세션 요약 및 상태 업데이트
  */
 export function updateSessionSummary(
   sessionId: string,
@@ -145,7 +145,7 @@ export function updateSessionSummary(
 // ==================== Chat Messages ====================
 
 /**
- * 创建新消息
+ * 새 메시지 생성
  */
 export function createMessage(
   sessionId: string,
@@ -170,15 +170,15 @@ export function createMessage(
     .returning()
     .get()
 
-  // 更新会话的 updatedAt
+  // 세션의 updatedAt 업데이트
   db.update(chatSessions).set({ updatedAt: now }).where(eq(chatSessions.id, sessionId)).run()
 
   return message
 }
 
 /**
- * 获取指定会话的所有消息
- * 按创建时间顺序排列
+ * 지정된 세션의 모든 메시지 조회
+ * 생성 시간 순서로 정렬
  */
 export function getMessagesBySession(sessionId: string) {
   const db = getDatabase()
@@ -187,8 +187,8 @@ export function getMessagesBySession(sessionId: string) {
 }
 
 /**
- * 更新消息内容
- * 主要用于更新流式消息的完整内容
+ * 메시지 내용 업데이트
+ * 주로 스트리밍 메시지의 전체 내용 업데이트에 사용
  */
 export function updateMessageContent(
   messageId: string,
@@ -208,7 +208,7 @@ export function updateMessageContent(
 // ==================== Notebooks ====================
 
 /**
- * 创建新笔记本
+ * 새 노트북 생성
  */
 export function createNotebook(title: string, description?: string) {
   const db = getDatabase()
@@ -232,8 +232,8 @@ export function createNotebook(title: string, description?: string) {
 }
 
 /**
- * 获取所有笔记本
- * 按更新时间倒序排列
+ * 모든 노트북 조회
+ * 업데이트 시간 역순으로 정렬
  */
 export function getAllNotebooks() {
   const db = getDatabase()
@@ -241,7 +241,7 @@ export function getAllNotebooks() {
 }
 
 /**
- * 根据 ID 获取笔记本
+ * ID로 노트북 조회
  */
 export function getNotebookById(id: string) {
   const db = getDatabase()
@@ -249,7 +249,7 @@ export function getNotebookById(id: string) {
 }
 
 /**
- * 更新笔记本
+ * 노트북 업데이트
  */
 export function updateNotebook(
   id: string,
@@ -266,24 +266,24 @@ export function updateNotebook(
 }
 
 /**
- * 删除笔记本
- * 由于外键级联删除，会自动删除该笔记本下的所有会话和消息
+ * 노트북 삭제
+ * 외래 키 캐스케이드 삭제로 해당 노트북의 모든 세션과 메시지가 자동 삭제됨
  */
 export async function deleteNotebook(id: string) {
   const db = getDatabase()
 
   try {
-    // 先获取该笔记本下所有带本地文件的文档
+    // 먼저 해당 노트북의 로컬 파일이 있는 모든 문서를 조회
     const docsWithLocalFiles = db
       .select({ localFilePath: documents.localFilePath })
       .from(documents)
       .where(eq(documents.notebookId, id))
       .all()
 
-    // 删除笔记本（外键级联会自动删除所有关联的 sessions、messages 和 documents）
+    // 노트북 삭제 (외래 키 캐스케이드로 모든 관련 세션, 메시지, 문서가 자동 삭제됨)
     db.delete(notebooks).where(eq(notebooks.id, id)).run()
 
-    // 删除本地文件（异步执行，不阻塞数据库操作）
+    // 로컬 파일 삭제 (비동기 실행, 데이터베이스 작업을 차단하지 않음)
     if (docsWithLocalFiles.length > 0) {
       const { unlink } = await import('fs/promises')
       for (const doc of docsWithLocalFiles) {
@@ -298,7 +298,7 @@ export async function deleteNotebook(id: string) {
       }
     }
 
-    // 执行 checkpoint 确保数据持久化
+    // 데이터 영구 저장을 위한 checkpoint 실행
     executeCheckpoint('PASSIVE')
     console.log(`[Database] Deleted notebook: ${id}`)
   } catch (error) {
@@ -310,7 +310,7 @@ export async function deleteNotebook(id: string) {
 // ==================== Notes ====================
 
 /**
- * 创建新笔记
+ * 새 노트 생성
  */
 export function createNote(notebookId: string, title: string, content: string) {
   const db = getDatabase()
@@ -332,8 +332,8 @@ export function createNote(notebookId: string, title: string, content: string) {
 
   console.log(`[Database] Created note: ${id}`)
 
-  // 同步创建 item（添加到列表末尾）
-  // 获取当前笔记本的最大 order 值
+  // item 동기 생성 (목록 맨 끝에 추가)
+  // 현재 노트북의 최대 order 값 조회
   const existingItems = db.select().from(items).where(eq(items.notebookId, notebookId)).all()
   const maxOrder = existingItems.reduce((max, item) => Math.max(max, item.order), -1)
   const newOrder = maxOrder + 1
@@ -357,8 +357,8 @@ export function createNote(notebookId: string, title: string, content: string) {
 }
 
 /**
- * 获取指定笔记本的所有笔记
- * 按更新时间倒序排列
+ * 지정된 노트북의 모든 노트 조회
+ * 업데이트 시간 역순으로 정렬
  */
 export function getNotesByNotebook(notebookId: string) {
   const db = getDatabase()
@@ -371,7 +371,7 @@ export function getNotesByNotebook(notebookId: string) {
 }
 
 /**
- * 根据ID获取单个笔记
+ * ID로 단일 노트 조회
  */
 export function getNoteById(id: string) {
   const db = getDatabase()
@@ -379,7 +379,7 @@ export function getNoteById(id: string) {
 }
 
 /**
- * 更新笔记内容
+ * 노트 내용 업데이트
  */
 export function updateNote(id: string, updates: Partial<{ title: string; content: string }>) {
   const db = getDatabase()
@@ -391,18 +391,18 @@ export function updateNote(id: string, updates: Partial<{ title: string; content
 }
 
 /**
- * 删除笔记
+ * 노트 삭제
  */
 export function deleteNote(id: string) {
   const db = getDatabase()
 
-  // 先删除关联的 item
+  // 먼저 관련된 item 삭제
   db.delete(items)
     .where(and(eq(items.type, 'note'), eq(items.resourceId, id)))
     .run()
   console.log(`[Database] Deleted item for note: ${id}`)
 
-  // 删除笔记本身
+  // 노트 자체 삭제
   db.delete(notes).where(eq(notes.id, id)).run()
   console.log(`[Database] Deleted note: ${id}`)
 }

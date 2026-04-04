@@ -1,8 +1,8 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
 
 /**
- * 笔记本表
- * 用于存储用户创建的笔记本
+ * 노트북 테이블
+ * 사용자가 생성한 노트북을 저장
  */
 export const notebooks = sqliteTable(
   'notebooks',
@@ -14,14 +14,14 @@ export const notebooks = sqliteTable(
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
-    // 优化按更新时间查询笔记本的性能
+    // 업데이트 시간별 노트북 조회 성능 최적화
     updatedIdx: index('idx_notebooks_updated').on(table.updatedAt)
   })
 )
 
 /**
- * 聊天会话表
- * 用于存储每个笔记本下的聊天会话
+ * 채팅 세션 테이블
+ * 각 노트북 하위의 채팅 세션을 저장
  */
 export const chatSessions = sqliteTable(
   'chat_sessions',
@@ -31,27 +31,27 @@ export const chatSessions = sqliteTable(
       .notNull()
       .references(() => notebooks.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
-    // 自动切换 session 相关字段
-    summary: text('summary'), // 之前会话的摘要（如果是自动切换生成的）
-    totalTokens: integer('total_tokens').notNull().default(0), // 当前会话累计 token 数
+    // 자동 세션 전환 관련 필드
+    summary: text('summary'), // 이전 세션의 요약 (자동 전환으로 생성된 경우)
+    totalTokens: integer('total_tokens').notNull().default(0), // 현재 세션 누적 토큰 수
     status: text('status', { enum: ['active', 'archived'] })
       .notNull()
-      .default('active'), // 会话状态
+      .default('active'), // 세션 상태
     parentSessionId: text('parent_session_id').references(() => chatSessions.id, {
       onDelete: 'set null'
-    }), // 指向上一个被切换的 session
+    }), // 이전에 전환된 세션을 가리킴
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
-    // 优化按笔记本查询会话的性能
+    // 노트북별 세션 조회 성능 최적화
     notebookIdx: index('idx_sessions_notebook').on(table.notebookId, table.updatedAt)
   })
 )
 
 /**
- * 聊天消息表
- * 存储每个会话中的所有消息（用户消息和AI回复）
+ * 채팅 메시지 테이블
+ * 각 세션의 모든 메시지를 저장 (사용자 메시지 및 AI 응답)
  */
 export const chatMessages = sqliteTable(
   'chat_messages',
@@ -62,18 +62,18 @@ export const chatMessages = sqliteTable(
       .references(() => chatSessions.id, { onDelete: 'cascade' }),
     role: text('role', { enum: ['user', 'assistant', 'system'] }).notNull(),
     content: text('content').notNull(),
-    reasoningContent: text('reasoning_content'), // DeepSeek Reasoner 推理过程内容
+    reasoningContent: text('reasoning_content'), // DeepSeek Reasoner 추론 과정 내용
     metadata: text('metadata', { mode: 'json' }).$type<Record<string, any>>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
-    // 优化按会话查询消息的性能
+    // 세션별 메시지 조회 성능 최적화
     sessionIdx: index('idx_messages_session').on(table.sessionId, table.createdAt)
   })
 )
 
 /**
- * TypeScript 类型导出（从 Drizzle Schema 推导）
+ * TypeScript 타입 내보내기 (Drizzle 스키마에서 추론)
  */
 export type Notebook = typeof notebooks.$inferSelect
 export type NewNotebook = typeof notebooks.$inferInsert
@@ -85,8 +85,8 @@ export type ChatMessage = typeof chatMessages.$inferSelect
 export type NewChatMessage = typeof chatMessages.$inferInsert
 
 /**
- * 笔记表
- * 存储每个笔记本下的笔记
+ * 노트 테이블
+ * 각 노트북 하위의 노트를 저장
  */
 export const notes = sqliteTable(
   'notes',
@@ -101,7 +101,7 @@ export const notes = sqliteTable(
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
-    // 优化按笔记本查询笔记的性能
+    // 노트북별 노트 조회 성능 최적화
     notebookIdx: index('idx_notes_notebook').on(table.notebookId, table.updatedAt)
   })
 )
@@ -109,11 +109,11 @@ export const notes = sqliteTable(
 export type Note = typeof notes.$inferSelect
 export type NewNote = typeof notes.$inferInsert
 
-// ==================== RAG 相关表 ====================
+// ==================== RAG 관련 테이블 ====================
 
 /**
- * 知识库文档表
- * 存储上传的文档元信息（知识来源）
+ * 지식 베이스 문서 테이블
+ * 업로드된 문서 메타 정보를 저장 (지식 소스)
  */
 export const documents = sqliteTable(
   'documents',
@@ -124,13 +124,13 @@ export const documents = sqliteTable(
       .references(() => notebooks.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     type: text('type', { enum: ['file', 'note', 'url', 'text'] }).notNull(),
-    sourceUri: text('source_uri'), // 原始文件路径或 URL
-    localFilePath: text('local_file_path'), // 本地拷贝文件路径
+    sourceUri: text('source_uri'), // 원본 파일 경로 또는 URL
+    localFilePath: text('local_file_path'), // 로컬 복사 파일 경로
     sourceNoteId: text('source_note_id').references(() => notes.id, { onDelete: 'set null' }),
-    content: text('content'), // 原始内容（可选存储）
-    contentHash: text('content_hash'), // 内容哈希，用于检测变更
-    mimeType: text('mime_type'), // 文件类型
-    fileSize: integer('file_size'), // 文件大小（字节）
+    content: text('content'), // 원본 내용 (선택적 저장)
+    contentHash: text('content_hash'), // 내용 해시, 변경 감지용
+    mimeType: text('mime_type'), // 파일 타입
+    fileSize: integer('file_size'), // 파일 크기 (바이트)
     metadata: text('metadata', { mode: 'json' }).$type<Record<string, any>>(),
     status: text('status', { enum: ['pending', 'processing', 'indexed', 'failed'] })
       .notNull()
@@ -150,8 +150,8 @@ export type Document = typeof documents.$inferSelect
 export type NewDocument = typeof documents.$inferInsert
 
 /**
- * 文档分块表
- * 存储分块后的文本内容（RAG 的最小知识单元）
+ * 문서 청크 테이블
+ * 분할된 텍스트 내용을 저장 (RAG의 최소 지식 단위)
  */
 export const chunks = sqliteTable(
   'chunks',
@@ -164,11 +164,11 @@ export const chunks = sqliteTable(
       .notNull()
       .references(() => notebooks.id, { onDelete: 'cascade' }),
     content: text('content').notNull(),
-    chunkIndex: integer('chunk_index').notNull(), // 在文档中的顺序
-    startOffset: integer('start_offset'), // 原文起始位置
-    endOffset: integer('end_offset'), // 原文结束位置
+    chunkIndex: integer('chunk_index').notNull(), // 문서 내 순서
+    startOffset: integer('start_offset'), // 원문 시작 위치
+    endOffset: integer('end_offset'), // 원문 종료 위치
     metadata: text('metadata', { mode: 'json' }).$type<Record<string, any>>(),
-    tokenCount: integer('token_count'), // token 估算值
+    tokenCount: integer('token_count'), // 토큰 추정값
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
@@ -181,8 +181,8 @@ export type Chunk = typeof chunks.$inferSelect
 export type NewChunk = typeof chunks.$inferInsert
 
 /**
- * 向量嵌入表（元数据）
- * 存储 chunk 的向量元信息，实际向量存储在 vec0 虚拟表中
+ * 벡터 임베딩 테이블 (메타데이터)
+ * 청크의 벡터 메타 정보를 저장, 실제 벡터는 vec0 가상 테이블에 저장
  */
 export const embeddings = sqliteTable(
   'embeddings',
@@ -194,8 +194,8 @@ export const embeddings = sqliteTable(
     notebookId: text('notebook_id')
       .notNull()
       .references(() => notebooks.id, { onDelete: 'cascade' }),
-    model: text('model').notNull(), // embedding 模型名称
-    dimensions: integer('dimensions').notNull(), // 向量维度
+    model: text('model').notNull(), // 임베딩 모델 이름
+    dimensions: integer('dimensions').notNull(), // 벡터 차원
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
@@ -209,8 +209,8 @@ export type Embedding = typeof embeddings.$inferSelect
 export type NewEmbedding = typeof embeddings.$inferInsert
 
 /**
- * 思维导图表
- * 存储笔记本的派生知识结构
+ * 마인드맵 테이블
+ * 노트북의 파생 지식 구조를 저장
  */
 export const mindMaps = sqliteTable(
   'mind_maps',
@@ -220,9 +220,9 @@ export const mindMaps = sqliteTable(
       .notNull()
       .references(() => notebooks.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
-    version: integer('version').notNull().default(1), // 版本号
-    treeData: text('tree_data', { mode: 'json' }).notNull(), // 树结构
-    chunkMapping: text('chunk_mapping', { mode: 'json' }).notNull(), // 节点ID -> chunk IDs映射
+    version: integer('version').notNull().default(1), // 버전 번호
+    treeData: text('tree_data', { mode: 'json' }).notNull(), // 트리 구조
+    chunkMapping: text('chunk_mapping', { mode: 'json' }).notNull(), // 노드 ID -> 청크 ID 매핑
     metadata: text('metadata', { mode: 'json' }).$type<{
       model: string
       totalNodes: number
@@ -246,8 +246,8 @@ export type MindMap = typeof mindMaps.$inferSelect
 export type NewMindMap = typeof mindMaps.$inferInsert
 
 /**
- * 题库表
- * 存储笔记本的答题题库
+ * 문제은행 테이블
+ * 노트북의 퀴즈 문제은행을 저장
  */
 export const quizzes = sqliteTable(
   'quizzes',
@@ -257,9 +257,9 @@ export const quizzes = sqliteTable(
       .notNull()
       .references(() => notebooks.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
-    version: integer('version').notNull().default(1), // 版本号
-    questionsData: text('questions_data', { mode: 'json' }).notNull(), // 题目数组
-    chunkMapping: text('chunk_mapping', { mode: 'json' }).notNull(), // questionId -> chunkIds映射
+    version: integer('version').notNull().default(1), // 버전 번호
+    questionsData: text('questions_data', { mode: 'json' }).notNull(), // 문제 배열
+    chunkMapping: text('chunk_mapping', { mode: 'json' }).notNull(), // questionId -> chunkIds 매핑
     metadata: text('metadata', { mode: 'json' }).$type<{
       model: string
       totalQuestions: number
@@ -282,8 +282,8 @@ export type Quiz = typeof quizzes.$inferSelect
 export type NewQuiz = typeof quizzes.$inferInsert
 
 /**
- * 答题会话表
- * 存储用户的答题记录
+ * 퀴즈 세션 테이블
+ * 사용자의 퀴즈 기록을 저장
  */
 export const quizSessions = sqliteTable(
   'quiz_sessions',
@@ -312,8 +312,8 @@ export type QuizSession = typeof quizSessions.$inferSelect
 export type NewQuizSession = typeof quizSessions.$inferInsert
 
 /**
- * Anki卡片表
- * 存储笔记本的Anki卡片集
+ * Anki 카드 테이블
+ * 노트북의 Anki 카드 세트를 저장
  */
 export const ankiCards = sqliteTable(
   'anki_cards',
@@ -323,9 +323,9 @@ export const ankiCards = sqliteTable(
       .notNull()
       .references(() => notebooks.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
-    version: integer('version').notNull().default(1), // 版本号
-    cardsData: text('cards_data', { mode: 'json' }).notNull(), // 卡片数组
-    chunkMapping: text('chunk_mapping', { mode: 'json' }).notNull(), // cardId -> chunkIds映射
+    version: integer('version').notNull().default(1), // 버전 번호
+    cardsData: text('cards_data', { mode: 'json' }).notNull(), // 카드 배열
+    chunkMapping: text('chunk_mapping', { mode: 'json' }).notNull(), // cardId -> chunkIds 매핑
     metadata: text('metadata', { mode: 'json' }).$type<{
       model: string
       totalCards: number
@@ -349,8 +349,8 @@ export type AnkiCard = typeof ankiCards.$inferSelect
 export type NewAnkiCard = typeof ankiCards.$inferInsert
 
 /**
- * Items 表
- * 统一管理笔记本下的所有内容项（笔记、思维导图、PPT、音频等）
+ * Items 테이블
+ * 노트북 하위의 모든 콘텐츠 항목을 통합 관리 (노트, 마인드맵, PPT, 오디오 등)
  */
 export const items = sqliteTable(
   'items',
@@ -362,17 +362,17 @@ export const items = sqliteTable(
     type: text('type', {
       enum: ['note', 'mindmap', 'quiz', 'anki', 'ppt', 'audio', 'video']
     }).notNull(),
-    resourceId: text('resource_id').notNull(), // 指向实际资源的 ID (notes.id, mindMaps.id 等)
-    order: integer('order').notNull().default(0), // 排序，数值越小越靠前
+    resourceId: text('resource_id').notNull(), // 실제 리소스 ID를 가리킴 (notes.id, mindMaps.id 등)
+    order: integer('order').notNull().default(0), // 정렬, 값이 작을수록 앞에 위치
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
-    // 优化按笔记本查询并排序的性能
+    // 노트북별 조회 및 정렬 성능 최적화
     notebookOrderIdx: index('idx_items_notebook_order').on(table.notebookId, table.order),
-    // 优化按类型查询的性能
+    // 타입별 조회 성능 최적화
     typeIdx: index('idx_items_type').on(table.type),
-    // 优化按资源 ID 查找对应 item 的性能
+    // 리소스 ID로 해당 item 찾기 성능 최적화
     resourceIdx: index('idx_items_resource').on(table.type, table.resourceId)
   })
 )

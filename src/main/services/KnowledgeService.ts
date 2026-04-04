@@ -1,6 +1,6 @@
 /**
  * KnowledgeService
- * 知识库核心服务，整合文档管理、分块、嵌入和检索
+ * 지식 베이스 핵심 서비스, 문서 관리, 청킹, 임베딩 및 검색 통합
  */
 
 import { createHash } from 'crypto'
@@ -20,7 +20,7 @@ import { ProviderManager } from '../providers/ProviderManager'
 import Logger from '../../shared/utils/logger'
 
 /**
- * 添加文档选项
+ * 문서 추가 옵션
  */
 export interface AddDocumentOptions {
   title: string
@@ -35,16 +35,16 @@ export interface AddDocumentOptions {
 }
 
 /**
- * 搜索选项
+ * 검색 옵션
  */
 export interface SearchOptions {
-  topK?: number // 返回结果数量，默认 5
-  threshold?: number // 相似度阈值，默认 0.5
-  includeContent?: boolean // 是否包含 chunk 内容，默认 true
+  topK?: number // 반환 결과 수, 기본값 5
+  threshold?: number // 유사도 임계값, 기본값 0.5
+  includeContent?: boolean // chunk 내용 포함 여부, 기본값 true
 }
 
 /**
- * 搜索结果
+ * 검색 결과
  */
 export interface SearchResult {
   chunkId: string
@@ -58,13 +58,13 @@ export interface SearchResult {
 }
 
 /**
- * 索引进度回调
+ * 인덱싱 진행률 콜백
  */
 export type IndexProgressCallback = (stage: string, progress: number) => void
 
 /**
- * 知识库服务
- * 管理文档、分块、嵌入和检索
+ * 지식 베이스 서비스
+ * 문서, 청킹, 임베딩 및 검색 관리
  */
 export class KnowledgeService {
   private embeddingService: EmbeddingService
