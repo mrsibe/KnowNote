@@ -1,8 +1,8 @@
 /**
- * 统一的聊天相关类型定义
- * 此文件被 main、renderer、preload 三个进程共享
+ * 통합 채팅 관련 타입 정의
+ * 이 파일은 main, renderer, preload 세 프로세스에서 공유됨
  *
- * 类型定义基于 Drizzle 推导的数据库 schema,确保类型定义的单一数据源
+ * 타입 정의는 Drizzle에서 추론된 데이터베이스 schema를 기반으로 하여 타입 정의의 단일 소스를 보장
  */
 
 import type {
@@ -11,41 +11,41 @@ import type {
 } from '../../main/db/schema'
 
 /**
- * 聊天会话接口（完整版）
- * 直接使用 Drizzle 推导的数据库类型
+ * 채팅 세션 인터페이스 (전체 버전)
+ * Drizzle에서 추론된 데이터베이스 타입을 직접 사용
  */
 export type ChatSession = DBChatSession
 
 /**
- * 聊天消息接口（完整版）
- * 基于 Drizzle 推导的数据库类型,并添加前端扩展字段
+ * 채팅 메시지 인터페이스 (전체 버전)
+ * Drizzle에서 추론된 데이터베이스 타입을 기반으로 프론트엔드 확장 필드 추가
  */
 export interface ChatMessage extends Omit<DBChatMessage, 'metadata' | 'reasoningContent'> {
-  notebookId?: string // 前端扩展字段，用于并发消息管理
-  reasoningContent?: string | null // 可选的推理内容字段
+  notebookId?: string // 프론트엔드 확장 필드, 동시 메시지 관리용
+  reasoningContent?: string | null // 선택적 추론 내용 필드
   metadata?: Record<string, any>
-  isStreaming?: boolean // 前端扩展字段，标识流式消息
-  isReasoningStreaming?: boolean // 前端扩展字段，推理过程是否在流式传输
+  isStreaming?: boolean // 프론트엔드 확장 필드, 스트리밍 메시지 식별
+  isReasoningStreaming?: boolean // 프론트엔드 확장 필드, 추론 과정 스트리밍 여부
 }
 
 /**
- * API 消息格式（用于与 LLM Provider 通信）
- * 这是简化版本，只包含 API 需要的字段
+ * API 메시지 형식 (LLM Provider와 통신용)
+ * API에 필요한 필드만 포함하는 간소화 버전
  */
 export interface APIMessage {
   role: 'user' | 'assistant' | 'system'
   content: string
-  reasoning_content?: string // DeepSeek Reasoner 特有字段
+  reasoning_content?: string // DeepSeek Reasoner 전용 필드
 }
 
 /**
- * 流式响应片段
+ * 스트리밍 응답 청크
  */
 export interface StreamChunk {
   content: string
-  reasoningContent?: string // DeepSeek Reasoner 推理过程内容
+  reasoningContent?: string // DeepSeek Reasoner 추론 과정 내용
   done: boolean
-  reasoningDone?: boolean // 推理过程是否完成
+  reasoningDone?: boolean // 추론 과정 완료 여부
   metadata?: {
     model?: string
     finishReason?: string
@@ -54,10 +54,10 @@ export interface StreamChunk {
       completionTokens?: number
       totalTokens?: number
     }
-    // 推理相关元数据（AI SDK v5 推理流式传输）
-    isReasoning?: boolean // 当前内容是否为推理过程
-    reasoningStart?: boolean // 推理块开始标记
-    reasoningEnd?: boolean // 推理块结束标记
-    reasoningId?: string // 推理块 ID
+    // 추론 관련 메타데이터 (AI SDK v5 추론 스트리밍)
+    isReasoning?: boolean // 현재 내용이 추론 과정인지 여부
+    reasoningStart?: boolean // 추론 블록 시작 마커
+    reasoningEnd?: boolean // 추론 블록 종료 마커
+    reasoningId?: string // 추론 블록 ID
   }
 }

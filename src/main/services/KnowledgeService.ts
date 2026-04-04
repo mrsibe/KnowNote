@@ -78,13 +78,13 @@ export class KnowledgeService {
     this.chunkingService = new ChunkingService()
     this.fileParserService = new FileParserService()
     this.webFetchService = new WebFetchService()
-    // 知识库文件存储目录
+    // 지식 베이스 파일 저장 디렉토리
     this.knowledgeFilesDir = join(app.getPath('userData'), 'knowledge-files')
     this.ensureKnowledgeFilesDir()
   }
 
   /**
-   * 确保知识库文件目录存在
+   * 지식 베이스 파일 디렉토리가 존재하는지 확인
    */
   private async ensureKnowledgeFilesDir() {
     try {
@@ -95,10 +95,10 @@ export class KnowledgeService {
   }
 
   /**
-   * 拷贝文件到知识库目录
-   * @param sourceFilePath 源文件路径
-   * @param documentId 文档 ID
-   * @returns 本地文件路径
+   * 파일을 지식 베이스 디렉토리로 복사
+   * @param sourceFilePath 원본 파일 경로
+   * @param documentId 문서 ID
+   * @returns 로컬 파일 경로
    */
   private async copyFileToKnowledgeDir(
     sourceFilePath: string,
@@ -106,12 +106,12 @@ export class KnowledgeService {
   ): Promise<string> {
     await this.ensureKnowledgeFilesDir()
 
-    // 提取文件扩展名
+    // 파일 확장자 추출
     const extension = sourceFilePath.split('.').pop() || 'bin'
     const localFileName = `${documentId}.${extension}`
     const localFilePath = join(this.knowledgeFilesDir, localFileName)
 
-    // 拷贝文件
+    // 파일 복사
     await copyFile(sourceFilePath, localFilePath)
     Logger.info('KnowledgeService', `File copied: ${sourceFilePath} -> ${localFilePath}`)
 
@@ -119,8 +119,8 @@ export class KnowledgeService {
   }
 
   /**
-   * 删除知识库中的本地文件
-   * @param localFilePath 本地文件路径
+   * 지식 베이스의 로컬 파일 삭제
+   * @param localFilePath 로컬 파일 경로
    */
   private async deleteLocalFile(localFilePath: string): Promise<void> {
     try {
@@ -137,7 +137,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 添加文档到知识库
+   * 지식 베이스에 문서 추가
    */
   async addDocument(
     notebookId: string,
@@ -148,11 +148,11 @@ export class KnowledgeService {
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
     const now = new Date()
 
-    // 计算内容哈希
+    // 콘텐츠 해시 계산
     const contentHash = createHash('md5').update(options.content).digest('hex')
 
     try {
-      // 1. 创建文档记录
+      // 1. 문서 레코드 생성
       onProgress?.('creating_document', 0)
 
       const newDoc: NewDocument = {
@@ -175,7 +175,7 @@ export class KnowledgeService {
 
       db.insert(documents).values(newDoc).run()
 
-      // 2. 分块
+      // 2. 청킹
       onProgress?.('chunking', 10)
       const chunkResults = this.chunkingService.chunk(options.content, options.chunkOptions)
 
@@ -185,7 +185,7 @@ export class KnowledgeService {
 
       Logger.info('KnowledgeService', `Document ${documentId}: ${chunkResults.length} chunks`)
 
-      // 3. 保存分块
+      // 3. 청크 저장
       onProgress?.('saving_chunks', 20)
       const chunkIds: string[] = []
       const chunkContents: string[] = []
@@ -210,25 +210,25 @@ export class KnowledgeService {
         db.insert(chunks).values(newChunk).run()
       }
 
-      // 4. 生成嵌入向量
+      // 4. 임베딩 벡터 생성
       onProgress?.('generating_embeddings', 30)
       const embeddingResults = await this.embeddingService.embedBatch(
         chunkContents,
-        { dimensions: 1024 }, // 显式指定 1024 维
+        { dimensions: 1024 }, // 명시적으로 1024차원 지정
         (completed, total) => {
           const progress = 30 + (completed / total) * 50
           onProgress?.('generating_embeddings', Math.round(progress))
         }
       )
 
-      // 检测向量维度并更新 VectorStoreManager
+      // 벡터 차원 감지 및 VectorStoreManager 업데이트
       const detectedDimensions = embeddingResults.length > 0 ? embeddingResults[0].dimensions : 1536
       if (embeddingResults.length > 0) {
         vectorStoreManager.setDefaultDimensions(detectedDimensions)
         Logger.debug('KnowledgeService', `Detected embedding dimensions: ${detectedDimensions}`)
       }
 
-      // 5. 保存嵌入元数据并添加到向量存储
+      // 5. 임베딩 메타데이터 저장 및 벡터 스토어에 추가
       onProgress?.('saving_embeddings', 85)
       const vectorStore = await vectorStoreManager.getStore(
         notebookId,
@@ -246,7 +246,7 @@ export class KnowledgeService {
         const embeddingId = `emb_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
         const embResult = embeddingResults[i]
 
-        // 保存嵌入元数据到数据库
+        // 임베딩 메타데이터를 데이터베이스에 저장
         const newEmbedding: NewEmbedding = {
           id: embeddingId,
           chunkId: chunkIds[i],
@@ -325,11 +325,11 @@ export class KnowledgeService {
 
       const parseResult = await this.fileParserService.parseFile(filePath)
 
-      // 计算内容哈希
+      // 콘텐츠 해시 계산
       const contentHash = createHash('md5').update(parseResult.content).digest('hex')
       const now = new Date()
 
-      // 1. 创建文档记录（包含 localFilePath）
+      // 1. 문서 레코드 생성（包含 localFilePath）
       onProgress?.('creating_document', 0)
 
       // 根据 MIME 类型决定文档类型
@@ -359,7 +359,7 @@ export class KnowledgeService {
 
       db.insert(documents).values(newDoc).run()
 
-      // 2. 分块
+      // 2. 청킹
       onProgress?.('chunking', 10)
       const chunkResults = this.chunkingService.chunk(parseResult.content)
 
@@ -369,7 +369,7 @@ export class KnowledgeService {
 
       Logger.info('KnowledgeService', `Document ${documentId}: ${chunkResults.length} chunks`)
 
-      // 3. 保存分块
+      // 3. 청크 저장
       onProgress?.('saving_chunks', 20)
       const chunkIds: string[] = []
       const chunkContents: string[] = []
@@ -394,25 +394,25 @@ export class KnowledgeService {
         db.insert(chunks).values(newChunk).run()
       }
 
-      // 4. 生成嵌入向量
+      // 4. 임베딩 벡터 생성
       onProgress?.('generating_embeddings', 30)
       const embeddingResults = await this.embeddingService.embedBatch(
         chunkContents,
-        { dimensions: 1024 }, // 显式指定 1024 维
+        { dimensions: 1024 }, // 명시적으로 1024차원 지정
         (completed, total) => {
           const progress = 30 + (completed / total) * 50
           onProgress?.('generating_embeddings', Math.round(progress))
         }
       )
 
-      // 检测向量维度并更新 VectorStoreManager
+      // 벡터 차원 감지 및 VectorStoreManager 업데이트
       const detectedDimensions = embeddingResults.length > 0 ? embeddingResults[0].dimensions : 1536
       if (embeddingResults.length > 0) {
         vectorStoreManager.setDefaultDimensions(detectedDimensions)
         Logger.debug('KnowledgeService', `Detected embedding dimensions: ${detectedDimensions}`)
       }
 
-      // 5. 保存嵌入元数据并添加到向量存储
+      // 5. 임베딩 메타데이터 저장 및 벡터 스토어에 추가
       onProgress?.('saving_embeddings', 85)
       const vectorStore = await vectorStoreManager.getStore(
         notebookId,
@@ -430,7 +430,7 @@ export class KnowledgeService {
         const embeddingId = `emb_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
         const embResult = embeddingResults[i]
 
-        // 保存嵌入元数据到数据库
+        // 임베딩 메타데이터를 데이터베이스에 저장
         const newEmbedding: NewEmbedding = {
           id: embeddingId,
           chunkId: chunkIds[i],

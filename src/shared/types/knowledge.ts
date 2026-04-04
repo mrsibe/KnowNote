@@ -1,32 +1,32 @@
 /**
- * 知识库相关类型定义
- * 基于 Drizzle 推导的数据库 schema,确保类型定义的单一数据源
+ * 지식 베이스 관련 타입 정의
+ * Drizzle에서 추론된 데이터베이스 schema를 기반으로 타입 정의의 단일 소스를 보장
  */
 
 import type { Document, Chunk } from '../../main/db/schema'
 
 /**
- * 文档类型（直接使用 Drizzle 推导的类型）
+ * 문서 타입 (Drizzle에서 추론된 타입을 직접 사용)
  */
 export type KnowledgeDocument = Document
 
 /**
- * 文档分块（直接使用 Drizzle 推导的类型）
+ * 문서 청크 (Drizzle에서 추론된 타입을 직접 사용)
  */
 export type KnowledgeChunk = Chunk
 
 /**
- * 文档类型枚举
+ * 문서 타입 열거
  */
 export type DocumentType = 'file' | 'note' | 'url' | 'text'
 
 /**
- * 文档状态枚举
+ * 문서 상태 열거
  */
 export type DocumentStatus = 'pending' | 'processing' | 'indexed' | 'failed'
 
 /**
- * 搜索结果
+ * 검색 결과
  */
 export interface KnowledgeSearchResult {
   chunkId: string
@@ -40,7 +40,7 @@ export interface KnowledgeSearchResult {
 }
 
 /**
- * 索引进度
+ * 인덱싱 진행률
  */
 export interface IndexProgress {
   notebookId?: string
