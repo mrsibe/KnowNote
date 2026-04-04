@@ -35,7 +35,7 @@ async function getAnkiPrompt(customPrompt?: string): Promise<string> {
 
   // 그렇지 않으면 설정에서 조회
   const settings = await settingsManager.getAllSettings()
-  const language = settings.language || 'zh-CN'
+  const language = settings.language || 'ko-KR'
 
   const prompt = settings.prompts?.anki?.[language]
 
@@ -334,7 +334,7 @@ export class AnkiCardService {
 
       // 현재 언어 설정 조회
       const settings = await settingsManager.getAllSettings()
-      const language = settings.language || 'zh-CN'
+      const language = settings.language || 'ko-KR'
 
       // 현재 버전 번호 조회
       const latestVersion = db

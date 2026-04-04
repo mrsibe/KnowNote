@@ -53,7 +53,7 @@ const MindMapSchema = z.object({
  */
 async function getMindMapPrompt(): Promise<string> {
   const settings = await settingsManager.getAllSettings()
-  const language = settings.language || 'zh-CN'
+  const language = settings.language || 'ko-KR'
 
   // settings에서 직접 프롬프트 조회, mergeSettings가 이미 기본값 보장
   const prompt = settings.prompts?.mindMap?.[language]
@@ -291,7 +291,7 @@ export class MindMapService {
 
       // 현재 언어 설정 조회
       const settings = await settingsManager.getAllSettings()
-      const language = settings.language || 'zh-CN'
+      const language = settings.language || 'ko-KR'
 
       // 현재 버전 번호 조회
       const latestVersion = db

@@ -40,7 +40,7 @@ async function getQuizPrompt(customPrompt?: string): Promise<string> {
 
   // 그렇지 않으면 설정에서 조회
   const settings = await settingsManager.getAllSettings()
-  const language = settings.language || 'zh-CN'
+  const language = settings.language || 'ko-KR'
 
   const prompt = settings.prompts?.quiz?.[language]
 
@@ -60,26 +60,26 @@ function getDifficultyInstruction(
 ): string {
   const difficultyInstructions = {
     easy: {
-      'zh-CN':
-        '难度要求：简单 - 请生成简单难度的题目，重点考察基础概念和定义，选项之间的差异要明显。',
+      'ko-KR':
+        '난이도 요구사항: 쉬움 - 기초 개념과 정의를 중점적으로 출제하고, 선택지 간 차이가 명확한 쉬운 난이도의 문제를 생성하세요.',
       'en-US':
         'Difficulty: Easy - Generate easy-difficulty questions that focus on basic concepts and definitions. Options should have clear differences.'
     },
     medium: {
-      'zh-CN':
-        '难度要求：中等 - 请生成中等难度的题目，需要理解和应用知识点，适当增加选项的相似性。',
+      'ko-KR':
+        '난이도 요구사항: 중간 - 지식의 이해와 응용이 필요하고, 선택지의 유사성을 적절히 높인 중간 난이도의 문제를 생성하세요.',
       'en-US':
         'Difficulty: Medium - Generate medium-difficulty questions that require understanding and applying knowledge points, with moderately similar options.'
     },
     hard: {
-      'zh-CN':
-        '难度要求：困难 - 请生成困难题目，需要深度理解、综合应用和分析能力，选项之间要有一定的迷惑性。',
+      'ko-KR':
+        '난이도 요구사항: 어려움 - 깊은 이해, 종합적 응용, 분석 능력이 필요하고 선택지 간에 혼동을 줄 수 있는 어려운 문제를 생성하세요.',
       'en-US':
         'Difficulty: Hard - Generate hard-difficulty questions that require deep understanding, comprehensive application, and analytical ability. Options should be somewhat confusing.'
     }
   }
 
-  return difficultyInstructions[difficulty][language] || difficultyInstructions[difficulty]['zh-CN']
+  return difficultyInstructions[difficulty][language] || difficultyInstructions[difficulty]['ko-KR']
 }
 
 /**
@@ -197,8 +197,8 @@ export class QuizService {
     const difficulty = options?.difficulty || 'medium'
 
     // 프롬프트 언어 감지
-    const isChinese = promptTemplate.includes('中文') || promptTemplate.includes('题目')
-    const language = isChinese ? 'zh-CN' : 'en-US'
+    const isKorean = promptTemplate.includes('한국어') || promptTemplate.includes('문제')
+    const language = isKorean ? 'ko-KR' : 'en-US'
 
     // 난이도 지시 조회
     const difficultyInstruction = getDifficultyInstruction(difficulty, language)
@@ -336,7 +336,7 @@ export class QuizService {
 
       // 현재 언어 설정 조회
       const settings = await settingsManager.getAllSettings()
-      const language = settings.language || 'zh-CN'
+      const language = settings.language || 'ko-KR'
 
       // 현재 버전 번호 조회
       const latestVersion = db
