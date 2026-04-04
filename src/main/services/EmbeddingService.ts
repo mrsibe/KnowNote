@@ -1,6 +1,6 @@
 /**
  * EmbeddingService
- * 封装向量生成逻辑，支持批处理和错误重试
+ * 벡터 생성 로직 캡슐화, 배치 처리 및 오류 재시도 지원
  */
 
 import { ProviderManager } from '../providers/ProviderManager'
@@ -8,18 +8,18 @@ import type { EmbeddingResult, EmbeddingConfig } from '../providers/types'
 import Logger from '../../shared/utils/logger'
 
 /**
- * Embedding 服务配置
+ * Embedding 서비스 설정
  */
 export interface EmbeddingServiceConfig {
-  batchSize?: number // 批处理大小，默认 20
-  maxRetries?: number // 最大重试次数，默认 3
-  retryDelay?: number // 重试延迟（毫秒），默认 1000
-  rateLimit?: number // 请求间隔（毫秒），默认 100
+  batchSize?: number // 배치 크기, 기본값 20
+  maxRetries?: number // 최대 재시도 횟수, 기본값 3
+  retryDelay?: number // 재시도 지연 (밀리초), 기본값 1000
+  rateLimit?: number // 요청 간격 (밀리초), 기본값 100
 }
 
 /**
- * Embedding 服务
- * 封装向量生成逻辑，支持批处理、错误重试、速率控制
+ * Embedding 서비스
+ * 벡터 생성 로직 캡슐화, 배치 처리, 오류 재시도, 속도 제한 지원
  */
 export class EmbeddingService {
   private providerManager: ProviderManager
@@ -36,7 +36,7 @@ export class EmbeddingService {
   }
 
   /**
-   * 生成单个文本的嵌入向量
+   * 단일 텍스트의 임베딩 벡터 생성
    */
   async embed(text: string, config?: EmbeddingConfig): Promise<EmbeddingResult> {
     const provider = await this.providerManager.getActiveEmbeddingProvider()
@@ -49,8 +49,8 @@ export class EmbeddingService {
   }
 
   /**
-   * 批量生成嵌入向量
-   * 自动分批处理大量文本
+   * 일괄 임베딩 벡터 생성
+   * 대량 텍스트를 자동으로 배치 처리
    */
   async embedBatch(
     texts: string[],
@@ -85,7 +85,7 @@ export class EmbeddingService {
 
         Logger.debug('EmbeddingService', `Batch ${i + 1}/${batches.length} completed`)
 
-        // 避免 rate limiting
+        // rate limiting 방지
         if (i < batches.length - 1) {
           await this.sleep(this.config.rateLimit)
         }
@@ -99,7 +99,7 @@ export class EmbeddingService {
   }
 
   /**
-   * 获取当前 Embedding Provider 的默认 Embedding 模型
+   * 현재 Embedding Provider의 기본 Embedding 모델 조회
    */
   async getDefaultModel(): Promise<string | undefined> {
     const provider = await this.providerManager.getActiveEmbeddingProvider()
@@ -107,7 +107,7 @@ export class EmbeddingService {
   }
 
   /**
-   * 检查当前 Embedding Provider 是否支持 Embedding
+   * 현재 Embedding Provider가 Embedding을 지원하는지 확인
    */
   async isAvailable(): Promise<boolean> {
     const provider = await this.providerManager.getActiveEmbeddingProvider()
@@ -115,14 +115,14 @@ export class EmbeddingService {
   }
 
   /**
-   * 更新配置
+   * 설정 업데이트
    */
   updateConfig(config: Partial<EmbeddingServiceConfig>): void {
     this.config = { ...this.config, ...config }
   }
 
   /**
-   * 数组分块
+   * 배열 분할
    */
   private chunk<T>(array: T[], size: number): T[][] {
     const chunks: T[][] = []
@@ -133,7 +133,7 @@ export class EmbeddingService {
   }
 
   /**
-   * 带重试的执行
+   * 재시도 포함 실행
    */
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
     let lastError: Error | null = null
@@ -146,7 +146,7 @@ export class EmbeddingService {
         Logger.warn('EmbeddingService', `Attempt ${attempt} failed:`, error)
 
         if (attempt < this.config.maxRetries) {
-          // 指数退避
+          // 지수 백오프
           const delay = this.config.retryDelay * Math.pow(2, attempt - 1)
           await this.sleep(delay)
         }
@@ -157,7 +157,7 @@ export class EmbeddingService {
   }
 
   /**
-   * 延迟
+   * 지연
    */
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))

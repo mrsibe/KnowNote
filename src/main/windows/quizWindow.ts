@@ -6,15 +6,15 @@ import { settingsManager } from '../config'
 let quizWindow: BrowserWindow | null = null
 
 /**
- * 创建答题窗口
- * @param notebookId - 笔记本 ID（用于生成新答题）
- * @param quizId - 答题 ID（用于查看特定版本，可选）
+ * 생성퀴즈윈도우
+ * @param notebookId - 노트북 ID（용도:생성새퀴즈）
+ * @param quizId - 퀴즈 ID（용도:조회보기특정버전，선택）
  */
 export function createQuizWindow(notebookId: string, quizId?: string): void {
-  // 如果答题窗口已经存在，则聚焦并返回
+  // 만약퀴즈윈도우이미존재，집중포커스그리고반환
   if (quizWindow && !quizWindow.isDestroyed()) {
     quizWindow.focus()
-    // 如果传入了新的路由参数，更新 URL
+    // 만약전달입력새의라우트매개변수，업데이트 URL
     const route = quizId ? `/quiz/view/${quizId}` : `/quiz/${notebookId}`
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
       quizWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
@@ -26,11 +26,11 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
     return
   }
 
-  // 根据用户主题设置背景色
+  // 기반으로사용자테마설정배배경색
   const theme = settingsManager.getSettingSync('theme')
   const backgroundColor = theme === 'dark' ? '#1a1b1e' : '#fafafa'
 
-  // 创建答题窗口
+  // 생성퀴즈윈도우
   quizWindow = new BrowserWindow({
     width: 900,
     height: 700,
@@ -59,7 +59,7 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
     quizWindow = null
   })
 
-  // 监听主题变化
+  // 감시테마변경
   settingsManager.onSettingsChangeSync((newSettings) => {
     if (quizWindow && !quizWindow.isDestroyed()) {
       const newBackgroundColor = newSettings.theme === 'dark' ? '#1a1b1e' : '#fafafa'
@@ -67,7 +67,7 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
     }
   })
 
-  // 加载答题页面
+  // 로드퀴즈페이지
   const route = quizId ? `/quiz/view/${quizId}` : `/quiz/${notebookId}`
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     quizWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
@@ -79,14 +79,14 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
 }
 
 /**
- * 获取答题窗口实例
+ * 조회퀴즈윈도우인스턴스
  */
 export function getQuizWindow(): BrowserWindow | null {
   return quizWindow
 }
 
 /**
- * 销毁答题窗口
+ * 소멸퀴즈윈도우
  */
 export function destroyQuizWindow(): void {
   if (quizWindow && !quizWindow.isDestroyed()) {

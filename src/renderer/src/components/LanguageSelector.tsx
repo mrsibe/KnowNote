@@ -4,7 +4,7 @@ import { Language } from '../store/i18nStore'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select'
 
 const languages = [
-  { code: 'zh-CN' as Language, name: '简体中文', nativeName: '简体中文' },
+  { code: 'ko-KR' as Language, name: '한국어', nativeName: '한국어' },
   { code: 'en-US' as Language, name: 'English', nativeName: 'English' }
 ]
 

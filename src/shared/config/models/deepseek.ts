@@ -2,9 +2,9 @@ import { ModelType } from '../../types'
 import type { ProviderLocalModels } from './types'
 
 /**
- * DeepSeek 内置模型列表
- * 基于 cherry-studio 和官方文档
- * 最后更新：2025-01-15
+ * DeepSeek 내장 모델 목록
+ * cherry-studio 및 공식 문서 기반
+ * 마지막 업데이트: 2025-01-15
  */
 export const DEEPSEEK_BUILTIN_MODELS: ProviderLocalModels = {
   providerName: 'deepseek',

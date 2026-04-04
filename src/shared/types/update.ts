@@ -1,5 +1,5 @@
 /**
- * 更新状态枚举
+ * 업데이트 상태 열거
  */
 export enum UpdateStatus {
   IDLE = 'idle',
@@ -12,7 +12,7 @@ export enum UpdateStatus {
 }
 
 /**
- * 更新进度
+ * 업데이트 진행률
  */
 export interface UpdateProgress {
   percent: number
@@ -21,8 +21,8 @@ export interface UpdateProgress {
 }
 
 /**
- * 更新状态
- * info 字段使用 any 类型以兼容 electron-updater 的 UpdateInfo
+ * 업데이트 상태
+ * info 필드는 electron-updater의 UpdateInfo와 호환하기 위해 any 타입 사용
  */
 export interface UpdateState {
   status: UpdateStatus
@@ -32,7 +32,7 @@ export interface UpdateState {
 }
 
 /**
- * 更新检查结果
+ * 업데이트 확인 결과
  */
 export interface UpdateCheckResult {
   success: boolean
@@ -41,7 +41,7 @@ export interface UpdateCheckResult {
 }
 
 /**
- * 更新操作结果
+ * 업데이트 작업 결과
  */
 export interface UpdateOperationResult {
   success: boolean

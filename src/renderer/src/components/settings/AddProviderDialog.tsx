@@ -37,7 +37,7 @@ export default function AddProviderDialog({
   })
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // 自动聚焦到第一个输入框
+  // 자동집중포커스에첫 번째개입력창
   useEffect(() => {
     if (isOpen && inputRef.current) {
       setTimeout(() => {
@@ -46,15 +46,15 @@ export default function AddProviderDialog({
     }
   }, [isOpen])
 
-  // URL 验证函数
+  // URL 검증함수
   const isValidUrl = (url: string): boolean => {
     try {
       const urlObj = new URL(url)
-      // 检查协议
+      // 확인프로토콜
       if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
         return false
       }
-      // 检查是否包含非 ASCII 字符
+      // 확인예아니오패키지포함비 ASCII 문자
       // eslint-disable-next-line no-control-regex
       if (/[^\x00-\x7F]/.test(url)) {
         return false
@@ -65,7 +65,7 @@ export default function AddProviderDialog({
     }
   }
 
-  // 表单验证
+  // 테이블단일검증
   const validateForm = (): boolean => {
     const newErrors = {
       providerName: '',
@@ -73,7 +73,7 @@ export default function AddProviderDialog({
       baseUrl: ''
     }
 
-    // 供应商名称验证
+    // 제공자이름검증
     const trimmedName = providerName.trim()
     if (!trimmedName) {
       newErrors.providerName = t('providerNameRequired')
@@ -81,12 +81,12 @@ export default function AddProviderDialog({
       newErrors.providerName = t('providerNameExists')
     }
 
-    // API Key 验证
+    // API Key 검증
     if (!apiKey.trim()) {
       newErrors.apiKey = t('apiKeyRequired')
     }
 
-    // Base URL 验证
+    // Base URL 검증
     const trimmedUrl = baseUrl.trim()
     if (!trimmedUrl) {
       newErrors.baseUrl = t('apiUrlRequired')
@@ -98,7 +98,7 @@ export default function AddProviderDialog({
     return !Object.values(newErrors).some((error) => error !== '')
   }
 
-  // 提交处理
+  // 제출처리
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
     if (validateForm()) {
@@ -111,7 +111,7 @@ export default function AddProviderDialog({
     }
   }
 
-  // 关闭时重置表单
+  // 닫기시재테이블단일
   const handleClose = (): void => {
     setProviderName('')
     setApiKey('')
@@ -134,7 +134,7 @@ export default function AddProviderDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {/* 供应商名称 */}
+          {/* 제공자이름 */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-foreground">{t('providerName')}</label>
             <Input
@@ -176,7 +176,7 @@ export default function AddProviderDialog({
             {errors.apiKey && <p className="text-sm text-destructive">{errors.apiKey}</p>}
           </div>
 
-          {/* API 地址 */}
+          {/* API 주소 */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-foreground">{t('apiUrl')}</label>
             <Input

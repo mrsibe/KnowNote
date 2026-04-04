@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type Language = 'zh-CN' | 'en-US'
+export type Language = 'ko-KR' | 'en-US'
 
 interface I18nStore {
   language: Language
@@ -10,7 +10,7 @@ interface I18nStore {
 }
 
 export const useI18nStore = create<I18nStore>((set) => {
-  // 设置监听器（只设置一次）
+  // 설정 리스너 (한 번만 설정)
   if (typeof window !== 'undefined' && window.api) {
     window.api.settings.onSettingsChange((newSettings) => {
       const newLanguage = newSettings.language
@@ -35,9 +35,9 @@ export const useI18nStore = create<I18nStore>((set) => {
 
     changeLanguage: async (language) => {
       try {
-        // 先更新 UI
+        // 먼저 UI 업데이트
         set({ language })
-        // 然后保存到 electron-store
+        // 그 후 electron-store에 저장
         await window.api.settings.set('language', language)
       } catch (error) {
         console.error('Failed to save language:', error)

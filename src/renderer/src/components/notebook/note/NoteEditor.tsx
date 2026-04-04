@@ -22,7 +22,7 @@ export default function NoteEditor({ content, onChange, onSave }: NoteEditorProp
       StarterKit,
       Markdown,
       Placeholder.configure({
-        placeholder: t('startEditing', '输入笔记内容...')
+        placeholder: t('startEditing', '입력노트내용...')
       })
     ],
     content,
@@ -37,7 +37,7 @@ export default function NoteEditor({ content, onChange, onSave }: NoteEditorProp
     }
   })
 
-  // 清理编辑器实例
+  // 정리편집기인스턴스
   useEffect(() => {
     return () => {
       if (editor) {
@@ -46,14 +46,14 @@ export default function NoteEditor({ content, onChange, onSave }: NoteEditorProp
     }
   }, [editor])
 
-  // 当外部 content 变化时同步到编辑器
+  // 때외부부분 content 변경시동기에편집기
   useEffect(() => {
     if (editor && content !== (editor.storage as any).markdown.getMarkdown()) {
       editor.commands.setContent(content)
     }
   }, [content, editor])
 
-  // 快捷键系统触发保存（仅编辑器聚焦时）
+  // 단축키시리즈통합트리거저장（만편집기집중포커스시）
   useEffect(() => {
     if (!editor || !onSave) return
 
@@ -69,14 +69,14 @@ export default function NoteEditor({ content, onChange, onSave }: NoteEditorProp
 
   if (!editor) {
     return (
-      <div className="h-full flex items-center justify-center text-muted-foreground">加载中...</div>
+      <div className="h-full flex items-center justify-center text-muted-foreground">로딩 중...</div>
     )
   }
 
   return (
     <div className="h-full flex flex-col">
       <Toaster />
-      {/* 编辑器内容 */}
+      {/* 편집기내용 */}
       <ScrollArea className="flex-1">
         <div className="p-4">
           <EditorContent editor={editor} />

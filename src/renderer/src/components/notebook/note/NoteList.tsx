@@ -53,10 +53,10 @@ export default function NoteList({
                 : 'border-transparent hover:bg-muted'
             }`}
           >
-            {/* 图标列 - 固定宽度 */}
+            {/* 도표컬럼 - 고정너비 */}
             <FileText className="w-4 h-4 mt-0.5 text-muted-foreground" />
 
-            {/* 内容列 - 可被压缩 */}
+            {/* 내용컬럼 - 압축 */}
             <div className="min-w-0 flex flex-col gap-1">
               <h3 className="text-sm font-medium truncate">{note.title}</h3>
               <p className="text-xs text-muted-foreground line-clamp-2">
@@ -64,12 +64,12 @@ export default function NoteList({
               </p>
               <p className="text-xs text-muted-foreground">
                 {new Date(note.updatedAt).toLocaleDateString(
-                  i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US'
+                  i18n.language === 'ko-KR' ? 'ko-KR' : 'en-US'
                 )}
               </p>
             </div>
 
-            {/* 删除按钮列 - 固定宽度 */}
+            {/* 삭제버튼컬럼 - 고정너비 */}
             <Button
               onClick={(e) => {
                 e.stopPropagation()
@@ -87,7 +87,7 @@ export default function NoteList({
         ))}
       </div>
 
-      {/* 删除笔记确认对话框 */}
+      {/* 노트 삭제확인다이얼로그 */}
       <DeleteNoteConfirmDialog
         isOpen={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}

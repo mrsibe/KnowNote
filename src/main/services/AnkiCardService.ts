@@ -1,6 +1,6 @@
 /**
  * AnkiCardService
- * Anki卡片服务 - 生成和管理笔记本的Anki卡片集
+ * Anki 카드 서비스 - 생성및관리노트북의Anki카드세트
  */
 
 import { getDatabase, executeCheckpoint } from '../db'
@@ -20,73 +20,73 @@ import Logger from '../../shared/utils/logger'
 import { settingsManager } from '../config'
 
 /**
- * 进度回调函数类型
+ * 진행콜백함수타입
  */
 export type AnkiProgressCallback = (stage: string, progress: number) => void
 
 /**
- * 获取Anki生成 Prompt（支持国际化和自定义）
+ * 조회Anki생성 Prompt（지원국실제화및자체정의）
  */
 async function getAnkiPrompt(customPrompt?: string): Promise<string> {
-  // 如果提供了自定义提示词，直接使用
+  // 만약제공자체정의힌트，직접사용
   if (customPrompt && customPrompt.trim()) {
     return customPrompt.trim()
   }
 
-  // 否则从设置中获取
+  // 아니오에서설정에서조회
   const settings = await settingsManager.getAllSettings()
-  const language = settings.language || 'zh-CN'
+  const language = settings.language || 'ko-KR'
 
   const prompt = settings.prompts?.anki?.[language]
 
   if (!prompt) {
-    throw new Error(`未找到 ${language} 语言的Anki卡片生成提示词`)
+    throw new Error(`찾을 수 없음 ${language} 언어의Anki카드생성힌트`)
   }
 
   return prompt
 }
 
 /**
- * Zod Schema 定义三种卡片类型
+ * Zod Schema 정의세종류카드타입
  */
 const BasicCardSchema = z.object({
-  id: z.string().describe('卡片唯一ID'),
+  id: z.string().describe('카드 고유 ID'),
   type: z.literal('basic'),
-  front: z.string().max(300).describe('正面:问题文本'),
-  back: z.string().max(500).describe('背面:答案文本'),
-  tags: z.array(z.string()).optional().describe('标签数组'),
+  front: z.string().max(300).describe('앞면: 질문 텍스트'),
+  back: z.string().max(500).describe('뒷면: 답변 텍스트'),
+  tags: z.array(z.string()).optional().describe('태그 배열'),
   metadata: z
     .object({
-      chunkIds: z.array(z.string()).describe('关联的chunk ID列表'),
+      chunkIds: z.array(z.string()).describe('관련 chunk ID 목록'),
       difficulty: z.enum(['easy', 'medium', 'hard']).optional()
     })
     .optional()
 })
 
 const ClozeCardSchema = z.object({
-  id: z.string().describe('卡片唯一ID'),
+  id: z.string().describe('카드 고유 ID'),
   type: z.literal('cloze'),
-  text: z.string().max(500).describe('带有{{c1::答案}}格式的文本'),
-  backExtra: z.string().max(300).optional().describe('背面额外信息'),
-  tags: z.array(z.string()).optional().describe('标签数组'),
+  text: z.string().max(500).describe('{{c1::답변}} 형식을 포함하는 텍스트'),
+  backExtra: z.string().max(300).optional().describe('뒷면 추가 정보'),
+  tags: z.array(z.string()).optional().describe('태그 배열'),
   metadata: z
     .object({
-      chunkIds: z.array(z.string()).describe('关联的chunk ID列表'),
+      chunkIds: z.array(z.string()).describe('관련 chunk ID 목록'),
       difficulty: z.enum(['easy', 'medium', 'hard']).optional()
     })
     .optional()
 })
 
 const FillBlankCardSchema = z.object({
-  id: z.string().describe('卡片唯一ID'),
+  id: z.string().describe('카드 고유 ID'),
   type: z.literal('fill-blank'),
-  sentence: z.string().max(300).describe('带有_____的句子'),
-  answer: z.string().max(100).describe('填空答案'),
-  hint: z.string().max(100).optional().describe('可选提示'),
-  tags: z.array(z.string()).optional().describe('标签数组'),
+  sentence: z.string().max(300).describe('_____를 포함하는 문장'),
+  answer: z.string().max(100).describe('빈칸 답변'),
+  hint: z.string().max(100).optional().describe('선택적 힌트'),
+  tags: z.array(z.string()).optional().describe('태그 배열'),
   metadata: z
     .object({
-      chunkIds: z.array(z.string()).describe('关联的chunk ID列表'),
+      chunkIds: z.array(z.string()).describe('관련 chunk ID 목록'),
       difficulty: z.enum(['easy', 'medium', 'hard']).optional()
     })
     .optional()
@@ -99,33 +99,33 @@ const AnkiCardItemSchema: z.ZodType<AnkiCardItem> = z.discriminatedUnion('type',
 ])
 
 /**
- * 创建动态Anki Schema
+ * 생성동상태Anki Schema
  */
 function createAnkiSchema(cardCount: number) {
   return z.object({
-    cards: z.array(AnkiCardItemSchema).min(1).describe(`${cardCount}张卡片（允许可变数量）`),
+    cards: z.array(AnkiCardItemSchema).min(1).describe(`${cardCount}장 카드 (변동 수량 허용)`),
     metadata: z.object({
-      totalCards: z.number().describe('总卡片数'),
-      cardTypes: z.array(z.string()).describe('卡片类型列表')
+      totalCards: z.number().describe('총 카드 수'),
+      cardTypes: z.array(z.string()).describe('카드 타입 목록')
     })
   })
 }
 
 /**
- * Anki卡片服务
+ * Anki 카드 서비스
  */
 export class AnkiCardService {
   constructor(private providerManager: ProviderManager) {}
 
   /**
-   * 聚合笔记本内容
+   * 집계노트북내용
    */
   private async aggregateNotebookContent(notebookId: string): Promise<string> {
     const db = getDatabase()
     const contentParts: string[] = []
 
     try {
-      // 1. 获取所有已索引文档
+      // 1. 조회모든인덱스문서
       const docs = db
         .select({
           id: documents.id,
@@ -139,10 +139,10 @@ export class AnkiCardService {
       Logger.info('AnkiCardService', `Found ${docs.length} indexed documents`)
 
       if (docs.length === 0) {
-        throw new Error('笔记本没有可用内容生成卡片，请先添加文档到知识库')
+        throw new Error('노트북없있는사용 가능내용생성카드，요청먼저문서 추가에지식 베이스')
       }
 
-      // 2. 聚合文档chunks (每个文档最多10个chunks)
+      // 2. 집계문서chunks (매개문서가장많은10개chunks)
       for (const doc of docs) {
         const docChunks = db
           .select()
@@ -154,12 +154,12 @@ export class AnkiCardService {
 
         if (docChunks.length > 0) {
           const chunkContent = docChunks.map((c) => c.content).join('\n')
-          contentParts.push(`[文档: ${doc.title}]\n${chunkContent}`)
+          contentParts.push(`[문서: ${doc.title}]\n${chunkContent}`)
         }
       }
 
       if (contentParts.length === 0) {
-        throw new Error('笔记本没有可用内容生成卡片')
+        throw new Error('노트북없있는사용 가능내용생성카드')
       }
 
       return contentParts.join('\n\n---\n\n')
@@ -170,7 +170,7 @@ export class AnkiCardService {
   }
 
   /**
-   * 调用LLM生成卡片 (使用 streamObject 结构化输出)
+   * 호출LLM생성카드 (사용 streamObject 결구조화출력)
    */
   private async callLLMForGeneration(
     content: string,
@@ -179,45 +179,45 @@ export class AnkiCardService {
   ): Promise<AnkiGenerationResult> {
     const provider = await this.providerManager.getActiveChatProvider()
     if (!provider) {
-      throw new Error('没有可用的对话模型,请先配置LLM提供商')
+      throw new Error('없있는사용 가능의대화모델,요청먼저설정LLM제공자')
     }
 
-    // 确保 provider 是 AISDKProvider 实例
+    // 보장 provider 예 AISDKProvider 인스턴스
     if (!(provider instanceof AISDKProvider)) {
-      throw new Error('当前 provider 不支持结构化输出')
+      throw new Error('현재 provider 미지원결구조화출력')
     }
 
     Logger.info('AnkiCardService', `Using provider: ${provider.name}`)
 
-    // 获取基础提示词
+    // 조회기본힌트
     const promptTemplate = await getAnkiPrompt(options?.customPrompt)
 
-    // 获取生成参数
+    // 조회생성매개변수
     const cardCount = options?.cardCount || 20
 
-    // 替换变量占位符
+    // 치환변수플레이스홀더
     let prompt = promptTemplate.replace(/\{\{CARD_COUNT\}\}/g, cardCount.toString())
 
-    // 替换内容占位符
+    // 치환내용플레이스홀더
     prompt = prompt.replace(/\{\{CONTENT\}\}/g, content)
 
     try {
       onProgress?.('generating_cards', 30)
 
-      // 获取 AI SDK 模型实例
+      // 조회 AI SDK 모델인스턴스
       const model = provider.getAIModel()
 
-      // 创建动态Schema
+      // 생성동상태Schema
       const AnkiSchema = createAnkiSchema(cardCount)
 
-      // 使用 streamObject 生成结构化数据
+      // 사용 streamObject 생성결구조화데이터
       const { partialObjectStream, object } = streamObject({
         model: model,
         schema: AnkiSchema,
         prompt: prompt
       })
 
-      // 监听流式更新 (用于显示进度)
+      // 감시스트림형식업데이트 (용도:표시진행)
       let lastProgress = 30
       let chunkCount = 0
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -232,13 +232,13 @@ export class AnkiCardService {
 
       onProgress?.('parsing_result', 70)
 
-      // 等待完整对象
+      // 등대기완전한객체
       const result = await object
       Logger.info('AnkiCardService', `Generated cards: ${result.metadata.totalCards}`)
 
-      // 基础验证
+      // 기본검증
       if (!result.cards || result.cards.length < 1) {
-        throw new Error('生成的卡片数量不正确')
+        throw new Error('생성의카드수량아닌정확인')
       }
 
       return {
@@ -247,12 +247,12 @@ export class AnkiCardService {
       }
     } catch (error) {
       Logger.error('AnkiCardService', 'Error calling LLM:', error)
-      throw new Error(`生成卡片失败: ${(error as Error).message}`)
+      throw new Error(`생성카드실패: ${(error as Error).message}`)
     }
   }
 
   /**
-   * 验证和清洗卡片数据
+   * 검증및정리세척카드데이터
    */
   private async validateAndCleanCards(
     notebookId: string,
@@ -260,7 +260,7 @@ export class AnkiCardService {
   ): Promise<AnkiGenerationResult> {
     const db = getDatabase()
 
-    // 收集所有提到的chunkIds
+    // 수세트모든제에의chunkIds
     const allChunkIds = new Set<string>()
     result.cards.forEach((card) => {
       if (card.metadata?.chunkIds) {
@@ -268,7 +268,7 @@ export class AnkiCardService {
       }
     })
 
-    // 验证chunkIds是否存在
+    // 검증chunkIds예아니오존재
     if (allChunkIds.size > 0) {
       const validChunks = db
         .select({ id: chunks.id })
@@ -278,7 +278,7 @@ export class AnkiCardService {
 
       const validChunkIds = new Set(validChunks.map((c) => c.id))
 
-      // 过滤无效的chunkIds
+      // 필터링유효하지 않음의chunkIds
       result.cards = result.cards.map((card) => {
         if (card.metadata?.chunkIds) {
           card.metadata.chunkIds = card.metadata.chunkIds.filter((id) => validChunkIds.has(id))
@@ -287,7 +287,7 @@ export class AnkiCardService {
       })
     }
 
-    // 卡片去重（检查front/sentence/text是否重复）
+    // 카드제거재（확인front/sentence/text예아니오재복）
     const uniqueCards: AnkiCardItem[] = []
     const seenContents = new Set<string>()
     result.cards.forEach((card) => {
@@ -312,7 +312,7 @@ export class AnkiCardService {
   }
 
   /**
-   * 生成卡片集
+   * 생성카드세트
    */
   async generateAnkiCards(
     notebookId: string,
@@ -324,19 +324,19 @@ export class AnkiCardService {
     const startTime = Date.now()
 
     try {
-      // 1. 创建记录
+      // 1. 생성기록
       onProgress?.('creating_record', 0)
 
       const notebook = db.select().from(notebooks).where(eq(notebooks.id, notebookId)).get()
       if (!notebook) {
-        throw new Error('笔记本不存在')
+        throw new Error('노트북존재하지 않음')
       }
 
-      // 获取当前语言设置
+      // 현재 조회언어설정
       const settings = await settingsManager.getAllSettings()
-      const language = settings.language || 'zh-CN'
+      const language = settings.language || 'ko-KR'
 
-      // 获取当前版本号
+      // 현재 조회버전번호
       const latestVersion = db
         .select({ version: ankiCards.version })
         .from(ankiCards)
@@ -347,9 +347,9 @@ export class AnkiCardService {
 
       const newVersion = (latestVersion?.version || 0) + 1
 
-      // 根据语言生成标题
+      // 기반으로언어생성제목
       const titleTemplate =
-        language === 'en-US' ? `${notebook.title} Anki Cards` : `${notebook.title}的Anki卡片`
+        language === 'en-US' ? `${notebook.title} Anki Cards` : `${notebook.title}의Anki카드`
 
       const newAnkiCard: NewAnkiCard = {
         id: ankiCardId,
@@ -366,7 +366,7 @@ export class AnkiCardService {
       db.insert(ankiCards).values(newAnkiCard).run()
       Logger.info('AnkiCardService', `Created anki card: ${ankiCardId}, version: ${newVersion}`)
 
-      // 创建对应的 item（添加到列表末尾）
+      // 생성의 item（추가에목록끝끝）
       const existingItems = db.select().from(items).where(eq(items.notebookId, notebookId)).all()
       const maxOrder = existingItems.reduce((max, item) => Math.max(max, item.order), -1)
       const newOrder = maxOrder + 1
@@ -388,18 +388,18 @@ export class AnkiCardService {
         `Created item for anki card: ${itemId} with order: ${newOrder}`
       )
 
-      // 2. 聚合内容
+      // 2. 집계내용
       onProgress?.('aggregating_content', 10)
       const content = await this.aggregateNotebookContent(notebookId)
 
-      // 3. 调用LLM生成
+      // 3. 호출LLM생성
       const result = await this.callLLMForGeneration(content, options, onProgress)
 
-      // 4. 验证和清洗数据
+      // 4. 검증및정리세척데이터
       onProgress?.('validating_data', 80)
       const validatedResult = await this.validateAndCleanCards(notebookId, result)
 
-      // 5. 构建chunkMapping
+      // 5. 빌드chunkMapping
       const chunkMapping: Record<string, string[]> = {}
       validatedResult.cards.forEach((card) => {
         if (card.metadata?.chunkIds && card.metadata.chunkIds.length > 0) {
@@ -407,12 +407,12 @@ export class AnkiCardService {
         }
       })
 
-      // 6. 更新数据库
+      // 6. 업데이트데이터베이스
       onProgress?.('saving_cards', 90)
 
       const generationTime = Date.now() - startTime
 
-      // 捕获当前 provider 名称，避免在更新时再次异步调用
+      // 캡처획득현재 provider 이름，회피면업데이트시다시번비동기호출
       const activeProvider = await this.providerManager.getActiveChatProvider()
       const providerName = activeProvider?.name || 'unknown'
 
@@ -440,7 +440,7 @@ export class AnkiCardService {
     } catch (error) {
       Logger.error('AnkiCardService', 'Error generating anki cards:', error)
 
-      // 更新状态为失败
+      // 업데이트상태실패
       db.update(ankiCards)
         .set({
           status: 'failed',
@@ -455,7 +455,7 @@ export class AnkiCardService {
   }
 
   /**
-   * 获取卡片集
+   * 조회카드세트
    */
   getAnkiCards(ankiCardId: string): AnkiCard | undefined {
     const db = getDatabase()
@@ -464,7 +464,7 @@ export class AnkiCardService {
   }
 
   /**
-   * 获取笔记本最新版本卡片集
+   * 노트북 조회최신버전카드세트
    */
   getLatestAnkiCards(notebookId: string): AnkiCard | undefined {
     const db = getDatabase()
@@ -479,7 +479,7 @@ export class AnkiCardService {
   }
 
   /**
-   * 更新卡片集
+   * 업데이트카드세트
    */
   updateAnkiCards(ankiCardId: string, updates: Partial<{ title: string }>): void {
     const db = getDatabase()
@@ -492,18 +492,18 @@ export class AnkiCardService {
   }
 
   /**
-   * 删除卡片集
+   * 삭제카드세트
    */
   deleteAnkiCards(ankiCardId: string): void {
     const db = getDatabase()
 
-    // 先删除关联的 item
+    // 먼저삭제연관된 item
     db.delete(items)
       .where(and(eq(items.type, 'anki'), eq(items.resourceId, ankiCardId)))
       .run()
     Logger.info('AnkiCardService', `Deleted item for anki card: ${ankiCardId}`)
 
-    // 删除卡片集本身
+    // 삭제카드세트자
     db.delete(ankiCards).where(eq(ankiCards.id, ankiCardId)).run()
     executeCheckpoint('PASSIVE')
     Logger.info('AnkiCardService', `Anki cards deleted: ${ankiCardId}`)

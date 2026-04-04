@@ -13,12 +13,12 @@ export default function QuizGenerating() {
   return (
     <div className="flex flex-col items-center justify-center h-full p-8">
       <div className="max-w-md w-full space-y-8">
-        {/* 标题 */}
+        {/* 제목 */}
         <h2 className="text-2xl font-semibold text-center text-foreground">
           {t('generatingQuiz')}
         </h2>
 
-        {/* 进度指示器 */}
+        {/* 진행가리키는보여주기 */}
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-16 h-16 animate-spin text-primary" />
           <div className="text-center space-y-2">
@@ -29,7 +29,7 @@ export default function QuizGenerating() {
           </div>
         </div>
 
-        {/* 进度条 */}
+        {/* 프로그레스 바 */}
         <div className="w-full bg-secondary rounded-full h-3">
           <div
             className="bg-primary h-3 rounded-full transition-all duration-300 ease-in-out"
@@ -37,7 +37,7 @@ export default function QuizGenerating() {
           />
         </div>
 
-        {/* 提示文本 */}
+        {/* 힌트텍스트 */}
         <p className="text-center text-sm text-muted-foreground">{t('generatingHint')}</p>
       </div>
     </div>

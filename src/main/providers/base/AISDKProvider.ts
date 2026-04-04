@@ -1,7 +1,7 @@
 /**
  * AI SDK Provider
- * 基于 Vercel AI SDK 的统一 Provider 实现
- * 支持所有 OpenAI 兼容的 API(OpenAI, DeepSeek, Qwen, Kimi, SiliconFlow 等)
+ * Vercel AI SDK 기반 통합 Provider 구현
+ * OpenAI 호환 API를 지원하는 모든 프로바이더 지원 (OpenAI, DeepSeek, LM Studio, Ollama 등)
  */
 
 import { createOpenAI } from '@ai-sdk/openai'
@@ -18,7 +18,7 @@ import type { ProviderDescriptor } from '../registry/ProviderDescriptor'
 import Logger from '../../../shared/utils/logger'
 
 /**
- * 将 APIMessage 转换为 AI SDK 的 CoreMessage 格式
+ * APIMessage를 AI SDK의 CoreMessage 형식으로 변환
  */
 function convertToCoreMessages(messages: APIMessage[]) {
   return messages.map((msg) => ({
@@ -29,20 +29,19 @@ function convertToCoreMessages(messages: APIMessage[]) {
 
 /**
  * AISDKProvider
- * 基于 Vercel AI SDK 的统一 Provider 实现
- * 根据 ProviderDescriptor 的能力配置动态组合功能
+ * Vercel AI SDK 기반 통합 Provider 구현
+ * ProviderDescriptor의 기능 설정에 따라 동적으로 기능을 조합
  */
 export class AISDKProvider implements BaseProvider {
   readonly name: string
   private descriptor: ProviderDescriptor
   protected config: LLMProviderConfig
 
-  // AI SDK provider 实例
+  // AI SDK provider 인스턴스
   private aiProvider:
     | ReturnType<typeof createOpenAI>
     | ReturnType<typeof createOpenAICompatible>
     | ReturnType<typeof createDeepSeek>
-    | ReturnType<typeof createQwen>
     | ReturnType<typeof createOllama>
     | null = null
 
@@ -50,7 +49,7 @@ export class AISDKProvider implements BaseProvider {
     this.name = descriptor.name
     this.descriptor = descriptor
 
-    // 初始化默认配置
+    // 기본 설정 초기화
     this.config = {
       baseUrl: descriptor.defaultBaseUrl,
       model: descriptor.defaultChatModel || descriptor.defaultEmbeddingModel,
@@ -62,7 +61,7 @@ export class AISDKProvider implements BaseProvider {
   }
 
   /**
-   * 配置 Provider
+   * Provider 설정
    */
   configure(config: LLMProviderConfig): void {
     this.config = { ...this.config, ...config }
@@ -107,7 +106,7 @@ export class AISDKProvider implements BaseProvider {
   }
 
   /**
-   * 验证配置是否有效
+   * 설정 유효성 검증
    */
   async validateConfig(config: LLMProviderConfig): Promise<boolean> {
     try {
@@ -122,29 +121,29 @@ export class AISDKProvider implements BaseProvider {
     }
   }
 
-  // ==================== 能力检查方法 ====================
+  // ==================== 기능 확인 메서드 ====================
 
   /**
-   * 检查是否支持对话能力
-   * TypeScript 类型守卫
+   * 대화 기능 지원 여부 확인
+   * TypeScript 타입 가드
    */
   hasChatCapability(): this is BaseProvider & ChatCapability {
     return this.descriptor.capabilities.chat && this.aiProvider !== null
   }
 
   /**
-   * 检查是否支持嵌入能力
-   * TypeScript 类型守卫
+   * 임베딩 기능 지원 여부 확인
+   * TypeScript 타입 가드
    */
   hasEmbeddingCapability(): this is BaseProvider & EmbeddingCapability {
     return this.descriptor.capabilities.embedding && this.aiProvider !== null
   }
 
-  // ==================== 对话能力方法 ====================
+  // ==================== 대화 기능 메서드 ====================
 
   /**
-   * 流式发送消息
-   * 如果不支持对话能力会抛出错误
+   * 스트리밍 방식으로 메시지 전송
+   * 대화 기능을 지원하지 않으면 에러를 발생시킵니다
    */
   async sendMessageStream(
     messages: APIMessage[],
@@ -170,23 +169,23 @@ export class AISDKProvider implements BaseProvider {
       return abortController
     }
 
-    // 创建 AbortController
+    // AbortController 생성
     const abortController = new AbortController()
 
-    // 异步执行流式生成
+    // 비동기로 스트리밍 생성 실행
     ;(async () => {
       try {
         const modelId = this.config.model || this.descriptor.defaultChatModel!
 
         Logger.debug('AISDKProvider', `Streaming with model: ${modelId}`)
 
-        // 转换消息格式
+        // 메시지 형식 변환
         const coreMessages = convertToCoreMessages(messages)
 
-        // 获取语言模型
+        // 언어 모델 조회
         const model = this.aiProvider!(modelId) as any
 
-        // 调用 AI SDK streamText
+        // AI SDK streamText 호출
         const result = streamText({
           model,
           messages: coreMessages,
@@ -195,18 +194,18 @@ export class AISDKProvider implements BaseProvider {
           abortSignal: abortController.signal
         })
 
-        // 处理流式响应
-        // 使用 fullStream 而不是 textStream 以支持推理过程展示
+        // 스트리밍 응답 처리
+        // 추론 과정 표시를 위해 textStream 대신 fullStream 사용
         for await (const part of result.fullStream) {
           if (abortController.signal.aborted) {
             Logger.debug('AISDKProvider', 'Stream aborted by user')
             break
           }
 
-          // 处理不同类型的流式部分
+          // 스트리밍 파트 타입별 처리
           switch (part.type) {
             case 'reasoning-start':
-              // 推理块开始
+              // 추론 블록 시작
               onChunk({
                 content: '',
                 done: false,
@@ -218,7 +217,7 @@ export class AISDKProvider implements BaseProvider {
               break
 
             case 'reasoning-delta':
-              // 推理增量内容
+              // 추론 증분 내용
               onChunk({
                 content: part.text,
                 done: false,
@@ -230,7 +229,7 @@ export class AISDKProvider implements BaseProvider {
               break
 
             case 'reasoning-end':
-              // 推理块结束
+              // 추론 블록 종료
               onChunk({
                 content: '',
                 done: false,
@@ -242,7 +241,7 @@ export class AISDKProvider implements BaseProvider {
               break
 
             case 'text-delta':
-              // 文本增量内容（最终答案）
+              // 텍스트 증분 내용 (최종 답변)
               onChunk({
                 content: part.text,
                 done: false
@@ -251,12 +250,12 @@ export class AISDKProvider implements BaseProvider {
           }
         }
 
-        // 等待结果完成，获取 metadata
+        // 결과 완료 대기, metadata 조회
         const finalResult = await result
         const usage = await finalResult.usage
         const finishReason = await finalResult.finishReason
 
-        // 发送完成标记，包含 metadata
+        // 완료 마커 전송 (metadata 포함)
         onChunk({
           content: '',
           done: true,
@@ -287,7 +286,7 @@ export class AISDKProvider implements BaseProvider {
   }
 
   /**
-   * 获取默认对话模型
+   * 기본 대화 모델 조회
    */
   getDefaultChatModel(): string {
     if (!this.descriptor.capabilities.chat) {
@@ -297,8 +296,8 @@ export class AISDKProvider implements BaseProvider {
   }
 
   /**
-   * 获取 AI SDK 模型实例 (用于 streamObject 等高级 API)
-   * @param modelId - 模型ID,如果不提供则使用配置的默认模型
+   * AI SDK 모델 인스턴스 조회 (streamObject 등 고급 API용)
+   * @param modelId - 모델 ID. 미지정 시 기본 설정 모델 사용
    */
   getAIModel(modelId?: string): any {
     if (!this.aiProvider) {
@@ -311,11 +310,11 @@ export class AISDKProvider implements BaseProvider {
     return this.aiProvider(model)
   }
 
-  // ==================== 嵌入能力方法 ====================
+  // ==================== 임베딩 기능 메서드 ====================
 
   /**
-   * 生成单个文本的 Embedding
-   * 如果不支持嵌入能力会抛出错误
+   * 단일 텍스트의 Embedding 생성
+   * 임베딩 기능을 지원하지 않으면 에러를 발생시킵니다
    */
   async createEmbedding(text: string, config?: EmbeddingConfig): Promise<EmbeddingResult> {
     if (!this.aiProvider) {
@@ -335,20 +334,20 @@ export class AISDKProvider implements BaseProvider {
 
     Logger.debug('AISDKProvider', `Creating embedding with model: ${modelId}`)
 
-    // 使用 AI SDK 的 embed 函数
-    // 不同 provider 使用不同的方法名
+    // AI SDK의 embed 함수 사용
+    // provider별로 다른 메서드명 사용
     const embeddingModel =
       this.name === 'ollama'
         ? (this.aiProvider as any).embedding(modelId) // Ollama: embedding
-        : (this.aiProvider as any).textEmbeddingModel(modelId) // OpenAI, DeepSeek, Qwen, OpenAI-Compatible: textEmbeddingModel
+        : (this.aiProvider as any).textEmbeddingModel(modelId) // OpenAI, DeepSeek, OpenAI-Compatible: textEmbeddingModel
 
-    // 构建 providerOptions
+    // providerOptions 빌드
     const providerOptions = this.buildProviderOptions(config)
 
     const result = await embed({
       model: embeddingModel,
       value: text,
-      ...(providerOptions && { providerOptions }) // 条件添加 providerOptions
+      ...(providerOptions && { providerOptions }) // 조건부 providerOptions 추가
     })
 
     return {
@@ -360,8 +359,8 @@ export class AISDKProvider implements BaseProvider {
   }
 
   /**
-   * 批量生成 Embedding
-   * 如果不支持嵌入能力会抛出错误
+   * 배치 Embedding 생성
+   * 임베딩 기능을 지원하지 않으면 에러를 발생시킵니다
    */
   async createEmbeddings(texts: string[], config?: EmbeddingConfig): Promise<EmbeddingResult[]> {
     if (!this.aiProvider) {
@@ -384,20 +383,20 @@ export class AISDKProvider implements BaseProvider {
       `Creating embeddings for ${texts.length} texts with model: ${modelId}`
     )
 
-    // 使用 AI SDK 的 embedMany 函数
-    // 不同 provider 使用不同的方法名
+    // AI SDK의 embedMany 함수 사용
+    // provider별로 다른 메서드명 사용
     const embeddingModel =
       this.name === 'ollama'
         ? (this.aiProvider as any).embedding(modelId) // Ollama: embedding
-        : (this.aiProvider as any).textEmbeddingModel(modelId) // OpenAI, DeepSeek, Qwen, OpenAI-Compatible: textEmbeddingModel
+        : (this.aiProvider as any).textEmbeddingModel(modelId) // OpenAI, DeepSeek, OpenAI-Compatible: textEmbeddingModel
 
-    // 构建 providerOptions
+    // providerOptions 빌드
     const providerOptions = this.buildProviderOptions(config)
 
     const result = await embedMany({
       model: embeddingModel,
       values: texts,
-      ...(providerOptions && { providerOptions }) // 条件添加 providerOptions
+      ...(providerOptions && { providerOptions }) // 조건부 providerOptions 추가
     })
 
     const totalTokens = result.usage?.tokens || 0
@@ -412,7 +411,7 @@ export class AISDKProvider implements BaseProvider {
   }
 
   /**
-   * 获取默认 Embedding 模型
+   * 기본 Embedding 모델 조회
    */
   getDefaultEmbeddingModel(): string {
     if (!this.descriptor.capabilities.embedding) {
@@ -422,8 +421,8 @@ export class AISDKProvider implements BaseProvider {
   }
 
   /**
-   * 构建 provider-specific 选项
-   * 根据 provider 类型和配置生成 providerOptions
+   * provider별 옵션 빌드
+   * provider 타입과 설정에 따라 providerOptions 생성
    */
   private buildProviderOptions(config?: EmbeddingConfig): Record<string, any> | undefined {
     if (!config?.dimensions) {
@@ -441,9 +440,8 @@ export class AISDKProvider implements BaseProvider {
       return undefined
     }
 
-    // 对于 OpenAI 兼容的 provider，使用统一的格式
-    // SiliconFlow 使用 'openai' 作为 providerKey
-    const providerKey = this.name === 'siliconflow' ? 'openai' : this.name
+    // OpenAI 호환 provider는 통일된 형식 사용
+    const providerKey = this.name
 
     return {
       [providerKey]: {
@@ -452,11 +450,11 @@ export class AISDKProvider implements BaseProvider {
     }
   }
 
-  // ==================== 向后兼容方法(已废弃) ====================
+  // ==================== 하위 호환 메서드 (사용 중단) ====================
 
   /**
-   * @deprecated 使用 hasChatCapability() 或 hasEmbeddingCapability() 替代
-   * 检查是否支持 Embedding
+   * @deprecated hasChatCapability() 또는 hasEmbeddingCapability() 사용 권장
+   * Embedding 지원 여부 확인
    */
   supportsEmbedding(): boolean {
     return this.hasEmbeddingCapability()

@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { validate } from './validation'
 
 /**
- * Item 相关验证 Schema
+ * Item 관련검증 Schema
  */
 const ItemSchemas = {
   getItems: z.object({
@@ -25,10 +25,10 @@ const ItemSchemas = {
 }
 
 /**
- * 注册 item 相关 IPC handlers
+ * 등록 item 관련 IPC handlers
  */
 export function registerItemHandlers() {
-  // 获取笔记本下的所有 items
+  // 노트북 조회아래의모든 items
   ipcMain.handle(
     'items:get',
     validate(ItemSchemas.getItems, async (args) => {
@@ -44,7 +44,7 @@ export function registerItemHandlers() {
     })
   )
 
-  // 更新 item 顺序
+  // 업데이트 item 순서순서
   ipcMain.handle(
     'items:update-order',
     validate(ItemSchemas.updateOrder, async (args) => {
@@ -59,7 +59,7 @@ export function registerItemHandlers() {
     })
   )
 
-  // 批量更新 items 顺序
+  // 일괄업데이트 items 순서순서
   ipcMain.handle(
     'items:batch-update-order',
     validate(ItemSchemas.batchUpdateOrder, async (args) => {
@@ -76,7 +76,7 @@ export function registerItemHandlers() {
     })
   )
 
-  // 删除 item（可选删除关联资源）
+  // 삭제 item（선택삭제닫기연리소스）
   ipcMain.handle(
     'items:delete',
     validate(ItemSchemas.deleteItem, async (args) => {

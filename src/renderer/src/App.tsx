@@ -27,40 +27,40 @@ function App(): React.JSX.Element {
     initOnboarding
   } = useOnboardingStore()
 
-  // 激活快捷键执行器
+  // 활성화단축키실행행
   useShortcutExecutor()
 
-  // 初始化平台检测（预加载平台信息到缓存）
+  // 초기화플랫폼감지（미리로드플랫폼정보에캐시）
   useEffect(() => {
     initPlatform().catch((error) => {
       console.error('[App] Failed to initialize platform detection:', error)
     })
   }, [])
 
-  // 初始化聊天监听器
+  // 초기화채팅감시
   useEffect(() => {
     const cleanup = setupChatListeners()
     return cleanup
   }, [])
 
-  // 初始化主题
+  // 초기화테마
   useEffect(() => {
     initTheme()
   }, [initTheme])
 
-  // 初始化语言
+  // 초기화언어
   useEffect(() => {
     initLanguage()
   }, [initLanguage])
 
-  // 监听语言变化
+  // 감시언어변경
   useEffect(() => {
     if (language && i18n.language !== language) {
       i18n.changeLanguage(language)
     }
   }, [language])
 
-  // 初始化笔记本数据（从数据库加载）
+  // 초기화노트북데이터（에서데이터베이스로드）
   useEffect(() => {
     console.log('[App] Loading notebooks on startup...')
     loadNotebooks().catch((error) => {
@@ -68,12 +68,12 @@ function App(): React.JSX.Element {
     })
   }, [loadNotebooks])
 
-  // 初始化引导状态
+  // 초기화온보딩상태
   useEffect(() => {
     initOnboarding()
   }, [initOnboarding])
 
-  // 如果正在加载引导状态，显示加载中
+  // 만약현재로드온보딩상태，표시로딩 중
   if (onboardingLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -86,9 +86,9 @@ function App(): React.JSX.Element {
     <I18nextProvider i18n={i18n}>
       <HashRouter>
         <Routes>
-          {/* 引导页路由 */}
+          {/* 온보딩페이지라우트 */}
           {!hasCompletedOnboarding && <Route path="/onboarding" element={<OnboardingPage />} />}
-          {/* 主应用路由 */}
+          {/* 메인앱라우트 */}
           <Route
             path="/"
             element={

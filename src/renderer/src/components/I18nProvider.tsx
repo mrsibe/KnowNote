@@ -12,13 +12,13 @@ export const I18nProvider = ({ children }: I18nProviderProps) => {
 
   useEffect(() => {
     const init = async () => {
-      // 初始化语言设置
+      // 초기화언어설정
       await initLanguage()
 
-      // 获取当前语言
+      // 현재 조회언어
       const currentLanguage = useI18nStore.getState().language
 
-      // 预加载所有语言包
+      // 미리로드모든언어패키지
       await preloadLocales(currentLanguage)
 
       setIsReady(true)
@@ -27,14 +27,14 @@ export const I18nProvider = ({ children }: I18nProviderProps) => {
     init()
   }, [initLanguage])
 
-  // 监听语言变化并预加载新的语言包
+  // 감시언어변경그리고미리로드새의언어패키지
   useEffect(() => {
     if (isReady) {
       preloadLocales(language)
     }
   }, [language, isReady])
 
-  // 如果还在加载中，显示加载界面
+  // 만약아직로딩 중，표시로드화면
   if (!isReady || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background dark:bg-background-dark">

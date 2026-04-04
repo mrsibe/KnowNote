@@ -41,7 +41,7 @@ export default function SettingsDialog(): ReactElement {
     }
   }
 
-  // 加载初始设置
+  // 로드초기시작설정
   useEffect(() => {
     const loadSettings = async () => {
       const settings = await window.api.settings.getAll()
@@ -55,7 +55,7 @@ export default function SettingsDialog(): ReactElement {
     loadSettings()
   }, [])
 
-  // 使用 useMemo 计算是否有变化
+  // 사용 useMemo 계산예아니오있는변경
   const hasChanges = useMemo(() => {
     if (originalSettings && pendingSettings && originalProviders && pendingProviders) {
       const settingsChanged = JSON.stringify(originalSettings) !== JSON.stringify(pendingSettings)
@@ -104,41 +104,41 @@ export default function SettingsDialog(): ReactElement {
     }
   ]
 
-  // 更新临时设置
+  // 업데이트임시시설정
   const updatePendingSettings = (updates: Partial<AppSettings>) => {
     if (pendingSettings) {
       setPendingSettings({ ...pendingSettings, ...updates })
     }
   }
 
-  // 更新临时提供商配置
+  // 업데이트임시시제공자설정
   const updatePendingProviders = (updatedProviders: ProviderConfig[]) => {
     setPendingProviders(updatedProviders)
   }
 
-  // 刷新提供商配置（用于新增/删除后同步状态）
+  // 제공자 새로고침설정（용도:새로 추가된/삭제후동기상태）
   const refreshProviders = async () => {
     const providers = await window.api.getAllProviderConfigs()
     setOriginalProviders(providers)
     setPendingProviders(providers)
   }
 
-  // 确认保存
+  // 확인저장
   const handleConfirm = async () => {
-    // 保存通用设置
+    // 저장통용설정
     if (pendingSettings) {
       await window.api.settings.update(pendingSettings)
       setOriginalSettings(pendingSettings)
     }
 
-    // 保存提供商配置（新增/删除已经立即保存，这里只保存修改）
+    // 제공자 설정 저장（새로 추가된/삭제이미즉시저장，내부저장수정수정）
     for (const provider of pendingProviders) {
       await window.api.saveProviderConfig(provider)
     }
     setOriginalProviders(pendingProviders)
   }
 
-  // 取消变更
+  // 취소변더
   const handleCancel = () => {
     if (originalSettings) {
       setPendingSettings(originalSettings)
@@ -156,7 +156,7 @@ export default function SettingsDialog(): ReactElement {
       >
         <SidebarProvider className="flex flex-1 min-h-0">
           <div className="flex flex-1 min-h-0 gap-3 p-3 w-full">
-            {/* 使用 Shadcn Sidebar */}
+            {/* 사용 Shadcn Sidebar */}
             <Sidebar className="w-40" collapsible="none">
               <SidebarContent>
                 <SidebarMenu>
@@ -184,7 +184,7 @@ export default function SettingsDialog(): ReactElement {
               </SidebarContent>
             </Sidebar>
 
-            {/* 获取当前活跃项的配置 */}
+            {/* 현재 조회활점프항목의설정 */}
             {(() => {
               const currentItem = menuItems.find((item) => item.id === activeSection)
               if (!currentItem) return null

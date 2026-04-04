@@ -1,6 +1,6 @@
 /**
  * FileParserService
- * 文件解析服务，使用 Loader 模式统一处理各种文档格式
+ * 파일 파싱 서비스, Loader 패턴을 사용하여 다양한 문서 형식을 통합 처리
  */
 
 import { extname } from 'path'
@@ -13,7 +13,7 @@ import { WebLoader } from './loaders/WebLoader'
 import type { IDocumentLoader, DocumentLoadResult, LoadOptions } from './loaders/types'
 
 /**
- * 支持的文件类型
+ * 지원하는 파일 타입
  */
 export type SupportedFileType =
   | 'pdf'
@@ -27,15 +27,15 @@ export type SupportedFileType =
   | 'text'
 
 /**
- * 文件解析服务
- * 支持 PDF、Word、PowerPoint、Markdown、纯文本
+ * 파일 파싱 서비스
+ * PDF, Word, PowerPoint, Markdown, 순수 텍스트 지원
  */
 export class FileParserService {
   private loaders: Map<string, IDocumentLoader>
   private allLoaders: IDocumentLoader[]
 
   constructor() {
-    // 初始化所有 Loader
+    // 모든 Loader 초기화
     this.allLoaders = [
       new PdfLoader(),
       new MarkdownLoader(),
@@ -44,14 +44,14 @@ export class FileParserService {
       new WebLoader()
     ]
 
-    // 按扩展名和 MIME 类型注册 Loader
+    // 확장자 및 MIME 타입으로 Loader 등록
     this.loaders = new Map()
     for (const loader of this.allLoaders) {
-      // 注册扩展名
+      // 확장자 등록
       for (const ext of loader.supportedExtensions) {
         this.loaders.set(ext.toLowerCase(), loader)
       }
-      // 注册 MIME 类型
+      // MIME 타입 등록
       for (const mime of loader.supportedMimeTypes) {
         this.loaders.set(mime, loader)
       }
@@ -61,7 +61,7 @@ export class FileParserService {
   }
 
   /**
-   * 根据文件路径自动识别格式并解析
+   * 파일 경로로 자동 형식 인식 및 파싱
    */
   async parseFile(filePath: string, options?: LoadOptions): Promise<DocumentLoadResult> {
     const ext = extname(filePath).toLowerCase().slice(1)
@@ -76,7 +76,7 @@ export class FileParserService {
   }
 
   /**
-   * 根据文件类型解析 Buffer
+   * 파일 타입으로 Buffer 파싱
    */
   async parseBuffer(
     buffer: Buffer,
@@ -94,7 +94,7 @@ export class FileParserService {
   }
 
   /**
-   * 解析纯文本/Markdown
+   * 순수 텍스트/Markdown 파싱
    */
   parseText(content: string, mimeType: string = 'text/plain'): DocumentLoadResult {
     return {
@@ -108,14 +108,14 @@ export class FileParserService {
   }
 
   /**
-   * 检查是否支持该文件类型
+   * 해당 파일 타입 지원 여부 확인
    */
   isSupported(fileType: string): boolean {
     return this.loaders.has(fileType.toLowerCase())
   }
 
   /**
-   * 根据 MIME 类型获取文件类型
+   * MIME 타입으로 파일 타입 조회
    */
   getFileTypeFromMime(mimeType: string): SupportedFileType | null {
     const mimeMap: Record<string, SupportedFileType> = {
@@ -131,7 +131,7 @@ export class FileParserService {
   }
 
   /**
-   * 获取 MIME 类型
+   * MIME 타입 조회
    */
   getMimeType(fileType: string): string {
     const mimeMap: Record<string, string> = {
@@ -149,16 +149,16 @@ export class FileParserService {
   }
 
   /**
-   * 根据扩展名获取 Loader
+   * 확장자로 Loader 조회
    */
   private getLoaderByExtension(ext: string): IDocumentLoader | undefined {
-    // 处理纯文本特殊情况
+    // 순수 텍스트 특수 처리
     if (ext === 'txt' || ext === 'text') {
-      return this.loaders.get('md') // 使用 MarkdownLoader 处理纯文本
+      return this.loaders.get('md') // MarkdownLoader로 순수 텍스트 처리
     }
     return this.loaders.get(ext.toLowerCase())
   }
 }
 
-// 导出类型（保持向后兼容）
+// 타입 내보내기 (하위 호환성 유지)
 export type { DocumentLoadResult as ParseResult, LoadOptions }

@@ -20,9 +20,9 @@ export default function ReasoningContent({
   const { t } = useTranslation('chat')
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // 监听思考状态变化，自动控制展开/折叠
-  // 思考开始 → 自动展开
-  // 思考结束 → 自动折叠
+  // 감시사고고려상태변경，자동제어확장열기/접기
+  // 사고고려시작 → 자동확장열기
+  // 사고고려종료 → 자동접기
   /* eslint-disable */
   useEffect(() => {
     if (isStreaming) {
@@ -33,21 +33,21 @@ export default function ReasoningContent({
   }, [isStreaming])
   /* eslint-enable */
 
-  // 如果没有内容且不在流式传输，不显示
+  // 만약없있는내용또한아닌스트림형식전달입출력，아닌표시
   if (!content && !isStreaming) {
     return <></>
   }
 
   return (
     <div className="border border-border rounded-lg overflow-hidden bg-muted/30 shadow-sm">
-      {/* 头部：展开/折叠按钮 */}
+      {/* 헤더부분：확장열기/접기버튼 */}
       <Button
         onClick={() => setIsExpanded(!isExpanded)}
         variant="ghost"
         className="w-full flex items-center justify-between px-3 py-1.5 text-xs h-auto hover:bg-muted/50"
       >
         <div className="flex items-center gap-1.5">
-          {/* 思考图标 */}
+          {/* 사고고려도표 */}
           <svg
             className="w-3.5 h-3.5 text-muted-foreground"
             fill="none"
@@ -62,18 +62,18 @@ export default function ReasoningContent({
             />
           </svg>
 
-          {/* 标题 */}
+          {/* 제목 */}
           <span className="font-medium text-foreground">
             {isStreaming ? t('thinkingInProgress') : t('thinkingProcess')}
           </span>
 
-          {/* 流式传输动画 */}
+          {/* 스트림형식전달입출력동그리기 */}
           {isStreaming && (
             <span className="inline-block w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
           )}
         </div>
 
-        {/* 展开/折叠图标 */}
+        {/* 확장열기/접기도표 */}
         <svg
           className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${
             isExpanded ? 'rotate-180' : ''
@@ -86,7 +86,7 @@ export default function ReasoningContent({
         </svg>
       </Button>
 
-      {/* 内容区域：展开时显示 */}
+      {/* 내용영역：확장열기시표시 */}
       {isExpanded && (
         <div className="border-t border-border">
           <ScrollArea>
@@ -113,13 +113,13 @@ export default function ReasoningContent({
                   >
                     {content}
                   </ReactMarkdown>
-                  {/* 流式传输光标 */}
+                  {/* 스트림형식전달입출력빛표 */}
                   {isStreaming && (
                     <span className="inline-block w-2 h-3 ml-1 bg-muted-foreground/50 animate-pulse" />
                   )}
                 </div>
               ) : (
-                // 空内容时显示占位符
+                // 빈내용시표시플레이스홀더
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{t('thinkingShort')}</span>
                   <span className="inline-block w-2 h-3 bg-muted-foreground/50 animate-pulse" />

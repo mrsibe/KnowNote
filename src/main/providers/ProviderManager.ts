@@ -1,6 +1,6 @@
 /**
  * Provider Manager
- * 协调 ProviderRegistry 和 ProviderConfigManager,提供统一的供应商访问接口
+ * 협조 ProviderRegistry 및 ProviderConfigManager,제공통합의제공자방문질문인터페이스
  */
 
 import type { BaseProvider } from './capabilities/BaseProvider'
@@ -16,7 +16,7 @@ import Logger from '../../shared/utils/logger'
 
 /**
  * ProviderManager
- * 供应商管理器,协调注册表和配置管理
+ * 제공자관리,협조등록테이블및설정관리
  */
 export class ProviderManager {
   private registry: ProviderRegistry
@@ -24,22 +24,22 @@ export class ProviderManager {
   constructor() {
     this.registry = new ProviderRegistry()
 
-    // 注册所有内置供应商
+    // 등록모든내장제공자
     this.registerBuiltinProviders()
 
     Logger.info('ProviderManager', 'Provider manager initialized')
   }
 
   /**
-   * 初始化 Provider Manager（异步）
-   * 在应用启动时调用，初始化内置模型列表
+   * 초기화 Provider Manager（비동기）
+   * 앱시작동시호출，초기화내장모델목록
    */
   async initialize(): Promise<void> {
     await this.initializeBuiltinModels()
   }
 
   /**
-   * 注册所有内置供应商
+   * 등록모든내장제공자
    */
   private registerBuiltinProviders(): void {
     this.registry.registerMany(BUILTIN_PROVIDERS)
@@ -50,8 +50,8 @@ export class ProviderManager {
   }
 
   /**
-   * 初始化内置模型列表
-   * 如果 electron-store 中没有模型缓存，自动写入内置模型
+   * 초기화내장모델목록
+   * 만약 electron-store 에서없있는모델캐시，자동쓰기내장모델
    */
   private async initializeBuiltinModels(): Promise<void> {
     try {
@@ -60,7 +60,7 @@ export class ProviderManager {
       for (const [providerName, models] of Object.entries(builtinModels)) {
         const cachedModels = await providerConfigManager.getProviderModels(providerName)
 
-        // 如果没有缓存，写入内置模型
+        // 만약없있는캐시，쓰기내장모델
         if (!cachedModels || cachedModels.length === 0) {
           Logger.info(
             'ProviderManager',
@@ -82,9 +82,9 @@ export class ProviderManager {
   }
 
   /**
-   * 获取已配置的 provider(合并配置)
-   * @param name - 供应商名称
-   * @returns BaseProvider 或 null
+   * 조회구성됨의 provider(병합설정)
+   * @param name - 제공자이름
+   * @returns BaseProvider 또는 null
    */
   async getConfiguredProvider(name: string): Promise<BaseProvider | null> {
     const provider = this.registry.getProvider(name)
@@ -93,28 +93,28 @@ export class ProviderManager {
       return null
     }
 
-    // 获取用户配置
+    // 조회사용자설정
     const config = await providerConfigManager.getProviderConfig(name)
     if (!config || !config.enabled) {
       Logger.warn('ProviderManager', `Provider ${name} is not enabled`)
       return null
     }
 
-    // 配置 provider
+    // 설정 provider
     provider.configure(config.config)
     return provider
   }
 
   /**
-   * 获取活跃的对话 provider
-   * 如果用户设置了默认对话模型但不可用，会直接返回 null，不会自动 fallback
+   * 조회활점프의대화 provider
+   * 만약사용자설정기본대화모델아닌사용 가능，직접반환 null，아닌자동 fallback
    */
   async getActiveChatProvider(): Promise<ChatProvider | null> {
     try {
       const settings = await settingsManager.getAllSettings()
       const defaultChatModel = settings.defaultChatModel
 
-      // 如果用户设置了默认对话模型,解析并使用
+      // 만약사용자설정기본대화모델,파싱그리고사용
       if (defaultChatModel && defaultChatModel.includes(':')) {
         const [providerName, ...modelIdParts] = defaultChatModel.split(':')
         const modelId = modelIdParts.join(':')
@@ -128,7 +128,7 @@ export class ProviderManager {
           return null
         }
 
-        // 检查是否支持对话能力
+        // 확인예아니오지원대화기능
         const compatProvider = provider as AISDKProvider
         if (!compatProvider.hasChatCapability()) {
           Logger.error(
@@ -138,13 +138,13 @@ export class ProviderManager {
           return null
         }
 
-        // 使用指定的模型配置
+        // 사용가리키는정의모델설정
         compatProvider.configure({ model: modelId })
         Logger.info('ProviderManager', `Using default chat model: ${providerName} - ${modelId}`)
         return compatProvider as ChatProvider
       }
 
-      // 如果没有设置默认对话模型，返回 null
+      // 만약없있는설정기본대화모델，반환 null
       Logger.warn('ProviderManager', 'No default chat model configured')
       return null
     } catch (error) {
@@ -154,15 +154,15 @@ export class ProviderManager {
   }
 
   /**
-   * 获取活跃的嵌入 provider
-   * 如果用户设置了默认嵌入模型但不可用，会直接返回 null，不会自动 fallback
+   * 조회활점프의임베딩 provider
+   * 만약사용자설정기본임베딩모델아닌사용 가능，직접반환 null，아닌자동 fallback
    */
   async getActiveEmbeddingProvider(): Promise<EmbeddingProvider | null> {
     try {
       const settings = await settingsManager.getAllSettings()
       const defaultEmbeddingModel = settings.defaultEmbeddingModel
 
-      // 如果用户设置了默认嵌入模型,解析并使用
+      // 만약사용자설정기본임베딩모델,파싱그리고사용
       if (defaultEmbeddingModel && defaultEmbeddingModel.includes(':')) {
         const [providerName, ...modelIdParts] = defaultEmbeddingModel.split(':')
         const modelId = modelIdParts.join(':')
@@ -176,7 +176,7 @@ export class ProviderManager {
           return null
         }
 
-        // 检查是否支持嵌入能力
+        // 확인예아니오지원임베딩 기능
         const compatProvider = provider as AISDKProvider
         if (!compatProvider.hasEmbeddingCapability()) {
           Logger.error(
@@ -186,7 +186,7 @@ export class ProviderManager {
           return null
         }
 
-        // 使用指定的模型配置
+        // 사용가리키는정의모델설정
         compatProvider.configure({ model: modelId })
         Logger.info(
           'ProviderManager',
@@ -195,7 +195,7 @@ export class ProviderManager {
         return compatProvider as EmbeddingProvider
       }
 
-      // 如果没有设置默认嵌入模型，返回 null
+      // 만약없있는설정기본임베딩모델，반환 null
       Logger.warn('ProviderManager', 'No default embedding model configured')
       return null
     } catch (error) {
@@ -205,8 +205,8 @@ export class ProviderManager {
   }
 
   /**
-   * 注册自定义供应商
-   * @param config - 自定义供应商配置
+   * 등록자체정의제공자
+   * @param config - 자체정의제공자설정
    */
   async registerCustomProvider(config: CustomProviderConfig): Promise<void> {
     const descriptor: ProviderDescriptor = {
@@ -215,51 +215,51 @@ export class ProviderManager {
       isBuiltin: false,
       defaultBaseUrl: config.baseUrl,
       capabilities: {
-        chat: true, // 自定义供应商默认假设支持对话
-        embedding: true // 可以通过 fetchModels 后根据模型类型更新
+        chat: true, // 자체정의제공자기본거짓설지원대화
+        embedding: true // 으로통해 fetchModels 후기반으로모델타입업데이트
       },
       createProvider: (descriptor) => new AISDKProvider(descriptor)
     }
 
-    // 注册到 registry
+    // 등록에 registry
     this.registry.register(descriptor)
 
-    // 保存配置
+    // 저장설정
     await providerConfigManager.saveProviderConfig(
       config.providerName,
       {
         baseUrl: config.baseUrl,
         apiKey: config.apiKey
       },
-      true // 默认启用
+      true // 기본활성화
     )
 
     Logger.info('ProviderManager', `Registered custom provider: ${config.providerName}`)
   }
 
   /**
-   * 列出所有已注册的供应商名称
+   * 컬럼모든등록의제공자이름
    */
   listProviders(): string[] {
     return this.registry.listProviderNames()
   }
 
   /**
-   * 获取供应商描述符
+   * 조회제공자설명
    */
   getDescriptor(name: string): ProviderDescriptor | undefined {
     return this.registry.getDescriptor(name)
   }
 
   /**
-   * 列出所有供应商描述符
+   * 컬럼모든제공자설명
    */
   listDescriptors(): ProviderDescriptor[] {
     return this.registry.listDescriptors()
   }
 
   /**
-   * 根据能力获取供应商
+   * 기반으로기능조회제공자
    */
   getProvidersByCapability(
     capability: 'chat' | 'embedding' | 'rerank' | 'imageGeneration'
@@ -268,24 +268,24 @@ export class ProviderManager {
   }
 
   /**
-   * 获取 provider(不带配置,用于向后兼容)
-   * @deprecated 使用 getConfiguredProvider 替代
+   * 조회 provider(아닌포함하는설정,용도:하위 호환성)
+   * @deprecated 사용 getConfiguredProvider 대체대
    */
   getProvider(name: string): BaseProvider | undefined {
     return this.registry.getProvider(name)
   }
 
   /**
-   * 获取活跃 provider(向后兼容)
-   * @deprecated 使用 getActiveChatProvider 替代
+   * 조회활점프 provider(하위 호환성)
+   * @deprecated 사용 getActiveChatProvider 대체대
    */
   async getActiveProvider(): Promise<BaseProvider | null> {
     return this.getActiveChatProvider()
   }
 
   /**
-   * 获取 embedding provider(向后兼容)
-   * @deprecated 使用 getActiveEmbeddingProvider 替代
+   * 조회 embedding provider(하위 호환성)
+   * @deprecated 사용 getActiveEmbeddingProvider 대체대
    */
   async getEmbeddingProvider(): Promise<BaseProvider | null> {
     return this.getActiveEmbeddingProvider()

@@ -83,7 +83,7 @@ export default function NotebookListPage(): ReactElement {
     <div className="flex flex-col h-screen bg-background text-foreground">
       <TopNavigationBar isHomePage={true} onCreateClick={handleCreateNotebook} />
 
-      {/* 主内容区域 - 使用 Home 组件 */}
+      {/* 메인내용영역 - 사용 Home 컴포넌트 */}
       <Home
         notebooks={notebooks}
         onNotebookClick={handleNotebookClick}
@@ -92,7 +92,7 @@ export default function NotebookListPage(): ReactElement {
         onCreateNotebook={handleCreateNotebook}
       />
 
-      {/* 重命名对话框 */}
+      {/* 재명이름다이얼로그 */}
       <RenameDialog
         isOpen={renameNotebookId !== null}
         currentTitle={renameNotebookTitle}
@@ -100,7 +100,7 @@ export default function NotebookListPage(): ReactElement {
         onConfirm={handleRenameConfirm}
       />
 
-      {/* 删除确认对话框 */}
+      {/* 삭제확인다이얼로그 */}
       <DeleteConfirmDialog
         isOpen={deleteNotebookId !== null}
         notebookTitle={deleteNotebookTitle}

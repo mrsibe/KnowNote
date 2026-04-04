@@ -16,11 +16,11 @@ import CustomNode, { CustomNodeData } from './CustomNode'
 import type { MindMap } from '../../../../../main/db/schema'
 import type { MindMapTreeNode } from '../../../../../shared/types/mindmap'
 
-// 节点尺寸配置
+// 노드크기치수설정
 const NODE_WIDTH = 150
 const NODE_HEIGHT = 50
 
-// 使用 Dagre 算法布局节点
+// 사용 Dagre 계산방법레이아웃노드
 function getLayoutedElements(
   nodes: Node[],
   edges: Edge[],
@@ -31,29 +31,29 @@ function getLayoutedElements(
 
   const isHorizontal = direction === 'LR'
 
-  // 设置图的布局方向
+  // 설정도의레이아웃방방향
   dagreGraph.setGraph({
     rankdir: direction,
-    nodesep: 100, // 同一层级节点之间的间距
-    ranksep: 250, // 不同层级之间的间距
+    nodesep: 100, // 동하나계층노드의간격의간격거리
+    ranksep: 250, // 다른계층의간격의간격거리
     marginx: 50,
     marginy: 50
   })
 
-  // 添加节点到 dagre 图
+  // 추가노드에 dagre 도
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
   })
 
-  // 添加边到 dagre 图
+  // 추가테두리에 dagre 도
   edges.forEach((edge) => {
     dagreGraph.setEdge(edge.source, edge.target)
   })
 
-  // 计算布局
+  // 계산레이아웃
   dagre.layout(dagreGraph)
 
-  // 更新节点位置和连接点方向
+  // 업데이트노드위치및연결점방방향
   const layoutedNodes = nodes.map((node) => {
     const nodeWithPosition = dagreGraph.node(node.id)
     return {
@@ -70,7 +70,7 @@ function getLayoutedElements(
   return { nodes: layoutedNodes, edges }
 }
 
-// 将树结构转换为 React Flow 的 nodes 和 edges
+// 트리결구조변환 React Flow 의 nodes 및 edges
 function treeToFlowElements(
   mindMap: MindMap,
   direction: 'TB' | 'LR' = 'LR'
@@ -78,16 +78,16 @@ function treeToFlowElements(
   const nodes: Node[] = []
   const edges: Edge[] = []
 
-  // Drizzle ORM 已经自动处理了 JSON 解析，无需手动 JSON.parse
+  // Drizzle ORM 이미자동처리 JSON 파싱，없음필요수동 JSON.parse
   const treeData = mindMap.treeData as unknown as MindMapTreeNode
 
   function traverse(node: MindMapTreeNode, level: number, parentId: string | null) {
     nodes.push({
       id: node.id,
       type: 'custom',
-      position: { x: 0, y: 0 }, // 初始位置，将由 dagre 计算
+      position: { x: 0, y: 0 }, // 초기시작위치，유 dagre 계산
       data: { label: node.label, level, direction, metadata: node.metadata } as CustomNodeData
-      // sourcePosition 和 targetPosition 将在 getLayoutedElements 中设置
+      // sourcePosition 및 targetPosition  getLayoutedElements 에서설정
     })
 
     if (parentId) {
@@ -117,7 +117,7 @@ function treeToFlowElements(
 
   traverse(treeData, 0, null)
 
-  // 使用 Dagre 算法计算布局
+  // 사용 Dagre 계산방법계산레이아웃
   return getLayoutedElements(nodes, edges, direction)
 }
 
@@ -131,7 +131,7 @@ export default function MindMapCanvas({ mindMap, direction = 'LR' }: MindMapCanv
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const { loadNodeChunks } = useMindMapStore()
 
-  // 定义自定义节点类型
+  // 정의자체정의노드타입
   const nodeTypes = useMemo(() => ({ custom: CustomNode }), [])
 
   useEffect(() => {

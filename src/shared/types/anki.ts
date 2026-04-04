@@ -1,10 +1,10 @@
 /**
- * Anki相关类型定义
- * Anki卡片生成功能的共享类型
+ * Anki 관련 타입 정의
+ * Anki 카드 생성 기능의 공유 타입
  */
 
 /**
- * 基础卡片类型
+ * 기본 카드 타입
  */
 export interface BaseAnkiCard {
   id: string
@@ -17,42 +17,42 @@ export interface BaseAnkiCard {
 }
 
 /**
- * 基础问答卡片
- * 正面:问题,背面:答案
+ * 기본 질문답변 카드
+ * 앞면: 질문, 뒷면: 답변
  */
 export interface BasicCard extends BaseAnkiCard {
   type: 'basic'
-  front: string // 正面:问题
-  back: string // 背面:答案
+  front: string // 앞면: 질문
+  back: string // 뒷면: 답변
 }
 
 /**
- * Cloze卡片(挖空题)
- * 使用{{c1::答案}}格式
+ * Cloze 카드 (빈칸 채우기)
+ * {{c1::답변}} 형식 사용
  */
 export interface ClozeCard extends BaseAnkiCard {
   type: 'cloze'
-  text: string // 带有{{c1::答案}}格式的文本
-  backExtra?: string // 背面额外信息
+  text: string // {{c1::답변}} 형식이 포함된 텍스트
+  backExtra?: string // 뒷면 추가 정보
 }
 
 /**
- * 填空题卡片
+ * 빈칸 채우기 카드
  */
 export interface FillBlankCard extends BaseAnkiCard {
   type: 'fill-blank'
-  sentence: string // 带有_____的句子
-  answer: string // 填空答案
-  hint?: string // 可选提示
+  sentence: string // _____가 포함된 문장
+  answer: string // 빈칸 답변
+  hint?: string // 선택적 힌트
 }
 
 /**
- * 卡片联合类型
+ * 카드 유니온 타입
  */
 export type AnkiCardItem = BasicCard | ClozeCard | FillBlankCard
 
 /**
- * Anki卡片集
+ * Anki 카드 세트
  */
 export interface AnkiCard {
   id: string
@@ -74,7 +74,7 @@ export interface AnkiCard {
 }
 
 /**
- * Anki生成结果(用于LLM streamObject返回)
+ * Anki 생성 결과 (LLM streamObject 반환용)
  */
 export interface AnkiGenerationResult {
   cards: AnkiCardItem[]
@@ -85,16 +85,16 @@ export interface AnkiGenerationResult {
 }
 
 /**
- * Anki生成选项
+ * Anki 생성 옵션
  */
 export interface AnkiGenerationOptions {
-  cardCount?: number // 卡片数量,默认20
-  cardTypes?: ('basic' | 'cloze' | 'fill-blank')[] // 卡片类型,默认全部
+  cardCount?: number // 카드 수량, 기본 20
+  cardTypes?: ('basic' | 'cloze' | 'fill-blank')[] // 카드 타입, 기본 전체
   difficulty?: 'easy' | 'medium' | 'hard'
   customPrompt?: string
 }
 
 /**
- * Anki导出格式
+ * Anki 내보내기 형식
  */
 export type AnkiExportFormat = 'apkg'

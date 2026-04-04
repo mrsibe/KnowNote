@@ -329,7 +329,7 @@ export class KnowledgeService {
       const contentHash = createHash('md5').update(parseResult.content).digest('hex')
       const now = new Date()
 
-      // 1. 문서 레코드 생성（包含 localFilePath）
+      // 1. 문서 레코드 생성 (localFilePath 포함)
       onProgress?.('creating_document', 0)
 
       // MIME 타입에 따라 문서 타입 결정
@@ -524,7 +524,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 从 Note 添加到知识库
+   * 노트를 지식 베이스에 추가
    */
   async addNoteToKnowledge(
     notebookId: string,
@@ -538,7 +538,7 @@ export class KnowledgeService {
       throw new Error(`Note ${noteId} not found`)
     }
 
-    // 验证笔记内容不为空
+    // 노트 내용이 비어있지 않은지 확인
     const trimmedContent = note.content.trim()
     if (!trimmedContent || trimmedContent.length === 0) {
       throw new Error('Note content is empty. Cannot add empty note to knowledge base.')
@@ -557,7 +557,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 语义搜索
+   * 시맨틱 검색
    */
   async search(
     notebookId: string,
@@ -566,10 +566,10 @@ export class KnowledgeService {
   ): Promise<SearchResult[]> {
     const { topK = 5, threshold = 0.5, includeContent = true } = options
 
-    // 1. 生成查询向量
+    // 1. 쿼리 벡터 생성
     const queryEmbedding = await this.embeddingService.embed(query)
 
-    // 2. 向量检索
+    // 2. 벡터 검색
     const vectorStore = await vectorStoreManager.getStore(notebookId)
     const vectorResults = await vectorStore.query(queryEmbedding.embedding, {
       topK,
@@ -580,13 +580,13 @@ export class KnowledgeService {
       return []
     }
 
-    // 3. 获取 chunk 详情
+    // 3. chunk 상세 정보 조회
     const db = getDatabase()
     const chunkIds = vectorResults.map((r) => r.chunkId)
 
     const chunkDetails = db.select().from(chunks).where(inArray(chunks.id, chunkIds)).all()
 
-    // 获取文档信息
+    // 문서 정보 조회
     const documentIds = [...new Set(chunkDetails.map((c) => c.documentId))]
     const documentDetails = db
       .select()
@@ -597,7 +597,7 @@ export class KnowledgeService {
     const documentMap = new Map(documentDetails.map((d) => [d.id, d]))
     const chunkMap = new Map(chunkDetails.map((c) => [c.id, c]))
 
-    // 4. 组装结果
+    // 4. 결과 조립
     const results: SearchResult[] = []
 
     for (const vr of vectorResults) {
@@ -627,7 +627,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 获取 notebook 的所有文档
+   * notebook의 모든 문서 조회
    */
   getDocuments(notebookId: string): Document[] {
     const db = getDatabase()
@@ -640,7 +640,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 获取单个文档
+   * 단일 문서 조회
    */
   getDocument(documentId: string): Document | undefined {
     const db = getDatabase()
@@ -648,7 +648,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 获取文档的所有 chunks
+   * 문서의 모든 chunks 조회
    */
   getDocumentChunks(documentId: string): Chunk[] {
     const db = getDatabase()
@@ -656,34 +656,34 @@ export class KnowledgeService {
   }
 
   /**
-   * 删除文档
+   * 문서 삭제
    */
   async deleteDocument(documentId: string): Promise<void> {
     const db = getDatabase()
 
-    // 获取文档信息
+    // 문서 정보 조회
     const doc = db.select().from(documents).where(eq(documents.id, documentId)).get()
     if (!doc) return
 
-    // 获取所有 chunk IDs
+    // 모든 chunk ID 조회
     const docChunks = db
       .select({ id: chunks.id })
       .from(chunks)
       .where(eq(chunks.documentId, documentId))
       .all()
 
-    // 从向量存储删除
+    // 벡터 스토어에서 삭제
     if (docChunks.length > 0) {
       const vectorStore = await vectorStoreManager.getStore(doc.notebookId)
       await vectorStore.deleteByChunkIds(docChunks.map((c) => c.id))
     }
 
-    // 删除本地拷贝的文件（如果存在）
+    // 로컬 복사 파일 삭제 (존재하는 경우)
     if (doc.localFilePath) {
       await this.deleteLocalFile(doc.localFilePath)
     }
 
-    // 级联删除会自动清理 chunks 和 embeddings
+    // 캐스케이드 삭제가 자동으로 chunks와 embeddings를 정리
     db.delete(documents).where(eq(documents.id, documentId)).run()
 
     executeCheckpoint('PASSIVE')
@@ -691,7 +691,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 重建文档索引
+   * 문서 인덱스 재구축
    */
   async reindexDocument(documentId: string, onProgress?: IndexProgressCallback): Promise<void> {
     const db = getDatabase()
@@ -701,7 +701,7 @@ export class KnowledgeService {
       throw new Error(`Document ${documentId} not found or has no content`)
     }
 
-    // 删除旧的 chunks 和 embeddings
+    // 기존 chunks와 embeddings 삭제
     const oldChunks = db
       .select({ id: chunks.id })
       .from(chunks)
@@ -723,14 +723,14 @@ export class KnowledgeService {
       )
       .run()
 
-    // 更新状态
+    // 상태 업데이트
     db.update(documents)
       .set({ status: 'processing', updatedAt: new Date() })
       .where(eq(documents.id, documentId))
       .run()
 
-    // 重新索引（复用 addDocument 逻辑的核心部分）
-    // 为简化实现，这里直接调用内部处理
+    // 재인덱싱 (addDocument 로직의 핵심 부분 재사용)
+    // 구현 간소화를 위해 내부 처리를 직접 호출
     await this.addDocument(
       doc.notebookId,
       {
@@ -747,7 +747,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 获取知识库统计信息
+   * 지식 베이스 통계 정보 조회
    */
   getStats(notebookId: string): {
     documentCount: number

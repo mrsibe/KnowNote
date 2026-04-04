@@ -31,7 +31,7 @@ interface ChatStore {
   setStreamingMessage: (notebookId: string, messageId: string | null) => void
   isNotebookStreaming: (notebookId: string) => boolean
 
-  // 异步操作
+  // 비동기 작업
   loadSessions: (notebookId: string) => Promise<void>
   loadActiveSession: (notebookId: string) => Promise<void>
   loadMessages: (sessionId: string) => Promise<void>
@@ -73,10 +73,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       const newStreamingMessages = { ...state.streamingMessages }
 
       if (messageId) {
-        // 设置该Notebook的流式消息
+        // 해당 Notebook의 스트리밍 메시지 설정
         newStreamingMessages[notebookId] = messageId
       } else {
-        // 清除该Notebook的流式消息
+        // 해당 Notebook의 스트리밍 메시지 정리
         delete newStreamingMessages[notebookId]
       }
 
@@ -104,11 +104,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     const activeSession = await window.api.getActiveSession(notebookId)
 
     if (activeSession) {
-      // 找到活跃session，设置为当前session
+      // 활성 session 찾음, 현재 session으로 설정
       set({ currentSession: activeSession })
       await get().loadMessages(activeSession.id)
     } else {
-      // 没有活跃session，创建第一个
+      // 활성 session 없음, 새로 생성
       const newSession = await get().createSession(notebookId, `Session ${Date.now()}`)
       set({ currentSession: newSession })
     }
@@ -117,12 +117,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   loadMessages: async (sessionId) => {
     const dbMessages = await window.api.getMessages(sessionId)
 
-    // 从缓存中恢复正在流式传输的消息内容
+    // 캐시에서 현재 스트리밍 중인 메시지 내용 복원
     const state = get()
     const messages = dbMessages.map((msg: ChatMessage) => {
       const cached = state.messageToNotebook[msg.id]
       if (cached && cached.content) {
-        // 如果缓存中有内容，说明这条消息正在流式传输，使用缓存的内容
+        // 캐시에 내용이 있으면, 해당 메시지가 현재 스트리밍 중이므로 캐시 내용 사용
         return { ...msg, content: cached.content, isStreaming: true }
       }
       return msg
@@ -141,13 +141,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   },
 
   sendMessage: async (sessionId, content) => {
-    // 1. 找到session对应的notebookId
+    // 1. session의 notebookId 조회
     const session = get().currentSession
     if (!session) return
 
     const notebookId = session.notebookId
 
-    // 2. 添加用户消息到 UI
+    // 2. UI에 사용자 메시지 추가
     const userMessage: ChatMessage = {
       id: `temp_user_${Date.now()}`,
       sessionId,
@@ -158,10 +158,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     }
     get().addMessage(userMessage)
 
-    // 3. 发送消息并获取 assistant messageId
+    // 3. 메시지 전송 후 assistant messageId 조회
     const messageId = await window.api.sendMessage(sessionId, content)
 
-    // 4. 添加 assistant 消息占位符（包含推理字段）
+    // 4. assistant 메시지 플레이스홀더 추가 (추론 필드 포함)
     const assistantMessage: ChatMessage = {
       id: messageId,
       sessionId,
@@ -176,7 +176,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     get().addMessage(assistantMessage)
     get().setStreamingMessage(notebookId, messageId)
 
-    // 5. 初始化缓存，记录 messageId -> {notebookId, content, reasoningContent}
+    // 5. 캐시 초기화, messageId -> {notebookId, content, reasoningContent} 기록
     set((state) => ({
       messageToNotebook: {
         ...state.messageToNotebook,
@@ -197,23 +197,23 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     try {
       console.log('[ChatStore] Aborting message:', messageId)
 
-      // 乐观更新: 立即标记消息为非流式
+      // 낙관적 업데이트: 즉시 메시지를 비스트리밍으로 표시
       set((state) => ({
         messages: state.messages.map((msg) =>
           msg.id === messageId ? { ...msg, isStreaming: false, isReasoningStreaming: false } : msg
         )
       }))
 
-      // 调用 IPC 中止请求
+      // IPC를 호출하여 요청 중단
       const result = await window.api.abortMessage(messageId)
 
       if (result.success) {
         console.log('[ChatStore] Message aborted successfully')
 
-        // 立即清理流状态
+        // 즉시 스트리밍 상태 정리
         state.setStreamingMessage(notebookId, null)
 
-        // 清理缓存
+        // 캐시 정리
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { [messageId]: _removed, ...rest } = state.messageToNotebook
         set({ messageToNotebook: rest })
@@ -227,12 +227,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 }))
 
 /**
- * 设置流式消息监听器（基于 AI SDK 流式协议）
- * 在应用启动时调用一次
- * 返回清理函数
+ * 스트리밍 메시지 리스너 설정 (AI SDK 스트리밍 프로토콜 기반)
+ * 앱 시작 시 한 번 호출
+ * 정리 함수 반환
  */
 export function setupChatListeners() {
-  // 监听流式消息片段（AI SDK fullStream 格式）
+  // 스트리밍 메시지 청크 리스너 (AI SDK fullStream 형식)
   const cleanupChunk = window.api.onMessageChunk((data) => {
     const { messageId, type, content } = data
     const store = useChatStore.getState()
@@ -240,10 +240,10 @@ export function setupChatListeners() {
     const cached = store.messageToNotebook[messageId]
     if (!cached) return
 
-    // 处理不同类型的流式部分
+    // 다양한 타입의 스트리밍 청크 처리
     switch (type) {
       case 'reasoning-start':
-        // 推理块开始，标记推理状态
+        // 추론 블록 시작, 추론 상태 표시
         useChatStore.setState((state) => ({
           messages: state.messages.map((msg) =>
             msg.id === messageId ? { ...msg, isReasoningStreaming: true } : msg
@@ -252,7 +252,7 @@ export function setupChatListeners() {
         break
 
       case 'reasoning-delta': {
-        // 推理增量内容
+        // 추론 증분 내용
         const newReasoningContent = cached.reasoningContent + content
         useChatStore.setState((state) => ({
           messageToNotebook: {
@@ -261,7 +261,7 @@ export function setupChatListeners() {
           }
         }))
 
-        // 如果消息在当前视图中，更新推理内容
+        // 메시지가 현재 표시 중이면, 추론 내용 업데이트
         if (store.messages.some((m) => m.id === messageId)) {
           useChatStore.setState((state) => ({
             messages: state.messages.map((msg) =>
@@ -273,7 +273,7 @@ export function setupChatListeners() {
       }
 
       case 'reasoning-end':
-        // 推理块结束
+        // 추론 블록 종료
         useChatStore.setState((state) => ({
           messages: state.messages.map((msg) =>
             msg.id === messageId ? { ...msg, isReasoningStreaming: false } : msg
@@ -282,7 +282,7 @@ export function setupChatListeners() {
         break
 
       case 'text-delta': {
-        // 文本增量内容（最终答案）
+        // 텍스트 증분 내용 (최종 답변)
         const newTextContent = cached.content + content
         useChatStore.setState((state) => ({
           messageToNotebook: {
@@ -291,7 +291,7 @@ export function setupChatListeners() {
           }
         }))
 
-        // 如果消息在当前视图中，更新文本内容
+        // 메시지가 현재 표시 중이면, 텍스트 내용 업데이트
         if (store.messages.some((m) => m.id === messageId)) {
           useChatStore.setState((state) => ({
             messages: state.messages.map((msg) =>
@@ -303,10 +303,10 @@ export function setupChatListeners() {
       }
 
       case 'finish': {
-        // 流式传输完成
+        // 스트리밍 전송 완료
         store.setStreamingMessage(cached.notebookId, null)
 
-        // 清理缓存
+        // 캐시 정리
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { [messageId]: _removed, ...rest } = store.messageToNotebook
         useChatStore.setState({ messageToNotebook: rest })
@@ -315,7 +315,7 @@ export function setupChatListeners() {
     }
   })
 
-  // 监听错误
+  // 오류 리스너
   const cleanupError = window.api.onMessageError((data) => {
     const { messageId, error } = data
     const store = useChatStore.getState()

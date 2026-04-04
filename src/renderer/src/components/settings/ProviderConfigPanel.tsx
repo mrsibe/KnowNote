@@ -25,8 +25,8 @@ interface ProviderConfigPanelProps {
   onConfigChange: (config: Record<string, any>) => void
   onEnabledChange: (enabled: boolean) => void
   onFetchModels: () => void
-  onDelete?: () => void // 可选：删除供应商回调（仅自定义供应商）
-  defaultBaseUrl?: string // 可选：默认 Base URL（用于恢复默认）
+  onDelete?: () => void // 선택：삭제제공자콜백（만자체정의제공자）
+  defaultBaseUrl?: string // 선택：기본 Base URL（용도:복원기본）
 }
 
 export default function ProviderConfigPanel({
@@ -53,7 +53,7 @@ export default function ProviderConfigPanel({
   }
 
   const handleBaseUrlChange = (baseUrl: string) => {
-    // 检查是否包含非 ASCII 字符
+    // 확인예아니오패키지포함비 ASCII 문자
     // eslint-disable-next-line no-control-regex
     if (baseUrl && /[^\x00-\x7F]/.test(baseUrl)) {
       setApiUrlError(t('apiUrlInvalid'))
@@ -77,10 +77,10 @@ export default function ProviderConfigPanel({
     onConfigChange({ ...provider.config, models: newModels })
   }
 
-  // 对模型进行分类
+  // 모델행분류
   const categorized = useMemo(() => categorizeModels(models || []), [models])
 
-  // 根据选中的分类和搜索条件过滤模型
+  // 기반으로선택에서의분류및검색바건필터링모델
   const filteredModels = useMemo(() => {
     let modelsToShow: Model[] = []
 
@@ -94,7 +94,7 @@ export default function ProviderConfigPanel({
       modelsToShow = [...categorized.reranker, ...categorized.other]
     }
 
-    // 应用搜索过滤
+    // 앱검색필터링
     return modelsToShow.filter((model) =>
       model.id.toLowerCase().includes(modelSearchQuery.toLowerCase())
     )
@@ -102,7 +102,7 @@ export default function ProviderConfigPanel({
 
   return (
     <div className="flex flex-col gap-4 w-full">
-      {/* 顶部标题和开关 */}
+      {/* 상단부분제목및스위치 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-h1 text-foreground">{displayName}</h2>
@@ -122,7 +122,7 @@ export default function ProviderConfigPanel({
         </div>
       </div>
 
-      {/* 描述 */}
+      {/* 설명 */}
       <p className="text-muted-foreground text-sm -mt-1">{description}</p>
 
       {/* API Key */}
@@ -163,7 +163,7 @@ export default function ProviderConfigPanel({
         </div>
       </div>
 
-      {/* API URL - 所有供应商都显示 */}
+      {/* API URL - 모든제공자표시 */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium text-foreground">{t('apiUrl')}</h3>
@@ -207,7 +207,7 @@ export default function ProviderConfigPanel({
 
         {models && models.length > 0 && (
           <>
-            {/* 分类标签 */}
+            {/* 분류태그 */}
             <div className="flex gap-2 flex-wrap">
               <Button
                 onClick={() => setShowCategory('all')}
@@ -274,7 +274,7 @@ export default function ProviderConfigPanel({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <div className="text-sm font-medium text-foreground truncate">{model.id}</div>
-                      {/* 显示模型类型标签 */}
+                      {/* 표시모델타입태그 */}
                       {model.type && (
                         <span
                           className={`px-1.5 py-0.5 text-xs rounded ${

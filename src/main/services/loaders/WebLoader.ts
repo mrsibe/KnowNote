@@ -1,6 +1,6 @@
 /**
  * WebLoader
- * 使用 @mozilla/readability 智能提取网页正文
+ * @mozilla/readability를 사용하여 웹페이지 본문 지능형 추출
  */
 
 import { JSDOM } from 'jsdom'
@@ -11,8 +11,8 @@ import Logger from '../../../shared/utils/logger'
 import type { IDocumentLoader, DocumentLoadResult, LoadOptions, SectionInfo } from './types'
 
 /**
- * 网页加载器
- * 基于 Mozilla Readability（Firefox Reader View）
+ * 웹페이지 로더
+ * Mozilla Readability (Firefox Reader View) 기반
  */
 export class WebLoader implements IDocumentLoader {
   readonly supportedMimeTypes = ['text/html', 'application/xhtml+xml']
@@ -21,7 +21,7 @@ export class WebLoader implements IDocumentLoader {
   private turndownService: TurndownService
 
   constructor() {
-    // 初始化 HTML 转 Markdown 服务
+    // HTML을 Markdown으로 변환하는 서비스 초기화
     this.turndownService = new TurndownService({
       headingStyle: 'atx',
       codeBlockStyle: 'fenced'
@@ -37,8 +37,8 @@ export class WebLoader implements IDocumentLoader {
   }
 
   async loadFromPath(): Promise<DocumentLoadResult> {
-    // Web 内容通常不从文件路径加载，而是从 URL
-    // 这里提供一个占位实现
+    // 웹 콘텐츠는 일반적으로 파일 경로가 아닌 URL에서 로드합니다
+    // 플레이스홀더 구현 제공
     throw new Error(
       'WebLoader.loadFromPath is not supported. Use loadFromBuffer with HTML content.'
     )
@@ -49,21 +49,21 @@ export class WebLoader implements IDocumentLoader {
     const html = buffer.toString('utf-8')
 
     try {
-      // 使用 Readability 智能提取正文
+      // Readability를 사용하여 본문 지능형 추출
       const dom = new JSDOM(html, { url: 'https://example.com' })
       const reader = new Readability(dom.window.document)
       const article = reader.parse()
 
       if (!article) {
-        // 回退：使用 cheerio 直接提取
+        // 폴백: cheerio를 사용하여 직접 추출
         Logger.warn('WebLoader', 'Readability failed, falling back to cheerio')
         return this.fallbackParse(html, opts)
       }
 
-      // 转换为 Markdown
+      // Markdown으로 변환
       const markdown = this.turndownService.turndown(article.content || '')
 
-      // 提取章节结构
+      // 섹션 구조 추출
       const sections = opts.preserveStructure
         ? this.extractSections(article.content || '')
         : undefined
@@ -93,15 +93,15 @@ export class WebLoader implements IDocumentLoader {
   }
 
   /**
-   * 回退解析（当 Readability 失败时）
+   * 폴백 파싱 (Readability 실패 시)
    */
   private fallbackParse(html: string, opts: LoadOptions): DocumentLoadResult {
     const $ = cheerio.load(html)
 
-    // 移除脚本、样式等
+    // 푸터, 스타일 등 자동 제거
     $('script, style, nav, footer, aside').remove()
 
-    // 尝试找到主内容区域
+    // 메인 콘텐츠 영역 찾기 시도
     const mainContent =
       $('article').html() ||
       $('main').html() ||
@@ -112,10 +112,10 @@ export class WebLoader implements IDocumentLoader {
 
     const markdown = this.turndownService.turndown(mainContent)
 
-    // 提取标题
+    // 제목 추출
     const title = $('title').text().trim() || $('h1').first().text().trim() || undefined
 
-    // 提取章节
+    // 섹션 추출
     const sections = opts.preserveStructure ? this.extractSections(mainContent) : undefined
 
     return {
@@ -135,7 +135,7 @@ export class WebLoader implements IDocumentLoader {
   }
 
   /**
-   * 从 HTML 中提取章节结构
+   * HTML에서 섹션 구조 추출
    */
   private extractSections(html: string): SectionInfo[] {
     const $ = cheerio.load(html)
@@ -150,7 +150,7 @@ export class WebLoader implements IDocumentLoader {
 
       if (!title) continue
 
-      // 提取该标题后直到下一个同级或更高级标题的内容
+      // 제목 이후부터 다음 동일 레벨 또는 상위 레벨 제목까지의 내용 추출
       let contentHtml = ''
       let nextSibling = $heading.next()
       while (nextSibling.length) {
@@ -169,7 +169,7 @@ export class WebLoader implements IDocumentLoader {
         level,
         title,
         content: contentMarkdown,
-        startOffset: 0, // HTML 中难以精确定位
+        startOffset: 0, // HTML에서는 정확한 위치 확인이 어려움
         endOffset: 0
       })
     }
@@ -178,7 +178,7 @@ export class WebLoader implements IDocumentLoader {
   }
 
   /**
-   * 构建章节层级关系
+   * 섹션 계층 구조 구축
    */
   private buildHierarchy(flatSections: SectionInfo[]): SectionInfo[] {
     const root: SectionInfo[] = []

@@ -17,7 +17,7 @@ import UnsavedChangesDialog from '../common/UnsavedChangesDialog'
 import DeleteNoteConfirmDialog from '../common/DeleteNoteConfirmDialog'
 import type { Note } from '../../../../shared/types'
 
-// 编辑器面板子组件 - 管理编辑状态
+// 편집기패널자컴포넌트 - 관리편편집상태
 interface NoteEditorPanelProps {
   note: Note
   isSaving: boolean
@@ -40,16 +40,16 @@ function NoteEditorPanel({
   const [editTitle, setEditTitle] = useState(note.title)
   const [editContent, setEditContent] = useState(note.content)
 
-  // 检测是否有未保存的修改
+  // 감지예아니오있는미저장의수정수정
   useEffect(() => {
     const hasChanges = editTitle !== note.title || editContent !== note.content
     onUnsavedChange(hasChanges)
   }, [editTitle, editContent, note.title, note.content, onUnsavedChange])
 
   const handleSave = () => {
-    // 如果标题为空或只有空格，使用默认标题
+    // 만약제목빈또는있는빈격，사용기본제목
     const finalTitle = editTitle.trim() || t('untitledNote')
-    // 更新显示的标题，让用户看到自动设置的标题
+    // 업데이트표시의제목，사용자보기에자동설정의제목
     if (!editTitle.trim()) {
       setEditTitle(finalTitle)
     }
@@ -109,7 +109,7 @@ function NoteEditorPanel({
         }
       />
 
-      {/* 编辑器内容 */}
+      {/* 편집기내용 */}
       <div className="flex-1 overflow-hidden">
         <NoteEditor content={editContent} onChange={setEditContent} onSave={handleSave} />
       </div>
@@ -132,26 +132,26 @@ export default function NotePanel(): ReactElement {
     setCurrentNote
   } = useItemStore()
 
-  // 管理未保存状态
+  // 관리미저장상태
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
-  // Dialog 状态管理
+  // Dialog 상태 관리
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showQuizStartDialog, setShowQuizStartDialog] = useState(false)
   const [showAnkiConfigDialog, setShowAnkiConfigDialog] = useState(false)
 
-  // 监听Notebook切换，清空当前编辑状态
+  // 감시Notebook전환，비우기현재편편집상태
   useEffect(() => {
     if (notebookId) {
-      // 清空当前编辑状态，避免显示旧Notebook的内容
+      // 비우기현재편편집상태，회피면표시이전Notebook의내용
       setCurrentNote(null)
-      // 使用 setTimeout 将状态更新推迟到下一个事件循环
+      // 사용 setTimeout 상태업데이트추지연에아래하나개이벤트순환환
       setTimeout(() => setHasUnsavedChanges(false), 0)
     }
   }, [notebookId, setCurrentNote])
 
-  // 设置思维导图进度监听器
+  // 설정마인드맵진행감시
   useEffect(() => {
     const unsubscribe = setupMindMapListeners()
     return () => {
@@ -159,45 +159,45 @@ export default function NotePanel(): ReactElement {
     }
   }, [])
 
-  // 加载 items 列表
+  // 로드 items 목록
   useEffect(() => {
     if (notebookId) {
       loadItems(notebookId)
     }
   }, [notebookId, loadItems])
 
-  // 创建新笔记
+  // 생성새노트
   const handleCreateNote = async () => {
     if (!notebookId) return
     await createNote(notebookId, t('newNoteContent'), t('newNote'))
   }
 
-  // 保存笔记
+  // 저장노트
   const handleSave = async (title: string, content: string) => {
     if (!currentNote) return
     await updateNote(currentNote.id, { title, content })
     toast.success(t('noteSaved'))
   }
 
-  // 删除笔记
+  // 노트 삭제
   const handleDelete = async () => {
     if (!currentNote) return
     setShowDeleteDialog(true)
   }
 
-  // 确认删除笔记
+  // 확인노트 삭제
   const confirmDelete = async () => {
     if (!currentNote) return
-    // 找到对应的 item
+    // 찾에의 item
     const item = items.find((item) => item.type === 'note' && item.resourceId === currentNote.id)
     if (item) {
-      await deleteItem(item.id, true) // 同时删除资源
+      await deleteItem(item.id, true) // 동시삭제리소스
     }
   }
 
-  // 返回列表页面
+  // 반환목록페이지
   const handleBack = () => {
-    // 如果有未保存的修改，提示用户
+    // 만약있는미저장의수정수정，힌트사용자
     if (hasUnsavedChanges) {
       setShowUnsavedDialog(true)
       return
@@ -206,13 +206,13 @@ export default function NotePanel(): ReactElement {
     setHasUnsavedChanges(false)
   }
 
-  // 确认离开（有未保存修改时）
+  // 확인떠나기열기（있는미저장수정수정시）
   const confirmLeave = () => {
     setCurrentNote(null)
     setHasUnsavedChanges(false)
   }
 
-  // 打开思维导图窗口（查看特定版本）
+  // 열기마인드맵윈도우（조회보기특정버전）
   const handleOpenMindMap = async (mindMapId: string) => {
     try {
       if (notebookId) {
@@ -223,7 +223,7 @@ export default function NotePanel(): ReactElement {
     }
   }
 
-  // 打开答题窗口（查看特定版本）
+  // 열기퀴즈윈도우（조회보기특정버전）
   const handleOpenQuiz = async (quizId: string) => {
     try {
       if (notebookId) {
@@ -234,7 +234,7 @@ export default function NotePanel(): ReactElement {
     }
   }
 
-  // 打开Anki卡片窗口（查看特定版本）
+  // 열기Anki카드윈도우（조회보기특정버전）
   const handleOpenAnki = async (ankiCardId: string) => {
     try {
       if (notebookId) {
@@ -245,19 +245,19 @@ export default function NotePanel(): ReactElement {
     }
   }
 
-  // 生成新思维导图（在后台生成，不打开窗口）
+  // 생성새마인드맵（후대생성，아닌열기윈도우）
   const handleGenerateMindMap = async () => {
     if (notebookId) {
       try {
-        // 立即开始生成（异步）
+        // 즉시시작생성（비동기）
         window.api.mindmap.generate(notebookId).then((result) => {
           if (result.success) {
-            // 生成完成后重新加载列表
+            // 생성완료후재새로드목록
             loadItems(notebookId)
           }
         })
 
-        // 等待一小段时间后刷新列表，以显示"正在生成"的 item
+        // 등대기하나작은단시간후새로고침목록，으로표시"현재생성"의 item
         setTimeout(() => {
           loadItems(notebookId)
         }, 500)
@@ -267,21 +267,21 @@ export default function NotePanel(): ReactElement {
     }
   }
 
-  // 打开Anki配置对话框
+  // 열기Anki설정다이얼로그
   const handleGenerateAnki = () => {
     setShowAnkiConfigDialog(true)
   }
 
-  // 打开答题启动对话框
+  // 열기퀴즈시작동다이얼로그
   const handleGenerateQuiz = () => {
     setShowQuizStartDialog(true)
   }
 
-  // 开始生成答题
+  // 시작생성퀴즈
   const handleQuizStart = async (params: QuizStartParams) => {
     if (!notebookId) return
     try {
-      // 立即开始生成（异步）
+      // 즉시시작생성（비동기）
       window.api.quiz
         .generate(notebookId, {
           questionCount: params.questionCount,
@@ -290,12 +290,12 @@ export default function NotePanel(): ReactElement {
         })
         .then((result) => {
           if (result.success) {
-            // 生成完成后重新加载列表
+            // 생성완료후재새로드목록
             loadItems(notebookId)
           }
         })
 
-      // 等待一小段时间后刷新列表，以显示"正在生成"的 item
+      // 등대기하나작은단시간후새로고침목록，으로표시"현재생성"의 item
       setTimeout(() => {
         loadItems(notebookId)
       }, 500)
@@ -307,7 +307,7 @@ export default function NotePanel(): ReactElement {
   return (
     <div className="flex flex-col bg-card rounded-xl overflow-hidden h-full shadow-md">
       {isEditing && currentNote ? (
-        // 编辑器页面 - 使用 key 强制在切换笔记时重新挂载
+        // 편집기페이지 - 사용 key 강제전환노트시재새마운트
         <NoteEditorPanel
           key={currentNote.id}
           note={currentNote}
@@ -319,9 +319,9 @@ export default function NotePanel(): ReactElement {
           onUnsavedChange={setHasUnsavedChanges}
         />
       ) : (
-        // 列表页面
+        // 목록페이지
         <>
-          {/* 顶部工具栏 */}
+          {/* 상단부분도구 모음 */}
           <PanelHeader
             draggable
             left={
@@ -375,7 +375,7 @@ export default function NotePanel(): ReactElement {
             }
           />
 
-          {/* Items 列表（笔记 + 思维导图等） */}
+          {/* Items 목록（노트 + 마인드맵등） */}
           <ScrollArea className="flex-1">
             <ItemList
               items={items}
@@ -391,21 +391,21 @@ export default function NotePanel(): ReactElement {
         </>
       )}
 
-      {/* 未保存修改确认对话框 */}
+      {/* 미저장수정수정확인다이얼로그 */}
       <UnsavedChangesDialog
         isOpen={showUnsavedDialog}
         onClose={() => setShowUnsavedDialog(false)}
         onConfirm={confirmLeave}
       />
 
-      {/* 删除笔记确认对话框 */}
+      {/* 노트 삭제확인다이얼로그 */}
       <DeleteNoteConfirmDialog
         isOpen={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={confirmDelete}
       />
 
-      {/* 答题启动对话框 */}
+      {/* 퀴즈시작동다이얼로그 */}
       {notebookId && (
         <QuizStartDialog
           isOpen={showQuizStartDialog}
@@ -414,7 +414,7 @@ export default function NotePanel(): ReactElement {
         />
       )}
 
-      {/* Anki卡片生成配置对话框 */}
+      {/* Anki카드생성설정다이얼로그 */}
       {notebookId && (
         <AnkiConfigDialog
           notebookId={notebookId}

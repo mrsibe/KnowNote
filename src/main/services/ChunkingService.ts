@@ -1,34 +1,34 @@
 /**
  * ChunkingService
- * 智能文档分块服务，保持语义完整性
+ * 지능형 문서 청킹 서비스, 의미적 완전성 유지
  */
 
 import Logger from '../../shared/utils/logger'
 
 /**
- * 分块选项
+ * 청킹 옵션
  */
 export interface ChunkOptions {
-  chunkSize?: number // 每块的目标字符数，默认 500
-  chunkOverlap?: number // 块之间的重叠字符数，默认 50
-  separators?: string[] // 分隔符优先级列表
-  minChunkSize?: number // 最小块大小，默认 100
+  chunkSize?: number // 각 청크의 목표 문자 수, 기본값 500
+  chunkOverlap?: number // 청크 간 겹치는 문자 수, 기본값 50
+  separators?: string[] // 구분자 우선순위 목록
+  minChunkSize?: number // 최소 청크 크기, 기본값 100
 }
 
 /**
- * 分块结果
+ * 청킹 결과
  */
 export interface ChunkResult {
-  content: string // 块内容
-  index: number // 块索引
-  startOffset: number // 原文起始位置
-  endOffset: number // 原文结束位置
-  tokenCount: number // 估算 token 数
+  content: string // 청크 내용
+  index: number // 청크 인덱스
+  startOffset: number // 원문 시작 위치
+  endOffset: number // 원문 끝 위치
+  tokenCount: number // 추정 토큰 수
 }
 
 /**
- * 文档分块服务
- * 支持智能分块，保持语义完整性
+ * 문서 청킹 서비스
+ * 지능형 청킹 지원, 의미적 완전성 유지
  */
 export class ChunkingService {
   private defaultOptions: Required<ChunkOptions> = {
@@ -36,11 +36,11 @@ export class ChunkingService {
     chunkOverlap: 50,
     minChunkSize: 100,
     separators: [
-      '\n\n\n', // 多个空行（章节分隔）
-      '\n\n', // 段落分隔
-      '\n', // 行分隔
-      '。', // 中文句号
-      '.', // 英文句号
+      '\n\n\n', // 여러 빈 줄 (장 구분)
+      '\n\n', // 단락 구분
+      '\n', // 줄 구분
+      '。', // 중국어 마침표
+      '.', // 영어 마침표
       '！',
       '!',
       '？',
@@ -49,25 +49,25 @@ export class ChunkingService {
       ';',
       '，',
       ',',
-      ' ' // 空格（最后手段）
+      ' ' // 공백 (최후의 수단)
     ]
   }
 
   /**
-   * 对文本进行分块
+   * 텍스트 청킹 수행
    */
   chunk(text: string, options?: ChunkOptions): ChunkResult[] {
     const opts = { ...this.defaultOptions, ...options }
     const { chunkSize, chunkOverlap, separators, minChunkSize } = opts
 
-    // 预处理：移除多余空白
+    // 전처리: 불필요한 공백 제거
     const cleanedText = this.preprocessText(text)
 
     if (!cleanedText || cleanedText.length === 0) {
       return []
     }
 
-    // 如果文本小于最小块大小，直接返回整个文本
+    // 텍스트가 최소 청크 크기보다 작으면 전체 텍스트를 바로 반환
     if (cleanedText.length <= minChunkSize) {
       return [
         {
@@ -86,7 +86,7 @@ export class ChunkingService {
     while (currentStart < cleanedText.length) {
       let currentEnd = Math.min(currentStart + chunkSize, cleanedText.length)
 
-      // 如果不是文本末尾，尝试在分隔符处断开
+      // 텍스트 끝이 아니면 구분자에서 분리 시도
       if (currentEnd < cleanedText.length) {
         const searchEnd = currentEnd
         const searchStart = Math.max(currentStart + Math.floor(chunkSize * 0.5), currentStart)
@@ -94,7 +94,7 @@ export class ChunkingService {
         let bestSplitPos = -1
         let bestSeparatorPriority = separators.length
 
-        // 在范围内查找最佳分割点
+        // 범위 내에서 최적의 분할 지점 찾기
         for (let i = searchEnd; i >= searchStart; i--) {
           for (let j = 0; j < separators.length; j++) {
             const sep = separators[j]
@@ -106,7 +106,7 @@ export class ChunkingService {
               break
             }
           }
-          // 找到高优先级分隔符就停止
+          // 높은 우선순위 구분자를 찾으면 중지
           if (bestSeparatorPriority <= 2) break
         }
 
@@ -127,7 +127,7 @@ export class ChunkingService {
         })
       }
 
-      // 计算下一块的起始位置（考虑重叠）
+      // 다음 청크의 시작 위치 계산 (겹침 고려)
       currentStart = Math.max(currentEnd - chunkOverlap, currentStart + 1)
     }
 
@@ -136,12 +136,12 @@ export class ChunkingService {
   }
 
   /**
-   * 按句子分块（更保守的分块策略）
+   * 문장 단위 청킹 (더 보수적인 청킹 전략)
    */
   chunkBySentence(text: string, options?: ChunkOptions): ChunkResult[] {
     const opts = { ...this.defaultOptions, ...options }
 
-    // 分句
+    // 문장 분리
     const sentences = this.splitIntoSentences(text)
     const chunks: ChunkResult[] = []
     let currentChunk: string[] = []
@@ -152,7 +152,7 @@ export class ChunkingService {
       const sentenceLength = sentence.length
 
       if (currentLength + sentenceLength > opts.chunkSize && currentChunk.length > 0) {
-        // 保存当前块
+        // 현재 청크 저장
         const content = currentChunk.join('')
         chunks.push({
           content,
@@ -162,7 +162,7 @@ export class ChunkingService {
           tokenCount: this.estimateTokens(content)
         })
 
-        // 开始新块（可以考虑重叠）
+        // 새 청크 시작 (겹침 고려 가능)
         currentStartOffset += content.length
         currentChunk = []
         currentLength = 0
@@ -172,7 +172,7 @@ export class ChunkingService {
       currentLength += sentenceLength
     }
 
-    // 处理最后一个块
+    // 마지막 청크 처리
     if (currentChunk.length > 0) {
       const content = currentChunk.join('')
       chunks.push({
@@ -188,26 +188,26 @@ export class ChunkingService {
   }
 
   /**
-   * 预处理文本
+   * 텍스트 전처리
    */
   private preprocessText(text: string): string {
     return (
       text
-        // 统一换行符
+        // 줄 바꿈 통일
         .replace(/\r\n/g, '\n')
         .replace(/\r/g, '\n')
-        // 移除连续的多余空白行（保留最多两个换行）
+        // 연속된 불필요한 빈 줄 제거 (최대 두 개의 줄 바꿈 유지)
         .replace(/\n{4,}/g, '\n\n\n')
-        // 移除行首行尾空白
+        // 줄 앞뒤 공백 제거
         .trim()
     )
   }
 
   /**
-   * 分句
+   * 문장 분리
    */
   private splitIntoSentences(text: string): string[] {
-    // 使用正则匹配句子结束符
+    // 정규식으로 문장 종결 부호 매칭
     const sentenceEndings = /([。！？.!?]+)/g
     const parts = text.split(sentenceEndings)
     const sentences: string[] = []
@@ -223,8 +223,8 @@ export class ChunkingService {
   }
 
   /**
-   * 估算 token 数量
-   * 基于中英文混合文本的经验公式
+   * 토큰 수 추정
+   * 중국어/영어 혼합 텍스트의 경험적 공식 기반
    */
   estimateTokens(text: string): number {
     if (!text || text.length === 0) return 0
@@ -234,14 +234,14 @@ export class ChunkingService {
 
     for (const char of text) {
       const code = char.charCodeAt(0)
-      // CJK 统一表意文字及扩展
+      // CJK 통합 한자 및 확장
       if (
-        (code >= 0x4e00 && code <= 0x9fff) || // CJK 基本
-        (code >= 0x3400 && code <= 0x4dbf) || // CJK 扩展 A
-        (code >= 0xf900 && code <= 0xfaff) || // CJK 兼容
-        (code >= 0x3040 && code <= 0x309f) || // 平假名
-        (code >= 0x30a0 && code <= 0x30ff) || // 片假名
-        (code >= 0xac00 && code <= 0xd7af) // 韩文
+        (code >= 0x4e00 && code <= 0x9fff) || // CJK 기본
+        (code >= 0x3400 && code <= 0x4dbf) || // CJK 확장 A
+        (code >= 0xf900 && code <= 0xfaff) || // CJK 호환
+        (code >= 0x3040 && code <= 0x309f) || // 히라가나
+        (code >= 0x30a0 && code <= 0x30ff) || // 가타카나
+        (code >= 0xac00 && code <= 0xd7af) // 한글
       ) {
         chineseChars++
       } else {
@@ -249,12 +249,12 @@ export class ChunkingService {
       }
     }
 
-    // 中文约 1.5 字符/token，英文约 4 字符/token
+    // 중국어 약 1.5 문자/토큰, 영어 약 4 문자/토큰
     return Math.ceil(chineseChars / 1.5 + otherChars / 4)
   }
 
   /**
-   * 更新默认选项
+   * 기본 옵션 업데이트
    */
   setDefaultOptions(options: Partial<ChunkOptions>): void {
     this.defaultOptions = { ...this.defaultOptions, ...options }

@@ -28,7 +28,7 @@ interface GeneralSettingsProps {
 }
 
 const languages = [
-  { value: 'zh-CN', label: 'Chinese', native: '简体中文' },
+  { value: 'ko-KR', label: 'Korean', native: '한국어' },
   { value: 'en-US', label: 'English', native: 'English' }
 ]
 
@@ -40,14 +40,14 @@ export default function GeneralSettings({
   const { t } = useTranslation('settings')
   const { changeLanguage } = useI18nStore()
 
-  // 分别获取对话模型和嵌入模型
+  // 분별도조회대화모델및임베딩모델
   const { availableChatModels, availableEmbeddingModels } = useMemo(() => {
     const chatModels: Array<{ id: string; provider: string; label: string }> = []
     const embeddingModels: Array<{ id: string; provider: string; label: string }> = []
 
     providers.forEach((provider) => {
       if (provider.enabled && provider.config.models && Array.isArray(provider.config.models)) {
-        // 从 modelDetails 获取完整的模型信息（包含 type 字段）
+        // 에서 modelDetails 조회완전한의모델정보（패키지포함 type 필드）
         const modelDetails = provider.config.modelDetails || []
 
         provider.config.models.forEach((modelId: string) => {
@@ -58,7 +58,7 @@ export default function GeneralSettings({
             label: modelId
           }
 
-          // 根据类型分类
+          // 기반으로타입분류
           if (modelDetail?.type === 'embedding') {
             embeddingModels.push(modelObj)
           } else if (modelDetail?.type === 'chat' || !modelDetail?.type) {
@@ -71,7 +71,7 @@ export default function GeneralSettings({
     return { availableChatModels: chatModels, availableEmbeddingModels: embeddingModels }
   }, [providers])
 
-  // 检查默认模型是否仍然可用，如果不可用则清空
+  // 확인기본모델예아니오여전히사용 가능，만약아닌사용 가능비우기
   useEffect(() => {
     if (providers.length === 0) {
       return
@@ -101,7 +101,7 @@ export default function GeneralSettings({
     onSettingsChange
   ])
 
-  // 当主题变化时，立即更新 DOM 以预览效果
+  // 때테마변경시，즉시업데이트 DOM 으로미리보기효과
   useEffect(() => {
     if (settings.theme === 'dark') {
       document.documentElement.classList.add('dark')
@@ -113,7 +113,7 @@ export default function GeneralSettings({
   return (
     <FieldSet>
       <FieldGroup>
-        {/* 主题模式设置 */}
+        {/* 테마���턴설정 */}
         <Field orientation="horizontal">
           <FieldContent>
             <FieldLabel>{t('themeMode')}</FieldLabel>
@@ -141,7 +141,7 @@ export default function GeneralSettings({
           </div>
         </Field>
 
-        {/* 语言设置 */}
+        {/* 언어설정 */}
         <Field orientation="horizontal">
           <FieldContent>
             <FieldLabel htmlFor="language-select">{t('language')}</FieldLabel>
@@ -171,7 +171,7 @@ export default function GeneralSettings({
           </Select>
         </Field>
 
-        {/* 默认对话模型设置 */}
+        {/* 기본대화모델설정 */}
         <Field orientation="horizontal">
           <FieldContent>
             <FieldLabel htmlFor="chat-model-select">{t('defaultChatModel')}</FieldLabel>
@@ -205,7 +205,7 @@ export default function GeneralSettings({
           )}
         </Field>
 
-        {/* 默认嵌入模型设置 */}
+        {/* 기본임베딩모델설정 */}
         <Field orientation="horizontal">
           <FieldContent>
             <FieldLabel htmlFor="embedding-model-select">{t('defaultEmbeddingModel')}</FieldLabel>

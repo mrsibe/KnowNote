@@ -1,6 +1,6 @@
 /**
  * Knowledge IPC Handlers
- * 知识库相关的 IPC 处理函数
+ * 지식 베이스관련의 IPC 처리함수
  */
 
 import { ipcMain, IpcMainInvokeEvent, dialog, shell } from 'electron'
@@ -9,10 +9,10 @@ import Logger from '../../shared/utils/logger'
 import { KnowledgeSchemas, validate } from './validation'
 
 /**
- * 注册知识库相关 IPC Handlers
+ * 등록지식 베이스관련 IPC Handlers
  */
 export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
-  // 添加文档（文本内容）
+  // 문서 추가（텍스트내용）
   ipcMain.handle('knowledge:add-document', async (event: IpcMainInvokeEvent, args: unknown) => {
     const validated = await validate(KnowledgeSchemas.addDocument, async (params) => {
       Logger.debug('KnowledgeHandlers', 'add-document:', {
@@ -25,7 +25,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
           params.notebookId,
           params.options,
           (stage, progress) => {
-            // 发送进度更新
+            // 전송진행업데이트
             event.sender.send('knowledge:index-progress', {
               notebookId: params.notebookId,
               stage,
@@ -43,7 +43,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     return validated
   })
 
-  // 从文件添加文档
+  // 에서파일문서 추가
   ipcMain.handle(
     'knowledge:add-document-from-file',
     async (event: IpcMainInvokeEvent, args: unknown) => {
@@ -73,7 +73,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     }
   )
 
-  // 从 URL 添加文档
+  // 에서 URL 문서 추가
   ipcMain.handle(
     'knowledge:add-document-from-url',
     async (event: IpcMainInvokeEvent, args: unknown) => {
@@ -103,7 +103,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     }
   )
 
-  // 从 Note 添加到知识库
+  // 에서 Note 추가에지식 베이스
   ipcMain.handle('knowledge:add-note', async (event: IpcMainInvokeEvent, args: unknown) => {
     const validated = await validate(KnowledgeSchemas.addNote, async (params) => {
       Logger.debug('KnowledgeHandlers', 'add-note:', params)
@@ -130,7 +130,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     return validated
   })
 
-  // 搜索知识库
+  // 지식 베이스 검색
   ipcMain.handle(
     'knowledge:search',
     validate(KnowledgeSchemas.search, async (params) => {
@@ -150,7 +150,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     })
   )
 
-  // 获取文档列表
+  // 문서 조회목록
   ipcMain.handle(
     'knowledge:get-documents',
     validate(KnowledgeSchemas.getDocuments, async (params) => {
@@ -166,7 +166,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     })
   )
 
-  // 获取单个文档
+  // 조회단일개문서
   ipcMain.handle(
     'knowledge:get-document',
     validate(KnowledgeSchemas.getDocument, async (params) => {
@@ -182,7 +182,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     })
   )
 
-  // 获取文档的 chunks
+  // 문서 조회의 chunks
   ipcMain.handle(
     'knowledge:get-document-chunks',
     validate(KnowledgeSchemas.getDocumentChunks, async (params) => {
@@ -198,7 +198,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     })
   )
 
-  // 删除文档
+  // 문서 삭제
   ipcMain.handle(
     'knowledge:delete-document',
     validate(KnowledgeSchemas.deleteDocument, async (params) => {
@@ -214,7 +214,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     })
   )
 
-  // 重建索引
+  // 재빌드인덱스
   ipcMain.handle('knowledge:reindex-document', async (event: IpcMainInvokeEvent, args: unknown) => {
     const validated = await validate(KnowledgeSchemas.reindexDocument, async (params) => {
       Logger.debug('KnowledgeHandlers', 'reindex-document:', params.documentId)
@@ -237,7 +237,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     return validated
   })
 
-  // 获取知识库统计信息
+  // 지식 베이스 통계 정보 조회
   ipcMain.handle(
     'knowledge:get-stats',
     validate(KnowledgeSchemas.getStats, async (params) => {
@@ -253,7 +253,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     })
   )
 
-  // 打开文件选择对话框
+  // 파일 선택 다이얼로그 열기
   ipcMain.handle('knowledge:select-files', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
@@ -269,7 +269,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     return result.canceled ? [] : result.filePaths
   })
 
-  // 打开文档源文件
+  // 열기문서소스파일
   ipcMain.handle(
     'knowledge:open-source',
     validate(KnowledgeSchemas.openSource, async (params) => {
@@ -281,12 +281,12 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
           return { success: false, error: 'Document not found' }
         }
 
-        // 根据文档类型处理
+        // 기반으로문서타입처리
         if (doc.type === 'url' && doc.sourceUri) {
-          // 打开 URL
+          // 열기 URL
           await shell.openExternal(doc.sourceUri)
         } else if (doc.type === 'file') {
-          // 优先使用本地拷贝的文件，如果不存在则使用源文件
+          // 우선사용로컬복사베이스의파일，만약존재하지 않음사용소스파일
           const filePathToOpen = doc.localFilePath || doc.sourceUri
           if (filePathToOpen) {
             await shell.openPath(filePathToOpen)

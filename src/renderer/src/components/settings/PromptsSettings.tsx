@@ -18,7 +18,7 @@ export default function PromptsSettings({
   const { t } = useTranslation('settings')
 
   const currentLanguage = settings.language
-  // 后端的 mergeSettings 已经确保所有字段都有默认值，前端直接使用
+  // 후엔드의 mergeSettings 이미보장모든필드있는기본값，프론트엔드직접사용
   const currentMindMapPrompt = settings.prompts?.mindMap?.[currentLanguage] || ''
   const currentQuizPrompt = settings.prompts?.quiz?.[currentLanguage] || ''
   const currentAnkiPrompt = settings.prompts?.anki?.[currentLanguage] || ''
@@ -60,7 +60,7 @@ export default function PromptsSettings({
   }
 
   const handleResetToDefault = async () => {
-    // 从 defaults.ts 获取默认提示词
+    // 에서 defaults.ts 조회기본힌트
     const defaultPrompts = await window.api.settings.getDefaultPrompts()
     onSettingsChange({
       prompts: defaultPrompts

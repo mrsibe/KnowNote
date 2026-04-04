@@ -47,7 +47,7 @@ interface ItemListProps {
   onRefresh?: () => void
 }
 
-// 单个可排序的 Item 组件
+// 단일개정렬의 Item 컴포넌트
 function SortableItemRow({
   item,
   currentNote,
@@ -170,9 +170,9 @@ function SortableItemRow({
               : 'border-transparent hover:bg-muted'
       }`}
     >
-      {/* 图标列 - 固定宽度 */}
+      {/* 도표컬럼 - 고정너비 */}
       <div className="flex items-center">
-        {/* 图标 */}
+        {/* 도표 */}
         {isNote && <FileText className="w-4 h-4 text-muted-foreground" />}
         {isMindMap && !isGenerating && <Network className="w-4 h-4 text-chart-1" />}
         {isQuiz && !isGenerating && <ClipboardList className="w-4 h-4 text-chart-2" />}
@@ -182,7 +182,7 @@ function SortableItemRow({
         )}
       </div>
 
-      {/* 内容列 - 可被压缩 */}
+      {/* 내용컬럼 - 압축 */}
       <div className="min-w-0 flex flex-col gap-1">
         {isNote && note && (
           <>
@@ -244,12 +244,12 @@ function SortableItemRow({
         )}
         <p className="text-xs text-muted-foreground">
           {new Date(item.updatedAt).toLocaleDateString(
-            i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US'
+            i18n.language === 'ko-KR' ? 'ko-KR' : 'en-US'
           )}
         </p>
       </div>
 
-      {/* 删除按钮列 - 固定宽度 */}
+      {/* 삭제버튼컬럼 - 고정너비 */}
       <Button
         onClick={(e) => {
           e.stopPropagation()
@@ -356,7 +356,7 @@ function SortableItemRow({
         </DialogContent>
       </Dialog>
 
-      {/* 删除确认对话框 */}
+      {/* 삭제확인다이얼로그 */}
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
@@ -397,7 +397,7 @@ export default function ItemList({
   const { t, i18n } = useTranslation('notebook')
   const [localItems, setLocalItems] = useState(items)
 
-  // 配置传感器 - 避免轻微抖动触发拖拽
+  // 설정전달감 - 회피면경량미세떨림동트리거드래그
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -406,7 +406,7 @@ export default function ItemList({
     })
   )
 
-  // 处理拖拽结束
+  // 처리드래그종료
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
 
@@ -417,7 +417,7 @@ export default function ItemList({
       const newItems = arrayMove(localItems, oldIndex, newIndex)
       setLocalItems(newItems)
 
-      // 批量更新 order 值
+      // 일괄업데이트 order 값
       const updates: Record<string, number> = {}
       newItems.forEach((item, index) => {
         updates[item.id] = index
@@ -427,13 +427,13 @@ export default function ItemList({
         await window.api.items.batchUpdateOrder(updates)
       } catch (error) {
         console.error('Failed to update item order:', error)
-        // 如果更新失败，恢复原来的顺序
+        // 만약업데이트실패，복원원본래의순서순서
         setLocalItems(items)
       }
     }
   }
 
-  // 当外部 items 改变时，更新本地状态
+  // 때외부부분 items 변경시，업데이트로컬상태
   useEffect(() => {
     setLocalItems(items)
   }, [items])

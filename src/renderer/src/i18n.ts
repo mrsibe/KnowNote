@@ -1,15 +1,15 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
-// 导入所有语言资源
-import zhCNCommon from './locales/zh-CN/common.json'
-import zhCNChat from './locales/zh-CN/chat.json'
-import zhCNSettings from './locales/zh-CN/settings.json'
-import zhCNNotebook from './locales/zh-CN/notebook.json'
-import zhCNUI from './locales/zh-CN/ui.json'
-import zhCNQuiz from './locales/zh-CN/quiz.json'
-import zhCNAnki from './locales/zh-CN/anki.json'
-import zhCNShortcuts from './locales/zh-CN/shortcuts.json'
+// 가져오기모든언어리소스
+import zhCNCommon from './locales/ko-KR/common.json'
+import zhCNChat from './locales/ko-KR/chat.json'
+import zhCNSettings from './locales/ko-KR/settings.json'
+import zhCNNotebook from './locales/ko-KR/notebook.json'
+import zhCNUI from './locales/ko-KR/ui.json'
+import zhCNQuiz from './locales/ko-KR/quiz.json'
+import zhCNAnki from './locales/ko-KR/anki.json'
+import zhCNShortcuts from './locales/ko-KR/shortcuts.json'
 
 import enUSCommon from './locales/en-US/common.json'
 import enUSChat from './locales/en-US/chat.json'
@@ -21,7 +21,7 @@ import enUSAnki from './locales/en-US/anki.json'
 import enUSShortcuts from './locales/en-US/shortcuts.json'
 
 const resources = {
-  'zh-CN': {
+  'ko-KR': {
     common: zhCNCommon,
     chat: zhCNChat,
     settings: zhCNSettings,
@@ -44,13 +44,13 @@ const resources = {
 }
 
 i18n
-  .use(initReactI18next) // 将 i18n 实例传递给 react-i18next
+  .use(initReactI18next) //  i18n 인스턴스에 전달 react-i18next
   .init({
     resources,
-    lng: 'zh-CN', // 默认语言
-    fallbackLng: 'zh-CN',
+    lng: 'ko-KR', // 기본언어
+    fallbackLng: 'ko-KR',
     interpolation: {
-      escapeValue: false // React 已经默认转义了
+      escapeValue: false // React 이미기본이스케이프됨
     },
     react: {
       useSuspense: false

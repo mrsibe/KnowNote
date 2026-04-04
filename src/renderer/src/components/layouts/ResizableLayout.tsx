@@ -10,12 +10,12 @@ export interface ResizableLayoutProps {
   defaultRightWidth?: number
 }
 
-// 黄金比例常量
+// 황금 비율상수
 const GOLDEN_RATIO = 1.618
 const MIN_SIDE_WIDTH = 260
 const MIN_CENTER_WIDTH = 420
 const DRAG_HANDLE_WIDTH = 12 // w-3
-const CONTAINER_PADDING_X = 16 // p-2 左右总和
+const CONTAINER_PADDING_X = 16 // p-2 왼오른총및
 
 const calculateGoldenRatioWidths = (containerWidth: number) => {
   const availableWidth = containerWidth - CONTAINER_PADDING_X - DRAG_HANDLE_WIDTH * 2
@@ -110,7 +110,7 @@ export default function ResizableLayout({
   const toggleLeftPanel = useCallback(() => {
     setIsLeftCollapsed((prev) => {
       if (!prev) {
-        // 即将折叠，保存当前宽度
+        // 접기，저장현재너비
         lastLeftSizeRef.current = leftWidth
       }
       return !prev
@@ -120,14 +120,14 @@ export default function ResizableLayout({
   const toggleRightPanel = useCallback(() => {
     setIsRightCollapsed((prev) => {
       if (!prev) {
-        // 即将折叠，保存当前宽度
+        // 접기，저장현재너비
         lastRightSizeRef.current = rightWidth
       }
       return !prev
     })
   }, [rightWidth])
 
-  // 在 collapse 状态变化时执行实际 resize，保证样式已经应用
+  //  collapse 상태변경시실행행실제 resize，보장형식이미앱
   useEffect(() => {
     if (!containerRef.current) return
     const raf = requestAnimationFrame(() => {

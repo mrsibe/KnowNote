@@ -6,10 +6,10 @@ import { settingsManager } from '../config'
 let mainWindow: BrowserWindow | null = null
 
 /**
- * 创建主窗口
+ * 생성메인 윈도우
  */
 export function createMainWindow(): BrowserWindow {
-  // 根据用户主题设置背景色，避免窗口调整大小时出现白边
+  // 기반으로사용자테마설정배배경색，회피면윈도우조정크기시현재공백테두리
   const theme = settingsManager.getSettingSync('theme')
   const backgroundColor = theme === 'dark' ? '#282c34' : '#fafafa'
 
@@ -44,7 +44,7 @@ export function createMainWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
-  // 监听主题变化，动态更新窗口背景色
+  // 감시테마변경，동상태업데이트윈도우배배경색
   settingsManager.onSettingsChangeSync((newSettings) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       const newBackgroundColor = newSettings.theme === 'dark' ? '#282c34' : '#fafafa'
@@ -64,7 +64,7 @@ export function createMainWindow(): BrowserWindow {
 }
 
 /**
- * 获取主窗口实例
+ * 조회메인 윈도우인스턴스
  */
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow

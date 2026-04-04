@@ -1,16 +1,16 @@
 /**
- * DocumentLoader 抽象接口和类型定义
- * 统一文档加载和结构提取
+ * DocumentLoader 추상 인터페이스 및 타입 정의
+ * 통합 문서 로드 및 구조 추출
  */
 
 /**
- * 页面信息（用于 PDF、PPT 等分页文档）
+ * 페이지 정보 (용도: PDF, PPT 등 페이지 기반 문서)
  */
 export interface PageInfo {
-  pageNumber: number // 页码（从 1 开始）
-  content: string // 页面文本
-  startOffset: number // 在完整文本中的起始位置
-  endOffset: number // 在完整文本中的结束位置
+  pageNumber: number // 페이지 번호 (1부터 시작)
+  content: string // 페이지 텍스트
+  startOffset: number // 전체 텍스트에서의 시작 위치
+  endOffset: number // 전체 텍스트에서의 종료 위치
   metadata?: {
     width?: number
     height?: number
@@ -21,74 +21,74 @@ export interface PageInfo {
 }
 
 /**
- * 章节信息（用于 Markdown、Word 等有层级结构的文档）
+ * 섹션 정보 (용도: Markdown, Word 등 계층 구조가 있는 문서)
  */
 export interface SectionInfo {
-  level: number // 章节层级（1-6）
-  title: string // 章节标题
-  content: string // 章节内容（不含子章节）
-  startOffset: number // 起始位置
-  endOffset: number // 结束位置
-  children?: SectionInfo[] // 子章节
+  level: number // 섹션 계층 (1-6)
+  title: string // 섹션 제목
+  content: string // 섹션 내용 (하위 섹션 미포함)
+  startOffset: number // 시작 위치
+  endOffset: number // 종료 위치
+  children?: SectionInfo[] // 하위 섹션
 }
 
 /**
- * 文档结构信息
+ * 문서 구조 정보
  */
 export interface DocumentStructure {
-  type: 'flat' | 'pages' | 'sections' // 结构类型
-  pages?: PageInfo[] // 分页文档（PDF、PPT）
-  sections?: SectionInfo[] // 章节文档（Markdown、Word）
+  type: 'flat' | 'pages' | 'sections' // 구조 타입
+  pages?: PageInfo[] // 페이지 기반 문서 (PDF, PPT)
+  sections?: SectionInfo[] // 섹션 기반 문서 (Markdown, Word)
 }
 
 /**
- * 文档加载结果（统一返回格式）
+ * 문서 로드 결과 (통합 반환 형식)
  */
 export interface DocumentLoadResult {
-  content: string // 完整文本内容
-  title?: string // 文档标题
-  mimeType: string // MIME 类型
-  structure?: DocumentStructure // 结构信息（新增）
-  metadata?: Record<string, unknown> // 其他元数据
+  content: string // 전체 텍스트 내용
+  title?: string // 문서 제목
+  mimeType: string // MIME 타입
+  structure?: DocumentStructure // 구조 정보 (신규 추가)
+  metadata?: Record<string, unknown> // 기타 메타데이터
 }
 
 /**
- * 加载选项
+ * 로드 옵션
  */
 export interface LoadOptions {
-  preserveStructure?: boolean // 是否保留结构信息（默认 true）
-  extractImages?: boolean // 是否提取图片信息（默认 false，预留）
-  ocrEnabled?: boolean // 是否启用 OCR（默认 false，预留）
-  password?: string // PDF 密码（预留）
+  preserveStructure?: boolean // 구조 정보 유지 여부 (기본값 true)
+  extractImages?: boolean // 이미지 정보 추출 여부 (기본값 false, 예약)
+  ocrEnabled?: boolean // OCR 활성화 여부 (기본값 false, 예약)
+  password?: string // PDF 비밀번호 (예약)
 }
 
 /**
- * DocumentLoader 抽象接口
- * 所有文档加载器必须实现此接口
+ * DocumentLoader 추상 인터페이스
+ * 모든 문서 로더는 이 인터페이스를 구현해야 합니다
  */
 export interface IDocumentLoader {
   /**
-   * 支持的 MIME 类型列表
+   * 지원하는 MIME 타입 목록
    */
   readonly supportedMimeTypes: string[]
 
   /**
-   * 支持的文件扩展名列表
+   * 지원하는 파일 확장자 목록
    */
   readonly supportedExtensions: string[]
 
   /**
-   * 从文件路径加载
+   * 파일 경로에서 로드
    */
   loadFromPath(filePath: string, options?: LoadOptions): Promise<DocumentLoadResult>
 
   /**
-   * 从 Buffer 加载
+   * Buffer에서 로드
    */
   loadFromBuffer(buffer: Buffer, options?: LoadOptions): Promise<DocumentLoadResult>
 
   /**
-   * 检查是否支持该文件
+   * 파일 지원 여부 확인
    */
   canLoad(filePathOrMimeType: string): boolean
 }

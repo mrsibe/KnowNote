@@ -8,11 +8,11 @@ import { settingsManager } from '../config'
 import Logger from '../../shared/utils/logger'
 import { ChatSchemas, validate } from './validation'
 
-// 管理活跃的流式请求
+// 관리활점프의스트림형식요청
 const activeStreams = new Map<string, AbortController>()
 
 /**
- * 构建 RAG 上下文 prompt
+ * RAG 컨텍스트 프롬프트 구성
  */
 function buildRAGContext(
   searchResults: Array<{
@@ -24,14 +24,14 @@ function buildRAGContext(
   if (searchResults.length === 0) return ''
 
   const contextParts = searchResults.map((result, index) => {
-    return `[来源 ${index + 1}: ${result.documentTitle}]\n${result.content}`
+    return `[출처 ${index + 1}: ${result.documentTitle}]\n${result.content}`
   })
 
-  return `以下是与用户问题相关的背景知识，请参考这些信息来回答：
+  return `다음은 사용자 질문과 관련된 배경 지식입니다. 이 정보를 참고하여 답변하세요:
 
 ${contextParts.join('\n\n---\n\n')}
 
-请基于以上背景知识回答用户的问题。如果背景知识不足以回答问题，请说明并尽力提供有帮助的回答。`
+위 배경 지식을 바탕으로 사용자의 질문에 답변하세요. 배경 지식이 질문에 충분하지 않은 경우 설명하고 최대한 도움이 되는 답변을 제공하세요.`
 }
 
 /**
@@ -89,34 +89,34 @@ export function registerChatHandlers(
   )
 
   ipcMain.handle('send-message', async (event: IpcMainInvokeEvent, ...args: any[]) => {
-    // 验证参数
+    // 검증매개변수
     if (args.length === 0) {
-      throw new Error('IPC 调用缺少参数')
+      throw new Error('IPC 호출에 매개변수 누락')
     }
     if (args.length > 1) {
-      throw new Error(`IPC 调用参数错误: 期望传递单个对象参数，但收到 ${args.length} 个参数`)
+      throw new Error(`IPC 호출 매개변수 오류: 단일 객체 매개변수 전달이 예상되었으나 ${args.length} 개의 매개변수를 수신`)
     }
 
     const validatedArgs = ChatSchemas.sendMessage.parse(args[0])
     const { sessionId, content } = validatedArgs
 
-    // 1. 保存用户消息
+    // 1. 사용자 메시지 저장
     queries.createMessage(sessionId, 'user', content)
 
-    // 2. 创建 assistant 消息占位符
+    // 2. assistant 메시지 플레이스홀더 생성
     const assistantMessage = queries.createMessage(sessionId, 'assistant', '')
 
-    // 3. 获取历史消息作为上下文
+    // 3. 컨텍스트로 사용할 기록 메시지 조회
     const history = queries.getMessagesBySession(sessionId)
     let messages = history.map((m: any) => ({
       role: m.role as 'user' | 'assistant' | 'system',
       content: m.content
     }))
 
-    // 3.1 通用消息清理（过滤空消息和无效格式）
+    // 3.1 일반 메시지 정리 (빈 메시지 및 잘못된 형식 필터링)
     messages = validateAndCleanMessages(messages)
 
-    // 验证清理后是否还有有效消息
+    // 검증정리후예아니오아직있는있는효메시지
     if (messages.length === 0) {
       event.sender.send('message-error', {
         messageId: assistantMessage.id,
@@ -125,8 +125,8 @@ export function registerChatHandlers(
       return assistantMessage.id
     }
 
-    // 3.2 RAG 增强：检索相关知识并注入上下文
-    // 只有在设置了默认嵌入模型时才启用 RAG
+    // 3.2 RAG 강화: 관련 지식 검색 및 컨텍스트 주입
+    // 기본 임베딩 모델이 설정된 경우에만 RAG 활성화
     try {
       const settings = await settingsManager.getAllSettings()
       const hasEmbeddingModel =
@@ -147,7 +147,7 @@ export function registerChatHandlers(
               `RAG: Found ${searchResults.length} relevant chunks for query`
             )
 
-            // 将 RAG 上下文作为 system message 插入到消息列表开头
+            // RAG 컨텍스트를 system message로 메시지 목록 맨 앞에 삽입
             messages.unshift({
               role: 'system',
               content: ragContext
@@ -158,11 +158,11 @@ export function registerChatHandlers(
         Logger.debug('ChatHandlers', 'RAG disabled: No embedding model configured')
       }
     } catch (error) {
-      // RAG 失败不应该阻止对话，只记录警告
+      // RAG 실패가 대화를 차단하면 안 되며, 경고만 기록
       Logger.warn('ChatHandlers', 'RAG search failed:', error)
     }
 
-    // 4. 调用 AI Provider 流式生成
+    // 4. AI Provider 스트리밍 생성 호출
     const provider = await providerManager.getActiveChatProvider()
     if (!provider) {
       event.sender.send('message-error', {
@@ -176,14 +176,14 @@ export function registerChatHandlers(
     let fullReasoningContent = ''
     let usageMetadata: any = null
 
-    // 调用 Provider 流式生成,获取 AbortController（基于 AI SDK fullStream）
+    // Provider 스트리밍 생성 호출, AbortController 획득 (AI SDK fullStream 기반)
     const abortController = await provider.sendMessageStream(
       messages,
-      // onChunk - 处理 AI SDK fullStream 的各种 part 类型
+      // onChunk - AI SDK fullStream의 다양한 part 유형 처리
       (chunk) => {
         const { metadata, content, done } = chunk
 
-        // 1. 推理块开始
+        // 1. 추론 블록 시작
         if (metadata?.reasoningStart) {
           event.sender.send('message-chunk', {
             messageId: assistantMessage.id,
@@ -191,7 +191,7 @@ export function registerChatHandlers(
             reasoningId: metadata.reasoningId
           })
         }
-        // 2. 推理增量内容
+        // 2. 추론 증분 내용
         else if (metadata?.isReasoning) {
           fullReasoningContent += content
 
@@ -202,7 +202,7 @@ export function registerChatHandlers(
             reasoningId: metadata.reasoningId
           })
         }
-        // 3. 推理块结束
+        // 3. 추론 블록 종료
         else if (metadata?.reasoningEnd) {
           event.sender.send('message-chunk', {
             messageId: assistantMessage.id,
@@ -210,7 +210,7 @@ export function registerChatHandlers(
             reasoningId: metadata.reasoningId
           })
         }
-        // 4. 普通文本内容（text-delta）
+        // 4. 일반 텍스트 내용 (text-delta)
         else if (content) {
           fullTextContent += content
 
@@ -221,14 +221,14 @@ export function registerChatHandlers(
           })
         }
 
-        // 5. 流式传输完成
+        // 5. 스트리밍 전송 완료
         if (done) {
-          // 保存 usage metadata
+          // usage 메타데이터 저장
           if (metadata?.usage) {
             usageMetadata = metadata
           }
 
-          // 发送完成事件
+          // 전송완료이벤트
           event.sender.send('message-chunk', {
             messageId: assistantMessage.id,
             type: 'finish',
@@ -242,22 +242,22 @@ export function registerChatHandlers(
           messageId: assistantMessage.id,
           error: error.message
         })
-        // 清理 AbortController
+        // AbortController 정리
         activeStreams.delete(assistantMessage.id)
       },
       // onComplete
       async () => {
         try {
-          // 更新数据库中的完整内容（包含推理内容）
+          // 업데이트데이터베이스에서의완전한내용（패키지포함추이내용）
           queries.updateMessageContent(assistantMessage.id, fullTextContent, fullReasoningContent)
 
-          // 计算 token 使用量
+          // 토큰 사용량 계산
           let tokensUsed = 0
           if (usageMetadata?.usage?.totalTokens) {
-            // 如果 API 返回了精确的 token 数
+            // API에서 정확한 토큰 수를 반환한 경우
             tokensUsed = usageMetadata.usage.totalTokens
           } else {
-            // 降级：使用估算
+            // 하강레벨：사용추정계산
             const userTokens = SessionAutoSwitchService.estimateTokens(content)
             const assistantTokens = SessionAutoSwitchService.estimateTokens(fullTextContent)
             tokensUsed = userTokens + assistantTokens
@@ -290,13 +290,13 @@ export function registerChatHandlers(
             error: 'Error occurred while processing message'
           })
         } finally {
-          // 清理 AbortController
+          // AbortController 정리
           activeStreams.delete(assistantMessage.id)
         }
       }
     )
 
-    // 存储 AbortController
+    // AbortController 저장
     activeStreams.set(assistantMessage.id, abortController)
 
     // Return messageId immediately so frontend can continue

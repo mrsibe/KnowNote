@@ -1,10 +1,10 @@
 /**
- * BaseProvider 接口
- * 所有 Provider 必须实现的基础接口
+ * BaseProvider 인터페이스
+ * 모든 Provider 반드시해야현재의기본인터페이스
  */
 
 /**
- * Provider 配置
+ * Provider 설정
  */
 export interface LLMProviderConfig {
   apiKey?: string
@@ -16,25 +16,25 @@ export interface LLMProviderConfig {
 }
 
 /**
- * BaseProvider 基础接口
- * 定义所有 Provider 必须实现的基础方法
+ * BaseProvider 기본인터페이스
+ * 정의모든 Provider 반드시해야현재의기본메서드
  */
 export interface BaseProvider {
   /**
-   * Provider 名称 (唯一标识)
+   * Provider 이름 (유일한하나표인식)
    */
   readonly name: string
 
   /**
-   * 配置 Provider
-   * @param config - Provider 配置项
+   * 설정 Provider
+   * @param config - Provider 설정항목
    */
   configure(config: LLMProviderConfig): void
 
   /**
-   * 验证配置是否有效(可选)
-   * @param config - 需要验证的配置
-   * @returns Promise<boolean> - 配置是否有效
+   * 검증설정예아니오있는효(선택)
+   * @param config - 필요검증의설정
+   * @returns Promise<boolean> - 설정예아니오있는효
    */
   validateConfig?(config: LLMProviderConfig): Promise<boolean>
 }

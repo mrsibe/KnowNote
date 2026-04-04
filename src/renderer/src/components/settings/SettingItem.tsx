@@ -4,8 +4,8 @@ interface SettingItemProps {
   title: string
   description: string
   children: ReactNode
-  layout?: 'horizontal' | 'vertical' // 默认 horizontal（左右布局）
-  action?: ReactNode // 可选的操作按钮
+  layout?: 'horizontal' | 'vertical' // 기본 horizontal（왼오른레이아웃）
+  action?: ReactNode // 선택의작업버튼
 }
 
 export default function SettingItem({

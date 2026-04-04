@@ -23,7 +23,7 @@ export default function AnkiExportDialog() {
 
     setIsExporting(true)
     try {
-      // 打开系统保存文件对话框
+      // 열기시리즈통합저장파일다이얼로그
       const filePath = await window.api.dialog.saveFile({
         title: t('exportCards'),
         defaultPath: `${currentAnkiCards.title || 'anki-cards'}.apkg`,
@@ -36,16 +36,16 @@ export default function AnkiExportDialog() {
       })
 
       if (!filePath) {
-        // 用户取消了保存
+        // 사용자취소저장
         setIsExporting(false)
         return
       }
 
-      // 调用导出API
+      // 호출내보내기API
       const result = await window.api.anki.exportToPath(currentAnkiCards.id, filePath)
 
       if (result.success) {
-        // 导出成功，关闭对话框
+        // 내보내기성공，닫기다이얼로그
         setExportDialogOpen(false)
       } else {
         console.error('Export failed:', result.error)
@@ -70,7 +70,7 @@ export default function AnkiExportDialog() {
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* 导出格式 */}
+          {/* 내보내기형식 */}
           <div className="space-y-2">
             <Label>{t('exportFormat')}</Label>
             <div className="flex items-center gap-2 p-3 border rounded-md bg-muted/50">
@@ -82,7 +82,7 @@ export default function AnkiExportDialog() {
             </div>
           </div>
 
-          {/* 卡片数量 */}
+          {/* 카드수량 */}
           <div className="text-sm text-muted-foreground">
             {t('totalCards')}: {(currentAnkiCards?.cardsData as AnkiCardItem[])?.length || 0}
           </div>

@@ -19,7 +19,7 @@ interface NotebookCardProps {
   onRename: () => void
 }
 
-// 主题图表颜色映射 - 用于侧边装饰
+// 테마차트색상매핑 - 용도:쪽테두리장식
 const chartColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5']
 
 const getChartColor = (id: string): string => {
@@ -45,7 +45,7 @@ export default function NotebookCard({
     if (days === 1) return t('yesterday')
     if (days < 7) return t('daysAgo', { days })
 
-    const locale = i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US'
+    const locale = i18n.language === 'ko-KR' ? 'ko-KR' : 'en-US'
     return date.toLocaleDateString(locale)
   }
 
@@ -53,7 +53,7 @@ export default function NotebookCard({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <Card onClick={onClick} className="relative overflow-hidden">
-          {/* 左侧彩色装饰条 */}
+          {/* 왼쪽다채로운장식바 */}
           <div className={`absolute left-0 top-0 bottom-0 w-1 ${chartColor}`} />
 
           <CardHeader>
@@ -93,7 +93,7 @@ export default function NotebookCard({
         </Card>
       </ContextMenuTrigger>
 
-      {/* 右键菜单 */}
+      {/* 우클릭메뉴 */}
       <ContextMenuContent>
         <ContextMenuItem
           onClick={(e) => {

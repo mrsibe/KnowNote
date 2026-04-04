@@ -3,12 +3,12 @@ import type { Note } from '../../../shared/types'
 import type { MindMap } from '../../../main/db/schema'
 
 /**
- * Item 类型
+ * Item 타입
  */
 export type ItemType = 'note' | 'mindmap' | 'quiz' | 'anki' | 'ppt' | 'audio' | 'video'
 
 /**
- * Item 详情
+ * Item 상세
  */
 export interface ItemDetail {
   id: string
@@ -18,21 +18,21 @@ export interface ItemDetail {
   order: number
   createdAt: Date
   updatedAt: Date
-  resource: Note | MindMap | any // 实际的资源数据
+  resource: Note | MindMap | any // 실제 리소스 데이터
 }
 
 /**
- * 从 items 数组中派生 notes 数组
- * 提取为辅助函数以保持逻辑一致性
+ * items 배열에서 notes 배열 파생
+ * 로직의 편집 일관성을 유지하기 위한 헬퍼 함수
  */
 const deriveNotes = (items: ItemDetail[]): Note[] => {
   return items.filter((item) => item.type === 'note').map((item) => item.resource as Note)
 }
 
 interface ItemStore {
-  // 状态
+  // 상태
   items: ItemDetail[]
-  notes: Note[] // 派生状态，从items中过滤type='note'的项
+  notes: Note[] // 파생 상태, items에서 type='note' 항목 필터링
   currentNote: Note | null
   isEditing: boolean
   isSaving: boolean
@@ -42,7 +42,7 @@ interface ItemStore {
   setCurrentNote: (note: Note | null) => void
   setIsEditing: (isEditing: boolean) => void
 
-  // 异步操作
+  // 비동기 작업
   loadItems: (notebookId: string) => Promise<void>
   loadNotes: (notebookId: string) => Promise<void>
   createNote: (notebookId: string, content: string, customTitle?: string) => Promise<Note>
@@ -67,7 +67,7 @@ export const useItemStore = create<ItemStore>()((set, get) => ({
       const items = await window.api.items.getAll(notebookId)
       console.log(`[ItemStore] Loaded ${items.length} items`)
 
-      // 派生 notes 列表
+      // notes 목록 파생
       const notes = deriveNotes(items)
 
       set({ items, notes })
@@ -78,7 +78,7 @@ export const useItemStore = create<ItemStore>()((set, get) => ({
   },
 
   loadNotes: async (notebookId: string) => {
-    // loadNotes 实际上调用 loadItems，因为notes是从items派生的
+    // loadNotes는 실제로 loadItems를 호출, notes는 items에서 파생되므로
     await get().loadItems(notebookId)
   },
 
@@ -89,7 +89,7 @@ export const useItemStore = create<ItemStore>()((set, get) => ({
       const note = await window.api.createNote(notebookId, content, customTitle)
       console.log('[ItemStore] Note created:', note.id)
 
-      // 重新加载 items 列表
+      // items 목록 다시 로드
       await get().loadItems(notebookId)
 
       set({
@@ -125,7 +125,7 @@ export const useItemStore = create<ItemStore>()((set, get) => ({
           return item
         })
 
-        // 重新派生 notes 数组，保持与 items 同步
+        // notes 배열 재파생, items와 동기 유지
         const notes = deriveNotes(updatedItems)
 
         const updatedCurrentNote =
@@ -159,7 +159,7 @@ export const useItemStore = create<ItemStore>()((set, get) => ({
           deletedItem?.type === 'note' && state.currentNote?.id === deletedItem.resourceId
 
         const updatedItems = state.items.filter((item) => item.id !== itemId)
-        // 重新派生 notes 数组，保持与 items 同步
+        // notes 배열 재파생, items와 동기 유지
         const notes = deriveNotes(updatedItems)
 
         return {

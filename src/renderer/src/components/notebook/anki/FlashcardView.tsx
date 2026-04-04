@@ -32,7 +32,7 @@ export default function FlashcardView({ cards, onClose }: FlashcardViewProps) {
   const currentCard = cards[currentIndex]
   const progress = ((currentIndex + 1) / cards.length) * 100
 
-  // 获取卡片的正面内容
+  // 조회카드의앞면내용
   const getFrontContent = (card: AnkiCardItem): string => {
     switch (card.type) {
       case 'basic':
@@ -44,7 +44,7 @@ export default function FlashcardView({ cards, onClose }: FlashcardViewProps) {
     }
   }
 
-  // 获取卡片的背面内容
+  // 조회카드의뒷면내용
   const getBackContent = (card: AnkiCardItem): string => {
     switch (card.type) {
       case 'basic':
@@ -71,7 +71,7 @@ export default function FlashcardView({ cards, onClose }: FlashcardViewProps) {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // 防止按键重复触发（按住不放）
+    // 방지에 따라키재복트리거（에 따라유지아닌방）
     if (e.repeat) {
       return
     }
@@ -95,7 +95,7 @@ export default function FlashcardView({ cards, onClose }: FlashcardViewProps) {
 
   return (
     <div className="flex flex-col h-full focus:outline-none" onKeyDown={handleKeyDown} tabIndex={0}>
-      {/* 卡片区域 */}
+      {/* 카드영역 */}
       <div className="flex-1 flex items-center justify-center p-8">
         <div
           className="w-full max-w-2xl min-h-96 cursor-pointer transition-all duration-300"
@@ -125,7 +125,7 @@ export default function FlashcardView({ cards, onClose }: FlashcardViewProps) {
         </div>
       </div>
 
-      {/* 进度条 */}
+      {/* 프로그레스 바 */}
       <div className="h-1 bg-muted relative">
         <div
           className="h-full bg-primary transition-all duration-300"
@@ -136,7 +136,7 @@ export default function FlashcardView({ cards, onClose }: FlashcardViewProps) {
         </div>
       </div>
 
-      {/* 底部控制栏 */}
+      {/* 바닥부분제어바 */}
       <div className="flex items-center justify-center gap-4 p-4 border-t">
         <Button
           variant="outline"

@@ -1,10 +1,10 @@
 /**
- * VectorStore 抽象接口
- * 支持 SQLite / LanceDB / Qdrant 等后端
+ * VectorStore 추출객체인터페이스
+ * 지원 SQLite / LanceDB / Qdrant 등후엔드
  */
 
 /**
- * 向量项
+ * 벡터항목
  */
 export interface VectorItem {
   id: string // embedding_id
@@ -14,95 +14,95 @@ export interface VectorItem {
 }
 
 /**
- * 查询结果
+ * 쿼리결과
  */
 export interface QueryResult {
   id: string // embedding_id
   chunkId: string
-  score: number // 相似度分数（0-1，越高越相似）
-  distance: number // 原始距离值
+  score: number // 유사도분수（0-1，넘는높은넘는상유사）
+  distance: number // 원본거리값
   metadata?: Record<string, unknown>
 }
 
 /**
- * 查询选项
+ * 쿼리선택지
  */
 export interface QueryOptions {
-  topK?: number // 返回前 K 个结果，默认 5
-  threshold?: number // 相似度阈值（0-1），低于此值的结果不返回
+  topK?: number // 반환전 K 개결과，기본 5
+  threshold?: number // 유사도임계값（0-1），낮은이값의결과아닌반환
   filter?: {
-    chunkIds?: string[] // 限制在指定 chunk 中搜索
+    chunkIds?: string[] // 제한제가리키는정 chunk 에서검색
   }
 }
 
 /**
- * VectorStore 配置
+ * VectorStore 설정
  */
 export interface VectorStoreConfig {
   notebookId: string
-  dimensions?: number // 向量维度，默认 1536
+  dimensions?: number // 벡터 차원，기본 1536
 }
 
 /**
- * 向量存储抽象接口
- * 业务层通过此接口操作向量存储，不关心底层实现
+ * 벡터 저장소추출객체인터페이스
+ * 업무레이어통해이인터페이스작업벡터 저장소，아닌닫기마음바닥레이어현재
  */
 export interface VectorStore {
   /**
-   * 初始化向量存储
+   * 초기화벡터 저장소
    */
   initialize(config: VectorStoreConfig): Promise<void>
 
   /**
-   * 批量插入或更新向量
+   * 일괄삽입또는업데이트벡터
    */
   upsert(items: VectorItem[]): Promise<void>
 
   /**
-   * 批量删除向量
+   * 일괄삭제벡터
    */
   delete(ids: string[]): Promise<void>
 
   /**
-   * 按 chunk ID 批量删除向量
+   * 에 따라 chunk ID 일괄삭제벡터
    */
   deleteByChunkIds(chunkIds: string[]): Promise<void>
 
   /**
-   * 向量相似度查询
-   * @param vector 查询向量
-   * @param options 查询选项
-   * @returns 相似度排序的结果列表
+   * 벡터유사도쿼리
+   * @param vector 쿼리벡터
+   * @param options 쿼리선택지
+   * @returns 유사도정렬의결과목록
    */
   query(vector: Float32Array, options?: QueryOptions): Promise<QueryResult[]>
 
   /**
-   * 清空当前 notebook 的所有向量
+   * 비우기현재 notebook 의모든벡터
    */
   clear(): Promise<void>
 
   /**
-   * 获取向量数量
+   * 조회벡터수량
    */
   count(): Promise<number>
 
   /**
-   * 关闭连接/释放资源
+   * 닫기연결/해제방리소스
    */
   close(): Promise<void>
 
   /**
-   * 获取当前 notebook ID
+   * 현재 조회 notebook ID
    */
   getNotebookId(): string
 
   /**
-   * 获取向量维度
+   * 조회벡터 차원
    */
   getDimensions(): number
 }
 
 /**
- * 向量存储类型
+ * 벡터 저장소타입
  */
 export type VectorStoreType = 'sqlite' | 'lancedb' | 'qdrant'

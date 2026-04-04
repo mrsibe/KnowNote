@@ -17,7 +17,7 @@ export default function MindMapPage() {
   const [platform, setPlatform] = useState<string>('')
   const mindMapContainerRef = useRef<HTMLDivElement>(null)
 
-  // 获取平台信息
+  // 조회플랫폼정보
   useEffect(() => {
     const getPlatform = async () => {
       try {
@@ -30,7 +30,7 @@ export default function MindMapPage() {
     getPlatform()
   }, [])
 
-  // 加载思维导图
+  // 로드마인드맵
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true)
@@ -50,12 +50,12 @@ export default function MindMapPage() {
     loadData()
   }, [notebookId, mindMapId, loadLatestMindMap, loadMindMap])
 
-  // 切换布局方向
+  // 전환레이아웃방방향
   const toggleDirection = () => {
     setDirection((prev) => (prev === 'LR' ? 'TB' : 'LR'))
   }
 
-  // 导出思维导图为图片
+  // 내보내기마인드맵도조각
   const handleExport = async () => {
     if (!mindMapContainerRef.current) return
 
@@ -63,7 +63,7 @@ export default function MindMapPage() {
       const reactFlowElement = mindMapContainerRef.current.querySelector('.react-flow')
       if (!reactFlowElement) return
 
-      // 临时隐藏不需要导出的元素
+      // 임시시숨김숨김아닌필요내보내기의메타요소
       const background = reactFlowElement.querySelector('.react-flow__background')
       const controls = reactFlowElement.querySelector('.react-flow__controls')
 
@@ -73,26 +73,26 @@ export default function MindMapPage() {
       if (background) (background as HTMLElement).style.display = 'none'
       if (controls) (controls as HTMLElement).style.display = 'none'
 
-      // 等待 DOM 更新
+      // 등대기 DOM 업데이트
       await new Promise((resolve) => setTimeout(resolve, 100))
 
-      // 获取 viewport 元素（包含所有节点和边的实际内容）
+      // 조회 viewport 메타요소（패키지포함모든노드및테두리의실제내용）
       const viewport = reactFlowElement.querySelector('.react-flow__viewport') as HTMLElement
       if (!viewport) return
 
-      // 获取所有节点来计算边界
+      // 조회모든노드래계산테두리계
       const nodeElements = viewport.querySelectorAll('.react-flow__node')
       const edgeElements = viewport.querySelectorAll('.react-flow__edge')
 
       if (nodeElements.length === 0) return
 
-      // 计算所有节点和边的边界框（基于 transform 属性）
+      // 계산모든노드및테두리의테두리계프레임（기반 transform 속성）
       let minX = Infinity,
         minY = Infinity,
         maxX = -Infinity,
         maxY = -Infinity
 
-      // 处理节点
+      // 처리노드
       nodeElements.forEach((node) => {
         const element = node as HTMLElement
         const transform = element.style.transform
@@ -101,7 +101,7 @@ export default function MindMapPage() {
         if (match) {
           const x = parseFloat(match[1])
           const y = parseFloat(match[2])
-          // 使用 offsetWidth/offsetHeight 获取元素的原始尺寸，不受缩放影响
+          // 사용 offsetWidth/offsetHeight 조회메타요소의원본크기치수，아닌받축소방그림자영향
           const width = element.offsetWidth
           const height = element.offsetHeight
 
@@ -112,7 +112,7 @@ export default function MindMapPage() {
         }
       })
 
-      // 处理边（可能延伸到节点之外）
+      // 처리테두리（지연확장에노드의외부）
       edgeElements.forEach((edge) => {
         const element = edge as SVGGraphicsElement
         try {
@@ -122,11 +122,11 @@ export default function MindMapPage() {
           maxX = Math.max(maxX, bbox.x + bbox.width)
           maxY = Math.max(maxY, bbox.y + bbox.height)
         } catch {
-          // 某些边元素可能无法获取 bbox，忽略即可
+          // 어떤테두리메타요소없음방법조회 bbox，무시생략
         }
       })
 
-      // 添加边距
+      // 추가테두리거리
       const padding = 40
       minX -= padding
       minY -= padding
@@ -136,14 +136,14 @@ export default function MindMapPage() {
       const width = maxX - minX
       const height = maxY - minY
 
-      // 临时调整 viewport 的 transform
+      // 임시시조정 viewport 의 transform
       const originalTransform = viewport.style.transform
       viewport.style.transform = `translate(${-minX}px, ${-minY}px)`
 
-      // 等待 transform 生效
+      // 등대기 transform 생효
       await new Promise((resolve) => setTimeout(resolve, 50))
 
-      // 导出图片
+      // 내보내기도조각
       const dataUrl = await toPng(viewport, {
         cacheBust: true,
         backgroundColor: '#ffffff',
@@ -156,12 +156,12 @@ export default function MindMapPage() {
         }
       })
 
-      // 恢复原始状态
+      // 복원원본상태
       viewport.style.transform = originalTransform
       if (background) (background as HTMLElement).style.display = originalBackgroundDisplay
       if (controls) (controls as HTMLElement).style.display = originalControlsDisplay
 
-      // 创建下载链接
+      // 생성다운로드체인접
       const link = document.createElement('a')
       link.download = `mindmap-${Date.now()}.png`
       link.href = dataUrl
@@ -169,7 +169,7 @@ export default function MindMapPage() {
     } catch (error) {
       console.error('[MindMapPage] Failed to export image:', error)
 
-      // 确保恢复状态
+      // 보장복원상태
       const reactFlowElement = mindMapContainerRef.current?.querySelector('.react-flow')
       if (reactFlowElement) {
         const background = reactFlowElement.querySelector('.react-flow__background')
@@ -179,7 +179,7 @@ export default function MindMapPage() {
 
         const viewport = reactFlowElement.querySelector('.react-flow__viewport') as HTMLElement
         if (viewport && viewport.style.transform !== undefined) {
-          // 不修改 transform，让 ReactFlow 自己管理
+          // 아닌수정수정 transform， ReactFlow 자체자기관리
         }
       }
     }
@@ -187,14 +187,14 @@ export default function MindMapPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
-      {/* 顶部可拖拽标题栏 */}
+      {/* 상단부분드래그제목바 */}
       <div
         className="absolute top-0 left-0 right-0 h-10 z-10 flex items-center justify-between px-4 bg-background"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {/* macOS 左侧空白区域（留给窗口控制按钮） */}
+        {/* macOS 왼쪽빈공백영역（남겨둠윈도우제어버튼） */}
         {platform === 'darwin' && <div className="w-16"></div>}
-        {/* 非 macOS 左侧空白区域 */}
+        {/* 비 macOS 왼쪽빈공백영역 */}
         {platform !== 'darwin' && <div style={{ width: '100px' }}></div>}
 
         <span className="text-sm text-muted-foreground font-medium">{t('mindMap')}</span>
@@ -208,7 +208,7 @@ export default function MindMapPage() {
               <button
                 onClick={toggleDirection}
                 className="p-1.5 rounded hover:bg-accent transition-colors"
-                title={direction === 'LR' ? '切换为垂直布局' : '切换为横向布局'}
+                title={direction === 'LR' ? '전환수직직접레이아웃' : '전환가로방향레이아웃'}
               >
                 {direction === 'LR' ? (
                   <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
@@ -219,7 +219,7 @@ export default function MindMapPage() {
               <button
                 onClick={handleExport}
                 className="p-1.5 rounded hover:bg-accent transition-colors"
-                title="导出为图片"
+                title="내보내기도조각"
               >
                 <Download className="w-4 h-4 text-muted-foreground" />
               </button>
@@ -227,11 +227,11 @@ export default function MindMapPage() {
           )}
         </div>
 
-        {/* Windows 右侧空白区域（留给窗口控制按钮） */}
+        {/* Windows 오른쪽빈공백영역（남겨둠윈도우제어버튼） */}
         {platform === 'win32' && <div className="w-32"></div>}
       </div>
 
-      {/* 内容区域 */}
+      {/* 내용영역 */}
       <div
         style={{
           flex: 1,

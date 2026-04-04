@@ -1,6 +1,6 @@
 /**
  * MarkdownLoader
- * 使用 remark/unified 解析 Markdown，保留 AST 结构
+ * remark/unified를 사용하여 Markdown 파싱, AST 구조 유지
  */
 
 import { readFile } from 'fs/promises'
@@ -13,8 +13,8 @@ import Logger from '../../../shared/utils/logger'
 import type { IDocumentLoader, DocumentLoadResult, LoadOptions, SectionInfo } from './types'
 
 /**
- * Markdown 文档加载器
- * 基于 unified/remark 解析，支持 GFM
+ * Markdown 문서 로더
+ * unified/remark 기반 파싱, GFM 지원
  */
 export class MarkdownLoader implements IDocumentLoader {
   readonly supportedMimeTypes = ['text/markdown']
@@ -38,18 +38,18 @@ export class MarkdownLoader implements IDocumentLoader {
     const content = buffer.toString('utf-8')
 
     try {
-      // 解析 Markdown AST
-      // 处理 ESM/CommonJS 兼容性：在运行时获取正确的函数
+      // Markdown AST 파싱
+      // ESM/CommonJS 호환성 처리: 런타임에 정확한 함수 확인
       const remarkFn = typeof remark === 'function' ? remark : (remark as any).remark
       const remarkGfmPlugin =
         typeof remarkGfm === 'function' ? remarkGfm : (remarkGfm as any).default
       const processor = remarkFn().use(remarkGfmPlugin)
       const ast = processor.parse(content) as Root
 
-      // 提取标题
+      // 제목 추출
       const title = this.extractTitle(ast)
 
-      // 提取章节结构
+      // 섹션 구조 추출
       const sections = opts.preserveStructure ? this.extractSections(content, ast) : undefined
 
       return {
@@ -75,7 +75,7 @@ export class MarkdownLoader implements IDocumentLoader {
   }
 
   /**
-   * 提取文档标题（第一个 h1）
+   * 문서 제목 추출 (첫 번째 h1)
    */
   private extractTitle(ast: Root): string | undefined {
     let title: string | undefined
@@ -83,16 +83,16 @@ export class MarkdownLoader implements IDocumentLoader {
     visit(ast, 'heading', (node: Heading) => {
       if (!title && node.depth === 1) {
         title = this.nodeToText(node)
-        return false // 停止遍历
+        return false // 순회 중지
       }
-      return undefined // 继续遍历
+      return undefined // 순회 계속
     })
 
     return title
   }
 
   /**
-   * 提取章节结构
+   * 섹션 구조 추출
    */
   private extractSections(content: string, ast: Root): SectionInfo[] {
     const sections: SectionInfo[] = []
@@ -114,7 +114,7 @@ export class MarkdownLoader implements IDocumentLoader {
           children: []
         }
 
-        // 维护章节层级
+        // 섹션 계층 유지
         while (stack.length > 0 && stack[stack.length - 1].level >= heading.depth) {
           stack.pop()
         }
@@ -129,14 +129,14 @@ export class MarkdownLoader implements IDocumentLoader {
       }
     })
 
-    // 提取每个章节的内容
+    // 각 섹션의 내용 추출
     this.fillSectionContent(sections, content)
 
     return sections
   }
 
   /**
-   * 填充章节内容
+   * 섹션 내용 채우기
    */
   private fillSectionContent(sections: SectionInfo[], fullContent: string): void {
     for (let i = 0; i < sections.length; i++) {
@@ -144,11 +144,11 @@ export class MarkdownLoader implements IDocumentLoader {
       const nextSectionStart =
         i + 1 < sections.length ? sections[i + 1].startOffset : fullContent.length
 
-      // 提取从当前标题到下一个同级标题之间的内容
+      // 현재 제목부터 다음 동일 레벨 제목 사이의 내용 추출
       section.content = fullContent.substring(section.startOffset, nextSectionStart).trim()
       section.endOffset = nextSectionStart
 
-      // 递归处理子章节
+      // 하위 섹션 재귀 처리
       if (section.children && section.children.length > 0) {
         this.fillSectionContent(section.children, section.content)
       }
@@ -156,7 +156,7 @@ export class MarkdownLoader implements IDocumentLoader {
   }
 
   /**
-   * 将 AST 节点转换为纯文本
+   * AST 노드를 순수 텍스트로 변환
    */
   private nodeToText(node: Content | Heading): string {
     if ('value' in node && typeof node.value === 'string') {
@@ -169,7 +169,7 @@ export class MarkdownLoader implements IDocumentLoader {
   }
 
   /**
-   * 检查是否有代码块
+   * 코드 블록 존재 여부 확인
    */
   private hasCodeBlocks(ast: Root): boolean {
     let hasCode = false
@@ -181,7 +181,7 @@ export class MarkdownLoader implements IDocumentLoader {
   }
 
   /**
-   * 检查是否有表格
+   * 테이블 존재 여부 확인
    */
   private hasTables(ast: Root): boolean {
     let hasTable = false

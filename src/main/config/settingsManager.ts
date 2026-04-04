@@ -3,8 +3,8 @@ import type { AppSettings } from './types'
 import { defaultSettings } from './defaults'
 
 /**
- * 深度合并设置对象
- * 确保旧的存储数据能够获得新增的默认字段
+ * 깊이병합설정객체
+ * 보장이전의저장데이터충분획득얻다새로 추가된의기본필드
  */
 function mergeSettings(stored: Partial<AppSettings>): AppSettings {
   return {
@@ -16,15 +16,15 @@ function mergeSettings(stored: Partial<AppSettings>): AppSettings {
     defaultEmbeddingModel: stored.defaultEmbeddingModel ?? defaultSettings.defaultEmbeddingModel,
     prompts: {
       mindMap: {
-        'zh-CN': stored.prompts?.mindMap?.['zh-CN'] ?? defaultSettings.prompts!.mindMap!['zh-CN'],
+        'ko-KR': stored.prompts?.mindMap?.['ko-KR'] ?? defaultSettings.prompts!.mindMap!['ko-KR'],
         'en-US': stored.prompts?.mindMap?.['en-US'] ?? defaultSettings.prompts!.mindMap!['en-US']
       },
       quiz: {
-        'zh-CN': stored.prompts?.quiz?.['zh-CN'] ?? defaultSettings.prompts!.quiz!['zh-CN'],
+        'ko-KR': stored.prompts?.quiz?.['ko-KR'] ?? defaultSettings.prompts!.quiz!['ko-KR'],
         'en-US': stored.prompts?.quiz?.['en-US'] ?? defaultSettings.prompts!.quiz!['en-US']
       },
       anki: {
-        'zh-CN': stored.prompts?.anki?.['zh-CN'] ?? defaultSettings.prompts!.anki!['zh-CN'],
+        'ko-KR': stored.prompts?.anki?.['ko-KR'] ?? defaultSettings.prompts!.anki!['ko-KR'],
         'en-US': stored.prompts?.anki?.['en-US'] ?? defaultSettings.prompts!.anki!['en-US']
       }
     }
@@ -32,7 +32,7 @@ function mergeSettings(stored: Partial<AppSettings>): AppSettings {
 }
 
 /**
- * 设置管理器
+ * 설정관리
  */
 export class SettingsManager {
   private getStore: () => Promise<Store<any>>
@@ -40,14 +40,14 @@ export class SettingsManager {
 
   constructor(getStore: () => Promise<Store<any>>) {
     this.getStore = getStore
-    // 立即初始化 store 缓存
+    // 즉시초기화 store 캐시
     getStore().then((store) => {
       this.storeCache = store
     })
   }
 
   /**
-   * 同步获取单个设置（仅当 store 已初始化时可用，否则返回默认值）
+   * 동기단일 설정 조회（만때 store 초기화시사용 가능，아니오반환기본값）
    */
   getSettingSync<K extends keyof AppSettings>(key: K): AppSettings[K] {
     if (!this.storeCache) {
@@ -59,7 +59,7 @@ export class SettingsManager {
   }
 
   /**
-   * 获取所有设置
+   * 모든 설정 조회
    */
   async getAllSettings(): Promise<AppSettings> {
     const store = await this.getStore()
@@ -68,7 +68,7 @@ export class SettingsManager {
   }
 
   /**
-   * 获取单个设置
+   * 단일 설정 조회
    */
   async getSetting<K extends keyof AppSettings>(key: K): Promise<AppSettings[K]> {
     const settings = await this.getAllSettings()
@@ -76,7 +76,7 @@ export class SettingsManager {
   }
 
   /**
-   * 更新设置
+   * 설정 업데이트
    */
   async updateSettings(updates: Partial<AppSettings>): Promise<void> {
     const store = await this.getStore()
@@ -86,14 +86,14 @@ export class SettingsManager {
   }
 
   /**
-   * 设置单个值
+   * 설정단일개값
    */
   async setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void> {
     await this.updateSettings({ [key]: value } as Partial<AppSettings>)
   }
 
   /**
-   * 重置为默认设置
+   * 기본 설정으로 초기화
    */
   async resetSettings(): Promise<void> {
     const store = await this.getStore()
@@ -101,7 +101,7 @@ export class SettingsManager {
   }
 
   /**
-   * 监听设置变化（同步版本，仅当 store 已初始化时生效）
+   * 감시설정변경（동기버전，만때 store 초기화시생효）
    */
   onSettingsChangeSync(
     callback: (newSettings: AppSettings, oldSettings: AppSettings) => void
@@ -113,7 +113,7 @@ export class SettingsManager {
         }
       })
     } else {
-      // Store 未初始化时，延迟注册监听器
+      // Store 미초기화시，지연지연등록감시
       this.getStore().then((store) => {
         store.onDidChange('settings', (newValue, oldValue) => {
           if (newValue && oldValue) {
@@ -125,7 +125,7 @@ export class SettingsManager {
   }
 
   /**
-   * 监听设置变化
+   * 감시설정변경
    */
   async onSettingsChange(
     callback: (newSettings: AppSettings, oldSettings: AppSettings) => void

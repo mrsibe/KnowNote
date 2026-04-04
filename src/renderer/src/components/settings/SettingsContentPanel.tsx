@@ -28,7 +28,7 @@ export default function SettingsContentPanel({
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-background rounded-lg shadow-sm overflow-hidden">
-      {/* 顶部标题栏 */}
+      {/* 상단부분제목바 */}
       <div className="flex items-start justify-between gap-4 px-6 py-4">
         <div className="flex-1 min-w-0">
           <h2 className="text-lg font-semibold text-foreground">{title}</h2>
@@ -53,7 +53,7 @@ export default function SettingsContentPanel({
 
       <Separator />
 
-      {/* 内容区域 */}
+      {/* 내용영역 */}
       <div className="flex-1 min-h-0 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-6">{children}</div>

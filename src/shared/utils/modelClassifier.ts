@@ -2,12 +2,12 @@ import { Model, ModelType, CategorizedModels } from '../types'
 import { getAllBuiltinModels } from '../config/models'
 
 /**
- * 内置模型类型缓存（用于快速查找）
+ * 내장 모델 타입 캐시 (빠른 조회용)
  */
 let builtinModelTypeCache: Map<string, ModelType> | null = null
 
 /**
- * 初始化内置模型类型缓存
+ * 내장 모델 타입 캐시 초기화
  */
 function initBuiltinModelTypeCache(): Map<string, ModelType> {
   if (builtinModelTypeCache) {
@@ -17,10 +17,10 @@ function initBuiltinModelTypeCache(): Map<string, ModelType> {
   const cache = new Map<string, ModelType>()
   const allBuiltinModels = getAllBuiltinModels()
 
-  // 遍历所有 provider 的内置模型
+  // 모든 provider의 내장 모델 순회
   for (const models of Object.values(allBuiltinModels)) {
     for (const model of models) {
-      // 内置模型保证有 type 字段
+      // 내장 모델은 type 필드가 보장됨
       if (model.type) {
         cache.set(model.id, model.type)
       }
@@ -32,9 +32,9 @@ function initBuiltinModelTypeCache(): Map<string, ModelType> {
 }
 
 /**
- * 从内置配置中查找模型类型
- * @param modelId 模型ID
- * @returns 模型类型，如果未找到返回 undefined
+ * 내장 설정에서 모델 타입 조회
+ * @param modelId 모델 ID
+ * @returns 모델 타입, 찾을 수 없으면 undefined 반환
  */
 function getBuiltinModelType(modelId: string): ModelType | undefined {
   const cache = initBuiltinModelTypeCache()
@@ -42,7 +42,7 @@ function getBuiltinModelType(modelId: string): ModelType | undefined {
 }
 
 /**
- * 嵌入模型的关键词模式
+ * 임베딩 모델 키워드 패턴
  */
 const EMBEDDING_PATTERNS = [
   /embed/i,
@@ -56,12 +56,12 @@ const EMBEDDING_PATTERNS = [
 ]
 
 /**
- * 重排序模型的关键词模式
+ * 리랭커 모델 키워드 패턴
  */
 const RERANKER_PATTERNS = [/rerank/i, /cross-encoder/i]
 
 /**
- * 对话模型的关键词模式（白名单）
+ * 대화 모델 키워드 패턴 (화이트리스트)
  */
 const CHAT_PATTERNS = [
   /gpt-/i,
@@ -84,12 +84,12 @@ const CHAT_PATTERNS = [
 ]
 
 /**
- * 多模态/视觉模型关键词
+ * 멀티모달/비전 모델 키워드
  */
 const VISION_PATTERNS = [/-vl/i, /-vision/i, /vision/i, /4v/i, /captioner/i, /omni/i]
 
 /**
- * 图像生成模型关键词
+ * 이미지 생성 모델 키워드
  */
 const IMAGE_GEN_PATTERNS = [
   /stable-diffusion/i,
@@ -101,42 +101,42 @@ const IMAGE_GEN_PATTERNS = [
 ]
 
 /**
- * 音频模型关键词
+ * 오디오 모델 키워드
  */
 const AUDIO_PATTERNS = [/whisper/i, /tts/i, /speech/i, /audio/i, /cosyvoice/i, /fish-speech/i]
 
 /**
- * 根据模型ID判断模型类型
- * @param modelId 模型ID
- * @returns 模型类型
+ * 모델 ID로 모델 타입 판별
+ * @param modelId 모델 ID
+ * @returns 모델 타입
  */
 export function classifyModel(modelId: string): ModelType {
   const lowerCaseId = modelId.toLowerCase()
 
-  // 优先级1: 明确的特殊类型（避免误判）
-  // 重排序模型
+  // 우선순위 1: 명확한 특수 타입 (오판 방지)
+  // 리랭커 모델
   if (RERANKER_PATTERNS.some((pattern) => pattern.test(lowerCaseId))) {
     return ModelType.RERANKER
   }
 
-  // 嵌入模型
+  // 임베딩 모델
   if (EMBEDDING_PATTERNS.some((pattern) => pattern.test(lowerCaseId))) {
     return ModelType.EMBEDDING
   }
 
-  // 优先级2: 多媒体生成模型
-  // 图像生成模型
+  // 우선순위 2: 멀티미디어 생성 모델
+  // 이미지 생성 모델
   if (IMAGE_GEN_PATTERNS.some((pattern) => pattern.test(lowerCaseId))) {
     return ModelType.IMAGE
   }
 
-  // 音频模型
+  // 오디오 모델
   if (AUDIO_PATTERNS.some((pattern) => pattern.test(lowerCaseId))) {
     return ModelType.AUDIO
   }
 
-  // 优先级3: 对话模型（包括多模态对话）
-  // 视觉/多模态对话模型也归类为对话模型（因为它们主要用于聊天）
+  // 우선순위 3: 대화 모델 (멀티모달 대화 포함)
+  // 비전/멀티모달 대화 모델도 대화 모델로 분류 (주로 채팅에 사용되므로)
   if (
     CHAT_PATTERNS.some((pattern) => pattern.test(lowerCaseId)) ||
     VISION_PATTERNS.some((pattern) => pattern.test(lowerCaseId))
@@ -144,21 +144,21 @@ export function classifyModel(modelId: string): ModelType {
     return ModelType.CHAT
   }
 
-  // 默认返回未知
+  // 기본값: 알 수 없음 반환
   return ModelType.UNKNOWN
 }
 
 /**
- * 为模型添加类型信息
- * 优先级：
- * 1. 内置配置文件中定义的类型
- * 2. 模型对象自带的 type 字段（API 返回）
- * 3. 基于模型名称的自动分类
- * @param model 原始模型对象
- * @returns 带类型信息的模型对象
+ * 모델에 타입 정보 추가
+ * 우선순위:
+ * 1. 내장 설정 파일에서 정의된 타입
+ * 2. 모델 객체 자체의 type 필드 (API 반환)
+ * 3. 모델 이름 기반 자동 분류
+ * @param model 원본 모델 객체
+ * @returns 타입 정보가 포함된 모델 객체
  */
 export function enrichModelWithType(model: Model): Model {
-  // 1. 优先使用内置配置文件中定义的类型
+  // 1. 내장 설정 파일에서 정의된 타입을 우선 사용
   const builtinType = getBuiltinModelType(model.id)
   if (builtinType) {
     return {
@@ -167,7 +167,7 @@ export function enrichModelWithType(model: Model): Model {
     }
   }
 
-  // 2. 使用模型对象自带的 type 字段，或使用自动分类
+  // 2. 모델 객체 자체의 type 필드 사용, 또는 자동 분류 사용
   return {
     ...model,
     type: model.type || classifyModel(model.id)
@@ -175,18 +175,18 @@ export function enrichModelWithType(model: Model): Model {
 }
 
 /**
- * 批量为模型添加类型信息
- * @param models 模型列表
- * @returns 带类型信息的模型列表
+ * 일괄적으로 모델에 타입 정보 추가
+ * @param models 모델 목록
+ * @returns 타입 정보가 포함된 모델 목록
  */
 export function enrichModelsWithType(models: Model[]): Model[] {
   return models.map(enrichModelWithType)
 }
 
 /**
- * 对模型列表进行分类
- * @param models 模型列表
- * @returns 分类后的模型对象
+ * 모델 목록 분류
+ * @param models 모델 목록
+ * @returns 분류된 모델 객체
  */
 export function categorizeModels(models: Model[]): CategorizedModels {
   const enrichedModels = enrichModelsWithType(models)
@@ -206,40 +206,40 @@ export function categorizeModels(models: Model[]): CategorizedModels {
 }
 
 /**
- * 过滤出对话模型
- * @param models 模型列表
- * @returns 对话模型列表
+ * 대화 모델 필터링
+ * @param models 모델 목록
+ * @returns 대화 모델 목록
  */
 export function filterChatModels(models: Model[]): Model[] {
   return enrichModelsWithType(models).filter((m) => m.type === ModelType.CHAT)
 }
 
 /**
- * 过滤出嵌入模型
- * @param models 模型列表
- * @returns 嵌入模型列表
+ * 임베딩 모델 필터링
+ * @param models 모델 목록
+ * @returns 임베딩 모델 목록
  */
 export function filterEmbeddingModels(models: Model[]): Model[] {
   return enrichModelsWithType(models).filter((m) => m.type === ModelType.EMBEDDING)
 }
 
 /**
- * 智能合并内置模型和远程模型
+ * 내장 모델과 원격 모델 스마트 병합
  *
- * 合并策略:
- * - 远程字段优先: id, owned_by, created, object (反映最新状态)
- * - 内置字段优先: type, max_context, description (精心配置的元数据)
- * - 远程新增模型: 自动分类 type 后添加
- * - 内置独有模型: 保留 (防止远程 API 遗漏)
+ * 병합 전략:
+ * - 원격 필드 우선: id, owned_by, created, object (최신 상태 반영)
+ * - 내장 필드 우선: type, max_context, description (정밀하게 설정된 메타데이터)
+ * - 원격 신규 모델: type 자동 분류 후 추가
+ * - 내장 전용 모델: 유지 (원격 API 누락 방지)
  *
- * @param builtinModels 内置模型列表
- * @param remoteModels 远程 API 获取的模型列表
- * @returns 合并后的模型列表
+ * @param builtinModels 내장 모델 목록
+ * @param remoteModels 원격 API에서 가져온 모델 목록
+ * @returns 병합된 모델 목록
  *
  * @example
- * // 内置模型: [{ id: 'gpt-4o', type: 'chat', max_context: 128000 }]
- * // 远程模型: [{ id: 'gpt-4o', created: 1715367049, owned_by: 'openai' }]
- * // 合并结果: [{ id: 'gpt-4o', type: 'chat', max_context: 128000, created: 1715367049, owned_by: 'openai' }]
+ * // 내장 모델: [{ id: 'gpt-4o', type: 'chat', max_context: 128000 }]
+ * // 원격 모델: [{ id: 'gpt-4o', created: 1715367049, owned_by: 'openai' }]
+ * // 병합 결과: [{ id: 'gpt-4o', type: 'chat', max_context: 128000, created: 1715367049, owned_by: 'openai' }]
  */
 export function mergeModels(builtinModels: Model[], remoteModels: Model[]): Model[] {
   const builtinMap = new Map(builtinModels.map((m) => [m.id, m]))
@@ -247,26 +247,26 @@ export function mergeModels(builtinModels: Model[], remoteModels: Model[]): Mode
 
   const merged: Model[] = []
 
-  // 1. 遍历所有远程模型
+  // 1. 모든 원격 모델 순회
   for (const remote of remoteModels) {
     const builtin = builtinMap.get(remote.id)
 
     if (builtin) {
-      // 同时存在:智能合并
-      // 远程字段提供最新的基础信息,内置字段提供精确的元数据
+      // 둘 다 존재: 스마트 병합
+      // 원격 필드는 최신 기본 정보 제공, 내장 필드는 정확한 메타데이터 제공
       merged.push({
-        ...remote, // 远程字段 (id, object, owned_by, created)
-        type: builtin.type, // 内置字段优先
+        ...remote, // 원격 필드 (id, object, owned_by, created)
+        type: builtin.type, // 내장 필드 우선
         max_context: builtin.max_context,
         description: builtin.description
       })
     } else {
-      // 仅远程有:直接添加 (自动分类 type)
+      // 원격에만 존재: 직접 추가 (type 자동 분류)
       merged.push(enrichModelWithType(remote))
     }
   }
 
-  // 2. 添加仅内置有的模型 (防止远程 API 遗漏)
+  // 2. 내장에만 존재하는 모델 추가 (원격 API 누락 방지)
   for (const builtin of builtinModels) {
     if (!remoteMap.has(builtin.id)) {
       merged.push(builtin)

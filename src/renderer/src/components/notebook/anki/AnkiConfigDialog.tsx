@@ -29,10 +29,10 @@ export default function AnkiConfigDialog({
   const [customPrompt, setCustomPrompt] = useState('')
 
   const handleGenerate = async () => {
-    // 立即关闭对话框
+    // 즉시닫기다이얼로그
     onOpenChange(false)
 
-    // 在后台开始生成（不等待完成）
+    // 후대시작생성（아닌등대기완료）
     generateAnkiCards(notebookId, {
       cardCount,
       difficulty,
@@ -41,7 +41,7 @@ export default function AnkiConfigDialog({
       console.error('Failed to generate anki cards:', error)
     })
 
-    // 等待一小段时间后触发回调，以显示"正在生成"的 item
+    // 등대기하나작은단시간후트리거콜백，으로표시"현재생성"의 item
     setTimeout(() => {
       onGenerateStart?.()
     }, 500)
@@ -55,7 +55,7 @@ export default function AnkiConfigDialog({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* 卡片数量 */}
+          {/* 카드수량 */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="card-count">{t('cardCount')}</Label>
@@ -71,7 +71,7 @@ export default function AnkiConfigDialog({
             />
           </div>
 
-          {/* 难度选择 */}
+          {/* 어려운도선택 */}
           <div className="space-y-2">
             <Label htmlFor="difficulty">{t('difficulty')}</Label>
             <Select
@@ -89,7 +89,7 @@ export default function AnkiConfigDialog({
             </Select>
           </div>
 
-          {/* 自定义提示词 */}
+          {/* 자체정의힌트 */}
           <div className="space-y-2">
             <Label htmlFor="custom-prompt">{t('customPrompt')}</Label>
             <Textarea

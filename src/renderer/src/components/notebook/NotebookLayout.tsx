@@ -18,12 +18,12 @@ export default function NotebookLayout(): ReactElement {
     useNotebookStore()
   const { loadActiveSession } = useChatStore()
 
-  // 当进入笔记本时，设置openedNotebook和currentNotebook，并加载栈顶session
+  // 때입력노트북시，설정openedNotebook및currentNotebook，그리고로드스택상단session
   useEffect(() => {
     if (id) {
       addOpenedNotebook(id)
       setCurrentNotebook(id)
-      // 关键改动：自动加载该Notebook的栈顶session
+      // 닫기키수정동：자동로드Notebook의스택상단session
       loadActiveSession(id).catch((err) => {
         console.error('[NotebookLayout] Failed to load session for notebook:', id, err)
       })
@@ -39,14 +39,14 @@ export default function NotebookLayout(): ReactElement {
     navigate(`/notebook/${newId}`)
   }, [addNotebook, t, notebooks.length, navigate])
 
-  // 监听笔记本管理快捷键
+  // 감시노트북관리단축키
   useEffect(() => {
     const handleCreateShortcut = () => {
       void handleCreateNotebook()
     }
 
     const handleCloseShortcut = () => {
-      // 关闭当前笔记本标签页，并返回笔记本列表
+      // 닫기현재노트북탭，그리고반환노트북목록
       if (id) {
         removeOpenedNotebook(id)
       }
@@ -62,7 +62,7 @@ export default function NotebookLayout(): ReactElement {
     }
   }, [navigate, handleCreateNotebook, id, removeOpenedNotebook])
 
-  // 设置答题进度监听器
+  // 설정퀴즈진행감시
   useEffect(() => {
     const cleanup = setupQuizListeners()
     return cleanup

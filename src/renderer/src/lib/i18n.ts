@@ -1,20 +1,20 @@
 import { useCallback } from 'react'
 import { useI18nStore } from '../store/i18nStore'
 
-// 语言类型定义
-export type Language = 'zh-CN' | 'en-US'
+// 언어타입정의
+export type Language = 'ko-KR' | 'en-US'
 export type Namespace = 'common' | 'chat' | 'settings' | 'notebook' | 'ui' | 'quiz'
 
-// 动态导入语言包
+// 동상태가져오기언어패키지
 const loadLocale = async (lang: Language, namespace: Namespace) => {
   const module = await import(`../locales/${lang}/${namespace}.json`)
   return module.default
 }
 
-// 缓存已加载的语言包
+// 캐시로드의언어패키지
 const localeCache = new Map<string, Record<string, any>>()
 
-// 获取翻译文本的核心函数
+// 조회번역번역텍스트의핵심마음함수
 export const getTranslation = async (
   lang: Language,
   namespace: Namespace,
@@ -22,13 +22,13 @@ export const getTranslation = async (
 ): Promise<string> => {
   const cacheKey = `${lang}-${namespace}`
 
-  // 如果缓存中有，直接使用
+  // 만약캐시에서있는，직접사용
   if (localeCache.has(cacheKey)) {
     const locale = localeCache.get(cacheKey)!
     return getNestedValue(locale, key) || key
   }
 
-  // 否则加载并缓存
+  // 아니오로드그리고캐시
   try {
     const locale = await loadLocale(lang, namespace)
     localeCache.set(cacheKey, locale)
@@ -39,14 +39,14 @@ export const getTranslation = async (
   }
 }
 
-// 获取嵌套对象的值
+// 조회임베딩세트객체의값
 const getNestedValue = (obj: any, key: string): string | undefined => {
   return key.split('.').reduce((prev, curr) => {
     return prev && prev[curr] !== undefined ? prev[curr] : undefined
   }, obj)
 }
 
-// 同步版本的翻译函数（用于已预加载的语言包）
+// 동기버전의번역번역함수（용도:미리로드의언어패키지）
 export const t = (namespace: Namespace, key: string, fallback?: string) => {
   const language = useI18nStore.getState().language
   const cacheKey = `${language}-${namespace}`
@@ -60,7 +60,7 @@ export const t = (namespace: Namespace, key: string, fallback?: string) => {
   return fallback || key
 }
 
-// 预加载所有语言包
+// 미리로드모든언어패키지
 export const preloadLocales = async (lang: Language) => {
   const namespaces: Namespace[] = ['common', 'chat', 'settings', 'notebook', 'ui', 'quiz']
   const promises = namespaces.map(async (namespace) => {
@@ -100,7 +100,7 @@ export const useTranslation = (namespace: Namespace) => {
   return { t: translate, language }
 }
 
-// 格式化函数
+// 포맷팅함수
 export const formatMessage = (
   template: string,
   values: Record<string, string | number> = {}
@@ -110,7 +110,7 @@ export const formatMessage = (
   })
 }
 
-// 复数形式处理（简单实现）
+// 복수형형식처리（간단일현재）
 export const pluralize = (count: number, singular: string, plural?: string): string => {
   if (count === 1) return singular
   return plural || singular + 's'

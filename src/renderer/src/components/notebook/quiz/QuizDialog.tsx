@@ -43,7 +43,7 @@ export default function QuizDialog({ notebookId }: { notebookId: string }) {
           flexDirection: 'column'
         }}
       >
-        {/* 头部 - 固定高度 */}
+        {/* 헤더부분 - 고정높이 */}
         <div
           className="p-6 pb-4 border-b border-border"
           style={{
@@ -85,7 +85,7 @@ export default function QuizDialog({ notebookId }: { notebookId: string }) {
           </div>
         </div>
 
-        {/* 内容区域 - 自动填充剩余空间 */}
+        {/* 내용영역 - 자동패딩남은나머지빈간격 */}
         <ScrollArea className="flex-1 p-6">
           {isGenerating ? (
             <QuizGenerating />

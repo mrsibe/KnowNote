@@ -8,12 +8,12 @@ interface ChunkInfo {
 }
 
 interface MindMapStore {
-  // 核心状态
+  // 핵심마음상태
   currentMindMap: MindMap | null
   isGenerating: boolean
   generationProgress: { stage: string; progress: number } | null
 
-  // Dialog状态
+  // Dialog상태
   isDialogOpen: boolean
   selectedNodeId: string | null
   nodeChunks: ChunkInfo[] | null
@@ -26,7 +26,7 @@ interface MindMapStore {
   setSelectedNodeId: (nodeId: string | null) => void
   setNodeChunks: (chunks: ChunkInfo[] | null) => void
 
-  // 异步操作
+  // 비동기작업
   loadLatestMindMap: (notebookId: string) => Promise<void>
   loadMindMap: (mindMapId: string) => Promise<void>
   generateMindMap: (notebookId: string) => Promise<void>
@@ -103,7 +103,7 @@ export const useMindMapStore = create<MindMapStore>()((set) => ({
   }
 }))
 
-// 设置进度监听器
+// 설정진행감시
 export function setupMindMapListeners() {
   return window.api.mindmap.onProgress((data) => {
     useMindMapStore.setState({

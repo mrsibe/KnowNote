@@ -1,6 +1,6 @@
 /**
  * PptLoader
- * 使用 officeparser 解析 PPT，按页提取
+ * officeparser를 사용하여 PPT 파싱, 페이지별 추출
  */
 
 import { readFile } from 'fs/promises'
@@ -10,8 +10,8 @@ import Logger from '../../../shared/utils/logger'
 import type { IDocumentLoader, DocumentLoadResult, LoadOptions, PageInfo } from './types'
 
 /**
- * PowerPoint 文档加载器
- * 基于 officeparser，支持 PPTX
+ * PowerPoint 문서 로더
+ * officeparser 기반, PPTX 지원
  */
 export class PptLoader implements IDocumentLoader {
   readonly supportedMimeTypes = [
@@ -37,17 +37,17 @@ export class PptLoader implements IDocumentLoader {
     const opts = { preserveStructure: true, ...options }
 
     try {
-      // 使用 officeparser 提取文本
+      // officeparser로 텍스트 추출
       const text = await officeParser.parseOfficeAsync(buffer)
       const content = text.trim()
 
-      // 按启发式规则分隔幻灯片
-      // officeparser 不直接提供页面分隔，我们使用多个连续换行作为分隔符
+      // 시작 형식 기준으로 슬라이드 분할
+      // officeparser는 페이지 구분을 직접 제공하지 않으므로 연속 줄 바꿈을 구분자로 사용
       const pages: PageInfo[] = []
       let currentOffset = 0
 
       if (opts.preserveStructure) {
-        // 按连续 3 个或更多换行分隔（通常是幻灯片之间的分隔）
+        // 연속 3개 이상의 줄 바꿈으로 분할 (일반적으로 슬라이드 간의 구분)
         const slideTexts = content.split(/\n{3,}/)
 
         for (let i = 0; i < slideTexts.length; i++) {
@@ -66,7 +66,7 @@ export class PptLoader implements IDocumentLoader {
         }
       }
 
-      // 提取标题（通常是第一页的第一行）
+      // 제목 추출 (일반적으로 첫 페이지의 첫 줄)
       const firstLine = content.split('\n')[0]?.trim()
       const title = firstLine && firstLine.length < 100 ? firstLine : undefined
 

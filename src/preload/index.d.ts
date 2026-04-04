@@ -13,7 +13,7 @@ import type {
 import type { UpdateState, UpdateCheckResult, UpdateOperationResult } from '../shared/types/update'
 import type { MindMap, Quiz, QuizSession, AnkiCard } from '../main/db/schema'
 
-// 重新导出共享类型
+// 공유 타입 재내보내기
 export type {
   ChatSession,
   ChatMessage,
@@ -41,16 +41,16 @@ declare global {
   interface Window {
     electron: ElectronAPI
     api: {
-      // 获取平台信息
+      // 플랫폼 정보 조회
       getPlatform: () => Promise<string>
 
-      // 获取应用版本号
+      // 앱 버전 번호 조회
       getAppVersion: () => Promise<string>
 
-      // 在默认浏览器中打开外部链接
+      // 기본 브라우저에서 외부 링크 열기
       openExternalUrl: (url: string) => Promise<{ success: boolean; error?: string }>
 
-      // 系统对话框相关
+      // 시스템 다이얼로그 관련
       dialog: {
         saveFile: (options: {
           title?: string
@@ -59,7 +59,7 @@ declare global {
         }) => Promise<string | null>
       }
 
-      // 应用设置相关
+      // 앱 설정 관련
       settings: {
         getAll: () => Promise<AppSettings>
         get: <K extends keyof AppSettings>(key: K) => Promise<AppSettings[K]>
@@ -72,7 +72,7 @@ declare global {
         ) => () => void
       }
 
-      // Notebook 相关
+      // Notebook 관련
       createNotebook: (title: string, description?: string) => Promise<Notebook>
       getAllNotebooks: () => Promise<Notebook[]>
       getNotebook: (id: string) => Promise<Notebook | null>
@@ -82,14 +82,14 @@ declare global {
       ) => Promise<void>
       deleteNotebook: (id: string) => Promise<void>
 
-      // Note 相关
+      // Note 관련
       createNote: (notebookId: string, content: string, customTitle?: string) => Promise<Note>
       getNotes: (notebookId: string) => Promise<Note[]>
       getNote: (id: string) => Promise<Note | null>
       updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content'>>) => Promise<void>
       deleteNote: (id: string) => Promise<void>
 
-      // Items 相关（统一管理笔记、思维导图等）
+      // Items 관련 (노트, 마인드맵 등 통합 관리)
       items: {
         getAll: (notebookId: string) => Promise<any[]>
         updateOrder: (itemId: string, order: number) => Promise<{ success: boolean }>
@@ -97,7 +97,7 @@ declare global {
         delete: (itemId: string, deleteResource?: boolean) => Promise<{ success: boolean }>
       }
 
-      // Mind Map 相关
+      // Mind Map 관련
       mindmap: {
         getLatest: (notebookId: string) => Promise<MindMap | null>
         get: (mindMapId: string) => Promise<MindMap | null>
@@ -116,7 +116,7 @@ declare global {
         ) => () => void
       }
 
-      // Quiz 相关
+      // Quiz 관련
       quiz: {
         getLatest: (notebookId: string) => Promise<Quiz | null>
         get: (quizId: string) => Promise<Quiz | null>
@@ -141,7 +141,7 @@ declare global {
         ) => () => void
       }
 
-      // Anki 卡片相关
+      // Anki 카드 관련
       anki: {
         getLatest: (notebookId: string) => Promise<AnkiCard | null>
         get: (ankiCardId: string) => Promise<AnkiCard | null>
@@ -171,19 +171,19 @@ declare global {
         ) => () => void
       }
 
-      // Chat Session 相关
+      // Chat Session 관련
       createChatSession: (notebookId: string, title: string) => Promise<ChatSession>
       getChatSessions: (notebookId: string) => Promise<ChatSession[]>
       getActiveSession: (notebookId: string) => Promise<ChatSession | null>
       updateSessionTitle: (sessionId: string, title: string) => Promise<void>
       deleteSession: (sessionId: string) => Promise<void>
 
-      // Chat Message 相关
+      // Chat Message 관련
       getMessages: (sessionId: string) => Promise<ChatMessage[]>
       sendMessage: (sessionId: string, content: string) => Promise<string>
       abortMessage: (messageId: string) => Promise<{ success: boolean; reason?: string }>
 
-      // 流式消息监听（AI SDK 流式协议格式）
+      // 스트리밍 메시지 리스너 (AI SDK 스트리밍 프로토콜 형식)
       onMessageChunk: (
         callback: (data: {
           messageId: string
@@ -195,12 +195,12 @@ declare global {
       ) => () => void
       onMessageError: (callback: (data: { messageId: string; error: string }) => void) => () => void
 
-      // Session 自动切换监听
+      // Session 자동 전환 리스너
       onSessionAutoSwitched: (
         callback: (data: { oldSessionId: string; newSessionId: string }) => void
       ) => () => void
 
-      // Provider 配置相关
+      // Provider 설정 관련
       saveProviderConfig: (config: ProviderConfig) => Promise<void>
       getProviderConfig: (providerName: string) => Promise<ProviderConfig | null>
       getAllProviderConfigs: () => Promise<ProviderConfig[]>
@@ -230,9 +230,9 @@ declare global {
       ) => Promise<{ id: string; object: string; owned_by?: string; created?: number }[]>
       onProviderConfigChanged: (callback: () => void) => () => void
 
-      // 知识库相关
+      // 지식 베이스 관련
       knowledge: {
-        // 添加文档
+        // 문서 추가
         addDocument: (
           notebookId: string,
           options: AddDocumentOptions
@@ -250,44 +250,44 @@ declare global {
           noteId: string
         ) => Promise<{ success: boolean; documentId?: string; error?: string }>
 
-        // 搜索
+        // 검색
         search: (
           notebookId: string,
           query: string,
           options?: SearchOptions
         ) => Promise<{ success: boolean; results: KnowledgeSearchResult[]; error?: string }>
 
-        // 文档管理
+        // 문서 관리
         getDocuments: (notebookId: string) => Promise<KnowledgeDocument[]>
         getDocument: (documentId: string) => Promise<KnowledgeDocument | null>
         getDocumentChunks: (documentId: string) => Promise<KnowledgeChunk[]>
         deleteDocument: (documentId: string) => Promise<{ success: boolean; error?: string }>
         reindexDocument: (documentId: string) => Promise<{ success: boolean; error?: string }>
 
-        // 统计
+        // 통계
         getStats: (notebookId: string) => Promise<KnowledgeStats>
 
-        // 文件选择对话框
+        // 파일 선택 다이얼로그
         selectFiles: () => Promise<string[]>
 
-        // 打开源文件
+        // 소스 파일 열기
         openSource: (documentId: string) => Promise<{ success: boolean; error?: string }>
 
-        // 索引进度监听
+        // 인덱싱 진행률 리스너
         onIndexProgress: (callback: (progress: IndexProgress) => void) => () => void
       }
 
-      // 应用更新相关
+      // 앱 업데이트 관련
       update: {
-        // 检查更新
+        // 업데이트 확인
         check: () => Promise<UpdateCheckResult>
-        // 下载更新
+        // 업데이트 다운로드
         download: () => Promise<UpdateOperationResult>
-        // 安装更新（退出并安装）
+        // 업데이트 설치 (종료 후 설치)
         install: () => Promise<UpdateOperationResult>
-        // 获取当前更新状态
+        // 현재 업데이트 상태 조회
         getState: () => Promise<UpdateCheckResult>
-        // 监听更新状态变化
+        // 업데이트 상태 변경 리스너
         onStateChanged: (callback: (state: UpdateState) => void) => () => void
       }
     }

@@ -1,14 +1,14 @@
 /**
- * AI Provider 类型定义
- * 基于能力组合模式的新架构
+ * AI Provider 타입정의
+ * 기반기능조합���턴의새프레임워크구조
  */
 
 import type { APIMessage, StreamChunk } from '../../shared/types/chat'
 
-// ==================== 导出共享类型 ====================
+// ==================== 내보내기공공유타입 ====================
 export type { APIMessage as ChatMessage, StreamChunk }
 
-// ==================== 导出新的能力接口 ====================
+// ==================== 내보내기새의기능 인터페이스 ====================
 export type { BaseProvider, LLMProviderConfig } from './capabilities/BaseProvider'
 export type { ChatCapability } from './capabilities/ChatCapability'
 export type {
@@ -28,7 +28,7 @@ export type {
   ImageGenerationResult
 } from './capabilities/ImageGenerationCapability'
 
-// ==================== Provider 组合类型 ====================
+// ==================== Provider 조합타입 ====================
 import type { BaseProvider } from './capabilities/BaseProvider'
 import type { ChatCapability } from './capabilities/ChatCapability'
 import type { EmbeddingCapability } from './capabilities/EmbeddingCapability'
@@ -36,49 +36,49 @@ import type { RerankCapability } from './capabilities/RerankCapability'
 import type { ImageGenerationCapability } from './capabilities/ImageGenerationCapability'
 
 /**
- * 对话 Provider
- * 支持对话功能的 Provider
+ * 대화 Provider
+ * 지원대화공의 Provider
  */
 export type ChatProvider = BaseProvider & ChatCapability
 
 /**
- * 嵌入 Provider
- * 支持嵌入功能的 Provider
+ * 임베딩 Provider
+ * 지원임베딩공의 Provider
  */
 export type EmbeddingProvider = BaseProvider & EmbeddingCapability
 
 /**
- * 完整功能 Provider
- * 同时支持对话和嵌入功能的 Provider
+ * 완전한공 Provider
+ * 동시지원대화및임베딩공의 Provider
  */
 export type FullFeaturedProvider = BaseProvider & ChatCapability & EmbeddingCapability
 
 /**
- * 重排序 Provider (未来扩展)
- * 支持重排序功能的 Provider
+ * 재정렬 Provider (향후확장)
+ * 지원재정렬공의 Provider
  */
 export type RerankProvider = BaseProvider & RerankCapability
 
 /**
- * 图像生成 Provider (未来扩展)
- * 支持图像生成功能的 Provider
+ * 이미지생성 Provider (향후확장)
+ * 지원이미지생성공의 Provider
  */
 export type ImageProvider = BaseProvider & ImageGenerationCapability
 
 /**
- * 多模态 Provider (未来扩展)
- * 支持多种能力的 Provider
+ * 멀티모달 Provider (향후확장)
+ * 지원많은종류기능의 Provider
  */
 export type MultimodalProvider = BaseProvider &
   ChatCapability &
   EmbeddingCapability &
   ImageGenerationCapability
 
-// ==================== 旧接口(向后兼容,已废弃) ====================
+// ==================== 이전인터페이스(하위 호환성,사용 중단됨) ====================
 
 /**
- * @deprecated 请使用新的能力组合类型: ChatProvider, EmbeddingProvider, FullFeaturedProvider
- * 旧的 LLMProvider 接口,保留用于向后兼容
+ * @deprecated 요청사용새의기능조합타입: ChatProvider, EmbeddingProvider, FullFeaturedProvider
+ * 이전의 LLMProvider 인터페이스,유지용도:하위 호환성
  */
 export interface LLMProvider {
   readonly name: string

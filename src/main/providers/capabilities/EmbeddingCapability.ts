@@ -1,50 +1,50 @@
 /**
- * EmbeddingCapability 接口
- * 定义嵌入能力
+ * EmbeddingCapability 인터페이스
+ * 정의임베딩 기능
  */
 
 /**
- * Embedding 配置
+ * Embedding 설정
  */
 export interface EmbeddingConfig {
-  model?: string // embedding 模型名称
-  dimensions?: number // 向量维度(部分模型支持)
+  model?: string // embedding 모델이름
+  dimensions?: number // 벡터 차원(부분분모델지원)
 }
 
 /**
- * Embedding 结果
+ * Embedding 결과
  */
 export interface EmbeddingResult {
-  embedding: Float32Array // 向量数据
-  model: string // 使用的模型
-  dimensions: number // 向量维度
-  tokensUsed: number // 消耗的 token 数
+  embedding: Float32Array // 벡터데이터
+  model: string // 사용의모델
+  dimensions: number // 벡터 차원
+  tokensUsed: number // 취소소모의 token 수
 }
 
 /**
- * EmbeddingCapability 嵌入能力接口
- * 实现此接口的 Provider 支持嵌入向量生成功能
+ * EmbeddingCapability 임베딩 기능인터페이스
+ * 현재이인터페이스의 Provider 지원임베딩벡터생성공
  */
 export interface EmbeddingCapability {
   /**
-   * 生成单个文本的 Embedding
-   * @param text - 输入文本
-   * @param config - Embedding 配置
-   * @returns Promise<EmbeddingResult> - Embedding 结果
+   * 생성단일개텍스트의 Embedding
+   * @param text - 입력텍스트
+   * @param config - Embedding 설정
+   * @returns Promise<EmbeddingResult> - Embedding 결과
    */
   createEmbedding(text: string, config?: EmbeddingConfig): Promise<EmbeddingResult>
 
   /**
-   * 批量生成 Embedding
-   * @param texts - 输入文本数组
-   * @param config - Embedding 配置
-   * @returns Promise<EmbeddingResult[]> - Embedding 结果数组
+   * 일괄생성 Embedding
+   * @param texts - 입력텍스트배열
+   * @param config - Embedding 설정
+   * @returns Promise<EmbeddingResult[]> - Embedding 결과배열
    */
   createEmbeddings(texts: string[], config?: EmbeddingConfig): Promise<EmbeddingResult[]>
 
   /**
-   * 获取默认 Embedding 模型
-   * @returns 默认 Embedding 模型名称
+   * 조회기본 Embedding 모델
+   * @returns 기본 Embedding 모델이름
    */
   getDefaultEmbeddingModel(): string
 }

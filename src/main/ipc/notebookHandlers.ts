@@ -9,10 +9,10 @@ import {
 import { NotebookSchemas, validate } from './validation'
 
 /**
- * 注册笔记本相关的 IPC handlers
+ * 등록노트북관련의 IPC handlers
  */
 export function registerNotebookHandlers() {
-  // 创建笔记本（带参数验证）
+  // 노트북 생성（포함하는매개변수검증）
   ipcMain.handle(
     'create-notebook',
     validate(NotebookSchemas.createNotebook, async (args) => {
@@ -28,7 +28,7 @@ export function registerNotebookHandlers() {
     })
   )
 
-  // 获取所有笔记本
+  // 모든 노트북 조회
   ipcMain.handle('get-all-notebooks', async () => {
     console.log('[IPC] get-all-notebooks')
     try {
@@ -41,7 +41,7 @@ export function registerNotebookHandlers() {
     }
   })
 
-  // 获取单个笔记本（带参数验证）
+  // 단일 노트 조회（포함하는매개변수검증）
   ipcMain.handle(
     'get-notebook',
     validate(NotebookSchemas.getNotebook, async (args) => {
@@ -59,7 +59,7 @@ export function registerNotebookHandlers() {
     })
   )
 
-  // 更新笔记本（带参数验证）
+  // 노트북 업데이트（포함하는매개변수검증）
   ipcMain.handle(
     'update-notebook',
     validate(NotebookSchemas.updateNotebook, async (args) => {
@@ -75,7 +75,7 @@ export function registerNotebookHandlers() {
     })
   )
 
-  // 删除笔记本（带参数验证）
+  // 노트북 삭제（포함하는매개변수검증）
   ipcMain.handle(
     'delete-notebook',
     validate(NotebookSchemas.deleteNotebook, async (args) => {

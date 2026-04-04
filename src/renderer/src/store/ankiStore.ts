@@ -3,17 +3,17 @@ import type { AnkiCard } from '../../../main/db/schema'
 import type { AnkiCardItem } from '../../../shared/types/anki'
 
 interface AnkiStore {
-  // 核心状态
+  // 핵심마음상태
   currentAnkiCards: AnkiCard | null
   selectedCardIds: Set<string>
   isGenerating: boolean
   generationProgress: { stage: string; progress: number } | null
 
-  // Dialog状态
+  // Dialog상태
   isConfigDialogOpen: boolean
   isExportDialogOpen: boolean
 
-  // 卡片编辑状态
+  // 카드편편집상태
   editingCard: AnkiCardItem | null
   isEditing: boolean
 
@@ -29,11 +29,11 @@ interface AnkiStore {
   setEditingCard: (card: AnkiCardItem | null) => void
   setIsEditing: (isEditing: boolean) => void
 
-  // 计算属性
+  // 계산속성
   getTotalCards: () => number
   getSelectedCards: () => AnkiCardItem[]
 
-  // 异步操作
+  // 비동기작업
   loadLatestAnkiCards: (notebookId: string) => Promise<void>
   loadAnkiCards: (ankiCardId: string) => Promise<void>
   generateAnkiCards: (
@@ -55,7 +55,7 @@ interface AnkiStore {
 }
 
 export const useAnkiStore = create<AnkiStore>()((set, get) => ({
-  // 初始状态
+  // 초기시작상태
   currentAnkiCards: null,
   selectedCardIds: new Set(),
   isGenerating: false,
@@ -86,7 +86,7 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
   setEditingCard: (card) => set({ editingCard: card }),
   setIsEditing: (isEditing) => set({ isEditing }),
 
-  // 计算属性
+  // 계산속성
   getTotalCards: () => {
     const { currentAnkiCards } = get()
     if (!currentAnkiCards) return 0
@@ -100,7 +100,7 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
     return cards.filter((card) => selectedCardIds.has(card.id))
   },
 
-  // 异步操作
+  // 비동기작업
   loadLatestAnkiCards: async (notebookId: string) => {
     try {
       const cards = await window.api.anki.getLatest(notebookId)
@@ -134,8 +134,8 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
     try {
       const result = await window.api.anki.generate(notebookId, options)
       if (result.success) {
-        // 生成成功，但不更新currentAnkiCards
-        // 这样用户可以继续查看当前卡片，同时新卡片在后台生成
+        // 생성성공，아닌업데이트currentAnkiCards
+        // 사용자으로계속조회보기현재카드，동시새카드후대생성
         set({
           isGenerating: false,
           generationProgress: null
@@ -186,7 +186,7 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   deleteCards: async (_cardIds: string[]) => {
-    // 当前不支持单个卡片删除，仅支持删除整个卡片集
+    // 현재미지원단일개카드삭제，만지원삭제정개카드세트
     throw new Error('deleteCards not implemented: only whole-deck deletion supported')
   },
 
@@ -203,7 +203,7 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
   }
 }))
 
-// 设置进度监听器
+// 설정진행감시
 export function setupAnkiListeners() {
   return window.api.anki.onProgress((data) => {
     useAnkiStore.setState({

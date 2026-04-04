@@ -1,6 +1,6 @@
 /**
  * Anki IPC Handlers
- * Anki卡片功能的 IPC 通信处理
+ * Anki카드공의 IPC 통��처리
  */
 
 import { ipcMain, dialog, BrowserWindow } from 'electron'
@@ -13,11 +13,11 @@ import { app } from 'electron'
 import fs from 'fs'
 
 /**
- * 注册anki相关的IPC handlers
+ * 등록anki관련의IPC handlers
  */
 export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
   /**
-   * 生成卡片
+   * 생성카드
    */
   ipcMain.handle(
     'anki:generate',
@@ -27,7 +27,7 @@ export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
           args.notebookId,
           args.options,
           (stage, progress) => {
-            // 发送进度更新事件
+            // 전송진행업데이트이벤트
             if (!event.sender.isDestroyed()) {
               event.sender.send('anki:progress', {
                 notebookId: args.notebookId,
@@ -45,7 +45,7 @@ export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
   )
 
   /**
-   * 获取笔记本最新卡片集
+   * 노트북 조회최신카드세트
    */
   ipcMain.handle('anki:get-latest', async (_, args: { notebookId: string }) => {
     try {
@@ -58,7 +58,7 @@ export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
   })
 
   /**
-   * 获取指定卡片集
+   * 조회가리키는정카드세트
    */
   ipcMain.handle('anki:get', async (_, args: { ankiCardId: string }) => {
     try {
@@ -71,7 +71,7 @@ export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
   })
 
   /**
-   * 更新卡片集
+   * 업데이트카드세트
    */
   ipcMain.handle(
     'anki:update',
@@ -86,7 +86,7 @@ export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
   )
 
   /**
-   * 删除卡片集
+   * 삭제카드세트
    */
   ipcMain.handle('anki:delete', async (_, args: { ankiCardId: string }) => {
     try {
@@ -98,36 +98,36 @@ export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
   })
 
   /**
-   * 导出卡片
+   * 내보내기카드
    */
   ipcMain.handle(
     'anki:export',
     async (event, args: { ankiCardId: string; format: AnkiExportFormat; deckName?: string }) => {
       try {
-        // 获取卡片集
+        // 조회카드세트
         const ankiCard = ankiCardService.getAnkiCards(args.ankiCardId)
         if (!ankiCard) {
-          return { success: false, error: '卡片集不存在' }
+          return { success: false, error: '카드세트존재하지 않음' }
         }
 
-        // 获取窗口引用以显示保存对话框
+        // 조회윈도우참조으로표시저장다이얼로그
         const mainWindow = BrowserWindow.fromWebContents(event.sender)
         if (!mainWindow) {
-          return { success: false, error: '无法获取窗口引用' }
+          return { success: false, error: '없음방법조회윈도우참조' }
         }
 
-        // 根据格式导出
+        // 기반으로형식내보내기
         if (args.format === 'apkg') {
-          // 使用ApkgExporter导出
+          // 사용ApkgExporter내보내기
           const exporter = new ApkgExporter()
           const { buffer, summary } = await exporter.export(
             ankiCard.cardsData as any,
             args.deckName || ankiCard.title
           )
 
-          // 显示保存对话框
+          // 표시저장다이얼로그
           const result = await dialog.showSaveDialog(mainWindow, {
-            title: '导出Anki卡片',
+            title: 'Anki 카드 내보내기',
             defaultPath: path.join(
               app.getPath('downloads'),
               `${ankiCard.title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}_${ankiCard.version}.apkg`
@@ -136,15 +136,15 @@ export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
           })
 
           if (result.canceled || !result.filePath) {
-            return { success: false, error: '用户取消保存' }
+            return { success: false, error: '사용자취소저장' }
           }
 
-          // 写入文件（异步，避免阻塞主进程）
+          // 쓰기파일（비동기，회피면차단삽입메인프로세스）
           await fs.promises.writeFile(result.filePath, buffer)
           return { success: true, filePath: result.filePath, summary }
         }
 
-        return { success: false, error: '不支持的导出格式' }
+        return { success: false, error: '미지원의내보내기형식' }
       } catch (error) {
         return { success: false, error: (error as Error).message }
       }
@@ -152,21 +152,21 @@ export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
   )
 
   /**
-   * 导出卡片到指定路径
+   * 내보내기카드에가리키는정경로
    */
   ipcMain.handle('anki:exportToPath', async (_, args: { ankiCardId: string; filePath: string }) => {
     try {
-      // 获取卡片集
+      // 조회카드세트
       const ankiCard = ankiCardService.getAnkiCards(args.ankiCardId)
       if (!ankiCard) {
-        return { success: false, error: '卡片集不存在' }
+        return { success: false, error: '카드세트존재하지 않음' }
       }
 
-      // 使用ApkgExporter导出
+      // 사용ApkgExporter내보내기
       const exporter = new ApkgExporter()
       const { buffer, summary } = await exporter.export(ankiCard.cardsData as any, ankiCard.title)
 
-      // 写入文件（异步）
+      // 쓰기파일（비동기）
       await fs.promises.writeFile(args.filePath, buffer)
       return { success: true, filePath: args.filePath, summary }
     } catch (error) {
@@ -175,7 +175,7 @@ export function registerAnkiHandlers(ankiCardService: AnkiCardService) {
   })
 
   /**
-   * 打开Anki窗口
+   * 열기Anki윈도우
    */
   ipcMain.handle(
     'anki:open-window',

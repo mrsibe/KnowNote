@@ -16,10 +16,10 @@ import { PanelHeader } from '../ui/panel-header'
 import DocumentList from './source/DocumentList'
 import type { KnowledgeDocument } from '../../../../shared/types/knowledge'
 
-// 添加来源类型
+// 추가출처타입
 type AddSourceType = 'file' | 'url' | 'text' | 'note'
 
-// 添加来源弹窗组件
+// 추가출처팝업컴포넌트
 interface AddSourceModalProps {
   type: AddSourceType
   isOpen: boolean
@@ -38,7 +38,7 @@ function AddSourceModal({
   notes
 }: AddSourceModalProps) {
   const { t } = useTranslation('ui')
-  // 状态会在组件重新挂载时自动重置（通过父组件的 key 属性）
+  // 상태컴포넌트재새마운트시자동재（통해부모컴포넌트의 key 속성）
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [url, setUrl] = useState('')
@@ -55,7 +55,7 @@ function AddSourceModal({
     }
   }
 
-  // 判断是否可以提交
+  // 판단예아니오으로제출
   const canSubmit =
     !isLoading &&
     ((type === 'url' && url.trim()) ||
@@ -143,7 +143,7 @@ function AddSourceModal({
   )
 }
 
-// 索引进度组件
+// 인덱스진행컴포넌트
 function IndexingProgress() {
   const { t } = useTranslation('ui')
   const { indexProgress, isIndexing } = useKnowledgeStore()
@@ -160,7 +160,7 @@ function IndexingProgress() {
   )
 }
 
-// 文档预览面板组件
+// 문서미리보기패널컴포넌트
 interface DocumentViewerPanelProps {
   document: KnowledgeDocument
   onBack: () => void
@@ -171,13 +171,13 @@ function DocumentViewerPanel({ document, onBack }: DocumentViewerPanelProps) {
   const [content, setContent] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
 
-  // 加载文档内容
+  // 로드문서내용
   useEffect(() => {
     const loadContent = async () => {
       setIsLoading(true)
       try {
         const chunks = await window.api.knowledge.getDocumentChunks(document.id)
-        // 合并所有 chunk 的内容
+        // 병합모든 chunk 의내용
         const fullContent = chunks.map((chunk) => chunk.content).join('\n\n')
         setContent(fullContent)
       } catch (error) {
@@ -209,7 +209,7 @@ function DocumentViewerPanel({ document, onBack }: DocumentViewerPanelProps) {
         center={<span className="text-sm font-medium truncate">{document.title}</span>}
       />
 
-      {/* 文档内容 */}
+      {/* 문서내용 */}
       <ScrollArea className="flex-1">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
@@ -253,7 +253,7 @@ export default function SourcePanel(): ReactElement {
 
   const { openSettings } = useUIStore()
 
-  // 加载默认嵌入模型设置
+  // 로드기본임베딩모델설정
   useEffect(() => {
     const loadEmbeddingModel = async () => {
       const model = await window.api.settings.get('defaultEmbeddingModel')
@@ -261,7 +261,7 @@ export default function SourcePanel(): ReactElement {
     }
     loadEmbeddingModel()
 
-    // 监听设置变化
+    // 감시설정변경
     const unsubscribe = window.api.settings.onSettingsChange((newSettings) => {
       setDefaultEmbeddingModel(newSettings.defaultEmbeddingModel)
     })
@@ -269,13 +269,13 @@ export default function SourcePanel(): ReactElement {
     return unsubscribe
   }, [])
 
-  // 设置监听器
+  // 설정감시
   useEffect(() => {
     const cleanup = setupKnowledgeListeners()
     return cleanup
   }, [])
 
-  // 加载文档和笔记
+  // 로드문서및노트
   useEffect(() => {
     if (notebookId) {
       loadDocuments(notebookId)
@@ -285,16 +285,16 @@ export default function SourcePanel(): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notebookId])
 
-  // 当 notebook 切换时清空选中的文档
+  // 때 notebook 전환시비우기선택에서의문서
   useEffect(() => {
     setSelectedDocument(null)
   }, [notebookId])
 
-  // 处理文件上传
+  // 처리파일업로드
   const handleFileUpload = useCallback(async () => {
     if (!notebookId) return
 
-    // 检查是否配置了默认嵌入模型
+    // 확인예아니오설정기본임베딩모델
     if (!defaultEmbeddingModel) {
       alert(t('noEmbeddingModelConfigured'))
       return
@@ -307,12 +307,12 @@ export default function SourcePanel(): ReactElement {
     setShowAddMenu(false)
   }, [notebookId, defaultEmbeddingModel, selectFiles, addDocumentFromFile, t])
 
-  // 处理 URL 导入
+  // 처리 URL 가져오기
   const handleUrlImport = useCallback(
     async (data: { url?: string }) => {
       if (!notebookId || !data.url) return
 
-      // 检查是否配置了默认嵌入模型
+      // 확인예아니오설정기본임베딩모델
       if (!defaultEmbeddingModel) {
         alert(t('noEmbeddingModelConfigured'))
         setModalType(null)
@@ -325,12 +325,12 @@ export default function SourcePanel(): ReactElement {
     [notebookId, defaultEmbeddingModel, addDocumentFromUrl, t]
   )
 
-  // 处理文本粘贴
+  // 처리텍스트붙여넣기
   const handleTextPaste = useCallback(
     async (data: { title?: string; content?: string }) => {
       if (!notebookId || !data.title || !data.content) return
 
-      // 检查是否配置了默认嵌入模型
+      // 확인예아니오설정기본임베딩모델
       if (!defaultEmbeddingModel) {
         alert(t('noEmbeddingModelConfigured'))
         setModalType(null)
@@ -347,12 +347,12 @@ export default function SourcePanel(): ReactElement {
     [notebookId, defaultEmbeddingModel, addDocument, t]
   )
 
-  // 处理笔记导入
+  // 처리노트가져오기
   const handleNoteImport = useCallback(
     async (data: { noteId?: string }) => {
       if (!notebookId || !data.noteId) return
 
-      // 检查是否配置了默认嵌入模型
+      // 확인예아니오설정기본임베딩모델
       if (!defaultEmbeddingModel) {
         alert(t('noEmbeddingModelConfigured'))
         setModalType(null)
@@ -363,7 +363,7 @@ export default function SourcePanel(): ReactElement {
         await addNoteToKnowledge(notebookId, data.noteId)
         setModalType(null)
       } catch (error) {
-        // 检查是否是空笔记错误
+        // 확인예아니오예빈노트오류
         const errorMessage = (error as Error).message || ''
         if (errorMessage.toLowerCase().includes('empty')) {
           alert(t('emptyNoteCannotImport'))
@@ -376,7 +376,7 @@ export default function SourcePanel(): ReactElement {
     [notebookId, defaultEmbeddingModel, addNoteToKnowledge, t]
   )
 
-  // 处理删除文档
+  // 처리문서 삭제
   const handleDelete = useCallback(
     async (documentId: string) => {
       if (!notebookId) return
@@ -385,12 +385,12 @@ export default function SourcePanel(): ReactElement {
     [notebookId, deleteDocument]
   )
 
-  // 处理打开设置
+  // 처리열기설정
   const handleOpenSettings = useCallback(() => {
     openSettings()
   }, [openSettings])
 
-  // 处理打开源文件
+  // 처리열기소스파일
   const handleOpenSource = useCallback(async (documentId: string) => {
     try {
       await window.api.knowledge.openSource(documentId)
@@ -399,26 +399,26 @@ export default function SourcePanel(): ReactElement {
     }
   }, [])
 
-  // 处理文档点击
+  // 처리문서점클릭
   const handleSelectDocument = useCallback(
     (document: KnowledgeDocument) => {
-      // 文本和笔记类型可以预览，直接显示预览页面
+      // 텍스트및노트타입으로미리보기，직접표시미리보기페이지
       if (document.type === 'text' || document.type === 'note') {
         setSelectedDocument(document)
       } else {
-        // 其他类型（文件、URL）直接打开
+        // 기타타입（파일、URL）직접열기
         handleOpenSource(document.id)
       }
     },
     [handleOpenSource]
   )
 
-  // 返回列表
+  // 반환목록
   const handleBack = useCallback(() => {
     setSelectedDocument(null)
   }, [])
 
-  // 处理弹窗提交
+  // 처리팝업제출
   const handleModalSubmit = useCallback(
     (data: { title?: string; content?: string; url?: string; noteId?: string }) => {
       if (modalType === 'url') {
@@ -435,14 +435,14 @@ export default function SourcePanel(): ReactElement {
   return (
     <Card className="flex flex-col rounded-xl border-0 overflow-hidden h-full shadow-md">
       {selectedDocument ? (
-        // 文档预览页面
+        // 문서미리보기페이지
         <DocumentViewerPanel
           key={selectedDocument.id}
           document={selectedDocument}
           onBack={handleBack}
         />
       ) : (
-        // 文档列表页面
+        // 문서목록페이지
         <>
           <PanelHeader
             draggable
@@ -467,7 +467,7 @@ export default function SourcePanel(): ReactElement {
                   <Plus className="w-4 h-4" />
                 </Button>
 
-                {/* 添加菜单 */}
+                {/* 추가메뉴 */}
                 {showAddMenu && (
                   <div className="absolute right-0 top-full mt-1 w-40 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-10">
                     <Button
@@ -517,10 +517,10 @@ export default function SourcePanel(): ReactElement {
             }
           />
 
-          {/* 索引进度 */}
+          {/* 인덱스진행 */}
           <IndexingProgress />
 
-          {/* 文档列表 */}
+          {/* 문서목록 */}
           {isLoading ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -539,7 +539,7 @@ export default function SourcePanel(): ReactElement {
         </>
       )}
 
-      {/* 添加来源弹窗 - 使用 key 强制在 type 变化时重新挂载组件 */}
+      {/* 추가출처팝업 - 사용 key 강제 type 변경시재새마운트컴포넌트 */}
       {modalType && modalType !== 'file' && (
         <AddSourceModal
           key={modalType}
@@ -554,7 +554,7 @@ export default function SourcePanel(): ReactElement {
         />
       )}
 
-      {/* 点击外部关闭菜单 */}
+      {/* 점클릭외부부분닫기메뉴 */}
       {showAddMenu && <div className="fixed inset-0 z-0" onClick={() => setShowAddMenu(false)} />}
     </Card>
   )

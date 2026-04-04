@@ -23,13 +23,13 @@ export default function TopNavigationBar({
   const { currentNotebook, openedNotebooks, removeOpenedNotebook, setCurrentNotebook } =
     useNotebookStore()
 
-  // 确定当前激活的标签
+  // 확인정현재활성화의태그
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (isHomePage) return 'home'
     return currentNotebook?.id ?? 'home'
   })
 
-  // 当 isHomePage 或 currentNotebook 改变时，更新 activeTab
+  // 때 isHomePage 또는 currentNotebook 변경시，업데이트 activeTab
   if (isHomePage && activeTab !== 'home') {
     setActiveTab('home')
   } else if (!isHomePage && currentNotebook && activeTab !== currentNotebook.id) {
@@ -49,20 +49,20 @@ export default function TopNavigationBar({
   const handleCloseOpenedNotebook = (id: string, e: React.MouseEvent): void => {
     e.stopPropagation()
 
-    // 如果关闭的是当前笔记本，需要跳转
+    // 만약닫기의예현재노트북，필요이동
     if (currentNotebook?.id === id && !isHomePage) {
-      // 找到当前笔记本在列表中的索引
+      // 찾에현재노트북목록에서의인덱스
       const currentIndex = openedNotebooks.findIndex((nb) => nb.id === id)
       const otherNotebooks = openedNotebooks.filter((nb) => nb.id !== id)
 
       if (otherNotebooks.length > 0) {
-        // 如果当前不是第一个，跳转到上一个；否则跳转到下一个
+        // 만약현재아닌예첫 번째개，이동에위하나개；아니오이동에아래하나개
         const targetNotebook =
           currentIndex > 0 ? openedNotebooks[currentIndex - 1] : openedNotebooks[1]
         setCurrentNotebook(targetNotebook.id)
         navigate(`/notebook/${targetNotebook.id}`)
       } else {
-        // 没有其他笔记本，跳转到首页
+        // 없있는기타노트북，이동에홈페이지
         navigate('/')
       }
     }
@@ -78,10 +78,10 @@ export default function TopNavigationBar({
       className="h-12 shrink-0 flex items-center justify-between px-2 gap-0.5"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
-      {/* macOS 左侧空白区域（留给窗口控制按钮） */}
+      {/* macOS 왼쪽빈공백영역（남겨둠윈도우제어버튼） */}
       {isMac() && <div className="w-20"></div>}
 
-      {/* Linux 左侧设置按钮区域 */}
+      {/* Linux 왼쪽설정버튼영역 */}
       {isLinux() && (
         <div className="flex items-center gap-2">
           <Button
@@ -97,14 +97,14 @@ export default function TopNavigationBar({
         </div>
       )}
 
-      {/* 导航标签 */}
+      {/* 내비게이션태그 */}
       <div className="flex items-center gap-2 flex-1">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1">
           <TabsList
             className="bg-transparent border-0 gap-2 h-auto p-0 justify-start"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
-            {/* 首页标签 */}
+            {/* 홈페이지태그 */}
             <TabsTrigger
               value="home"
               className="h-7 gap-2 px-3 data-[state=active]:bg-muted/50 data-[state=active]:shadow-sm rounded-md border data-[state=active]:border-border/50 border-transparent hover:bg-accent/50 transition-all"
@@ -113,7 +113,7 @@ export default function TopNavigationBar({
               <span>{t('home')}</span>
             </TabsTrigger>
 
-            {/* 打开的笔记本标签 */}
+            {/* 열기의노트북태그 */}
             {openedNotebooks.map((notebook) => (
               <TabsTrigger
                 key={notebook.id}
@@ -138,7 +138,7 @@ export default function TopNavigationBar({
               </TabsTrigger>
             ))}
 
-            {/* 新建按钮 */}
+            {/* 새로 만들기버튼 */}
             <Button
               onClick={onCreateClick}
               variant="ghost"
@@ -152,7 +152,7 @@ export default function TopNavigationBar({
         </Tabs>
       </div>
 
-      {/* 非Linux平台的设置按钮（Windows和macOS保持在右侧） */}
+      {/* 비Linux플랫폼의설정버튼（Windows및macOS보유지오른쪽） */}
       {!isLinux() && (
         <Button
           onClick={handleSettingsClick}
@@ -166,7 +166,7 @@ export default function TopNavigationBar({
         </Button>
       )}
 
-      {/* Windows 右侧空白区域（留给窗口控制按钮） */}
+      {/* Windows 오른쪽빈공백영역（남겨둠윈도우제어버튼） */}
       {isWindows() && <div className="w-32"></div>}
     </div>
   )

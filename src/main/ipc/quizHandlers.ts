@@ -1,6 +1,6 @@
 /**
  * Quiz IPC Handlers
- * 答题功能的 IPC 通信处理
+ * 퀴즈공의 IPC 통��처리
  */
 
 import { ipcMain } from 'electron'
@@ -8,11 +8,11 @@ import type { QuizService, QuizGenerationOptions } from '../services/QuizService
 import { createQuizWindow } from '../windows/quizWindow'
 
 /**
- * 注册quiz相关的IPC handlers
+ * 등록quiz관련의IPC handlers
  */
 export function registerQuizHandlers(quizService: QuizService) {
   /**
-   * 生成题目
+   * 생성문제
    */
   ipcMain.handle(
     'quiz:generate',
@@ -22,7 +22,7 @@ export function registerQuizHandlers(quizService: QuizService) {
           args.notebookId,
           args.options,
           (stage, progress) => {
-            // 发送进度更新事件
+            // 전송진행업데이트이벤트
             if (!event.sender.isDestroyed()) {
               event.sender.send('quiz:progress', {
                 notebookId: args.notebookId,
@@ -40,7 +40,7 @@ export function registerQuizHandlers(quizService: QuizService) {
   )
 
   /**
-   * 获取笔记本最新题库
+   * 노트북 조회최신문제라이브러리
    */
   ipcMain.handle('quiz:get-latest', async (_, args: { notebookId: string }) => {
     try {
@@ -53,7 +53,7 @@ export function registerQuizHandlers(quizService: QuizService) {
   })
 
   /**
-   * 获取指定题库
+   * 조회가리키는정문제라이브러리
    */
   ipcMain.handle('quiz:get', async (_, args: { quizId: string }) => {
     try {
@@ -66,7 +66,7 @@ export function registerQuizHandlers(quizService: QuizService) {
   })
 
   /**
-   * 提交答题会话
+   * 제출퀴즈세션
    */
   ipcMain.handle(
     'quiz:submit-session',
@@ -81,7 +81,7 @@ export function registerQuizHandlers(quizService: QuizService) {
   )
 
   /**
-   * 获取答题会话
+   * 조회퀴즈세션
    */
   ipcMain.handle('quiz:get-session', async (_, args: { sessionId: string }) => {
     try {
@@ -94,7 +94,7 @@ export function registerQuizHandlers(quizService: QuizService) {
   })
 
   /**
-   * 更新题库
+   * 업데이트문제라이브러리
    */
   ipcMain.handle(
     'quiz:update',
@@ -109,7 +109,7 @@ export function registerQuizHandlers(quizService: QuizService) {
   )
 
   /**
-   * 删除题库
+   * 문제은행 삭제
    */
   ipcMain.handle('quiz:delete', async (_, args: { quizId: string }) => {
     try {
@@ -121,7 +121,7 @@ export function registerQuizHandlers(quizService: QuizService) {
   })
 
   /**
-   * 打开答题窗口
+   * 열기퀴즈윈도우
    */
   ipcMain.handle('quiz:open-window', async (_, args: { notebookId: string; quizId?: string }) => {
     try {

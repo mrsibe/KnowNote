@@ -1,54 +1,54 @@
 /**
- * RerankCapability 接口
- * 定义重排序能力(未来扩展)
+ * RerankCapability 인터페이스
+ * 정의재정렬기능(향후확장)
  */
 
 /**
- * Rerank 配置
+ * Rerank 설정
  */
 export interface RerankConfig {
-  model?: string // rerank 模型名称
-  topN?: number // 返回前 N 个结果
+  model?: string // rerank 모델이름
+  topN?: number // 반환전 N 개결과
 }
 
 /**
- * Rerank 文档
+ * Rerank 문서
  */
 export interface RerankDocument {
-  id: string // 文档 ID
-  text: string // 文档文本
-  metadata?: Record<string, any> // 文档元数据
+  id: string // 문서 ID
+  text: string // 문서텍스트
+  metadata?: Record<string, any> // 문서메타데이터
 }
 
 /**
- * Rerank 结果
+ * Rerank 결과
  */
 export interface RerankResult {
-  documentId: string // 文档 ID
-  score: number // 相关性分数
-  index: number // 原始索引
+  documentId: string // 문서 ID
+  score: number // 관련성분수
+  index: number // 원본인덱스
 }
 
 /**
- * RerankCapability 重排序能力接口
- * 实现此接口的 Provider 支持重排序功能
+ * RerankCapability 재정렬기능 인터페이스
+ * 현재이인터페이스의 Provider 지원재정렬공
  *
  * @remarks
- * 此接口为未来扩展预留,暂未实现
+ * 이인터페이스향후확장미리유지,임시미현재
  */
 export interface RerankCapability {
   /**
-   * 重排序文档
-   * @param query - 查询文本
-   * @param documents - 文档列表
-   * @param config - Rerank 配置
-   * @returns Promise<RerankResult[]> - 排序后的结果
+   * 재정렬문서
+   * @param query - 쿼리텍스트
+   * @param documents - 문서목록
+   * @param config - Rerank 설정
+   * @returns Promise<RerankResult[]> - 정렬후의결과
    */
   rerank(query: string, documents: RerankDocument[], config?: RerankConfig): Promise<RerankResult[]>
 
   /**
-   * 获取默认 Rerank 模型
-   * @returns 默认 Rerank 模型名称
+   * 조회기본 Rerank 모델
+   * @returns 기본 Rerank 모델이름
    */
   getDefaultRerankModel(): string
 }

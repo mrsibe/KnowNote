@@ -13,21 +13,21 @@ export default function AboutSettings(): ReactElement {
   const [checking, setChecking] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('')
 
-  // 监听更新状态变化
+  // 감시업데이트상태변경
   useEffect(() => {
     const unsubscribe = window.api.update.onStateChanged((state: UpdateState) => {
       setUpdateState(state)
       setChecking(false)
     })
 
-    // 获取初始状态
+    // 조회초기시작상태
     window.api.update.getState().then((result) => {
       if (result.success && result.state) {
         setUpdateState(result.state)
       }
     })
 
-    // 获取应用版本号
+    // 앱 버전 조회번호
     window.api.getAppVersion().then((version) => {
       setAppVersion(version)
     })
@@ -53,7 +53,7 @@ export default function AboutSettings(): ReactElement {
     }
   }
 
-  // 获取更新按钮文本和状态
+  // 조회업데이트버튼텍스트및상태
   const getUpdateButtonContent = () => {
     switch (updateState.status) {
       case UpdateStatus.CHECKING:

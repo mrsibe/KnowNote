@@ -16,12 +16,12 @@ export default function QuizResultView() {
     submitQuiz
   } = useQuizStore()
 
-  // 提交答题会话（保存到数据库）
+  // 제출퀴즈세션（저장에데이터베이스）
   const handleSubmit = async () => {
     await submitQuiz()
   }
 
-  // 首次进入结果页自动提交
+  // 홈번입력결과페이지자동제출
   useEffect(() => {
     if (currentQuiz) {
       handleSubmit()
@@ -56,7 +56,7 @@ export default function QuizResultView() {
   return (
     <div className="h-full flex items-center justify-center p-8">
       <div className="w-full space-y-8">
-        {/* 标题 */}
+        {/* 제목 */}
         <div className="text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Trophy className="w-8 h-8 text-primary" />
@@ -64,7 +64,7 @@ export default function QuizResultView() {
           </div>
         </div>
 
-        {/* 分数展示 */}
+        {/* 분수확장보여주기 */}
         <div className="text-center space-y-3">
           <div className="text-7xl font-bold text-primary">
             {correctCount}/{totalQuestions}
@@ -74,7 +74,7 @@ export default function QuizResultView() {
           </p>
         </div>
 
-        {/* 统计网格 */}
+        {/* 통계네트워크격 */}
         <div className="grid grid-cols-3 gap-6 text-center py-6">
           <div className="space-y-2">
             <p className="text-4xl font-semibold text-green-600 dark:text-green-400">
@@ -92,12 +92,12 @@ export default function QuizResultView() {
           </div>
         </div>
 
-        {/* 鼓励文案 */}
+        {/* 격려격려문계획 */}
         <div className="text-center">
           <p className="text-xl font-medium text-primary">{getEncouragementText()}</p>
         </div>
 
-        {/* 操作按钮 */}
+        {/* 작업버튼 */}
         <div className="flex gap-3 justify-center pt-4">
           <Button variant="outline" size="lg" onClick={handleReview}>
             {t('viewDetails')}

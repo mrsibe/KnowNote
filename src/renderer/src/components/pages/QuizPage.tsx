@@ -16,7 +16,7 @@ export default function QuizPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [platform, setPlatform] = useState<string>('')
 
-  // 获取平台信息
+  // 조회플랫폼정보
   useEffect(() => {
     const getPlatform = async () => {
       try {
@@ -29,12 +29,12 @@ export default function QuizPage() {
     getPlatform()
   }, [])
 
-  // 加载答题数据
+  // 로드퀴즈데이터
   useEffect(() => {
     const loadData = async (): Promise<void> => {
       setIsLoading(true)
       try {
-        // 设置进度监听
+        // 설정진행감시
         const cleanup = setupQuizListeners()
 
         if (quizId) {
@@ -43,7 +43,7 @@ export default function QuizPage() {
           await loadLatestQuiz(notebookId)
         }
 
-        // 清理监听器
+        // 정리감시
         cleanup()
       } catch (error) {
         console.error('[QuizPage] Failed to load quiz:', error)
@@ -55,7 +55,7 @@ export default function QuizPage() {
     loadData()
   }, [notebookId, quizId, loadLatestQuiz, loadQuiz])
 
-  // 清理
+  // 정리
   useEffect(() => {
     return () => {
       resetQuiz()
@@ -64,14 +64,14 @@ export default function QuizPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
-      {/* 顶部可拖拽标题栏 */}
+      {/* 상단부분드래그제목바 */}
       <div
         className="absolute top-0 left-0 right-0 h-10 z-10 flex items-center justify-between px-4 bg-background"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {/* macOS 左侧空白区域（留给窗口控制按钮） */}
+        {/* macOS 왼쪽빈공백영역（남겨둠윈도우제어버튼） */}
         {platform === 'darwin' && <div className="w-16"></div>}
-        {/* 非 macOS 左侧空白区域 */}
+        {/* 비 macOS 왼쪽빈공백영역 */}
         {platform !== 'darwin' && <div style={{ width: '100px' }}></div>}
 
         <span className="text-sm text-muted-foreground font-medium">{t('quiz')}</span>
@@ -80,14 +80,14 @@ export default function QuizPage() {
           className="flex items-center gap-2"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
-          {/* 可以在这里添加操作按钮 */}
+          {/* 으로내부추가작업버튼 */}
         </div>
 
-        {/* Windows 右侧空白区域（留给窗口控制按钮） */}
+        {/* Windows 오른쪽빈공백영역（남겨둠윈도우제어버튼） */}
         {platform === 'win32' && <div className="w-32"></div>}
       </div>
 
-      {/* 内容区域 */}
+      {/* 내용영역 */}
       <div
         style={{
           flex: 1,

@@ -1,6 +1,6 @@
 /**
  * Provider Registry
- * 供应商注册表,管理所有已注册的供应商描述符和实例
+ * 제공자등록테이블,관리모든등록의제공자설명및인스턴스
  */
 
 import type { BaseProvider } from '../capabilities/BaseProvider'
@@ -9,13 +9,13 @@ import Logger from '../../../shared/utils/logger'
 
 /**
  * ProviderRegistry
- * 管理供应商描述符和实例的注册表
+ * 관리제공자설명및인스턴스의등록테이블
  */
 export class ProviderRegistry {
-  // 供应商描述符映射 (name -> descriptor)
+  // 제공자설명매핑 (name -> descriptor)
   private descriptors: Map<string, ProviderDescriptor> = new Map()
 
-  // 供应商实例缓存 (name -> instance)
+  // 제공자인스턴스캐시 (name -> instance)
   private instances: Map<string, BaseProvider> = new Map()
 
   constructor() {
@@ -23,8 +23,8 @@ export class ProviderRegistry {
   }
 
   /**
-   * 注册供应商描述符
-   * @param descriptor - 供应商描述符
+   * 등록제공자설명
+   * @param descriptor - 제공자설명
    */
   register(descriptor: ProviderDescriptor): void {
     if (this.descriptors.has(descriptor.name)) {
@@ -35,32 +35,32 @@ export class ProviderRegistry {
     }
 
     this.descriptors.set(descriptor.name, descriptor)
-    // 清除旧的实例缓存(如果有)
+    // 정리제외이전의인스턴스캐시(만약있는)
     this.instances.delete(descriptor.name)
 
     Logger.info('ProviderRegistry', `Registered provider: ${descriptor.name}`)
   }
 
   /**
-   * 批量注册供应商描述符
-   * @param descriptors - 供应商描述符数组
+   * 일괄등록제공자설명
+   * @param descriptors - 제공자설명배열
    */
   registerMany(descriptors: ProviderDescriptor[]): void {
     descriptors.forEach((descriptor) => this.register(descriptor))
   }
 
   /**
-   * 获取供应商实例(懒加载创建)
-   * @param name - 供应商名称
-   * @returns Provider 实例或 undefined
+   * 조회제공자인스턴스(지연로드생성)
+   * @param name - 제공자이름
+   * @returns Provider 인스턴스또는 undefined
    */
   getProvider(name: string): BaseProvider | undefined {
-    // 先检查缓存
+    // 먼저확인캐시
     if (this.instances.has(name)) {
       return this.instances.get(name)
     }
 
-    // 没有缓存,从描述符创建
+    // 없있는캐시,에서설명생성
     const descriptor = this.descriptors.get(name)
     if (!descriptor) {
       Logger.warn('ProviderRegistry', `Provider ${name} not registered`)
@@ -79,34 +79,34 @@ export class ProviderRegistry {
   }
 
   /**
-   * 获取供应商描述符
-   * @param name - 供应商名称
-   * @returns ProviderDescriptor 或 undefined
+   * 조회제공자설명
+   * @param name - 제공자이름
+   * @returns ProviderDescriptor 또는 undefined
    */
   getDescriptor(name: string): ProviderDescriptor | undefined {
     return this.descriptors.get(name)
   }
 
   /**
-   * 列出所有已注册的供应商描述符
-   * @returns ProviderDescriptor 数组
+   * 컬럼모든등록의제공자설명
+   * @returns ProviderDescriptor 배열
    */
   listDescriptors(): ProviderDescriptor[] {
     return Array.from(this.descriptors.values())
   }
 
   /**
-   * 列出所有已注册的供应商名称
-   * @returns 供应商名称数组
+   * 컬럼모든등록의제공자이름
+   * @returns 제공자이름배열
    */
   listProviderNames(): string[] {
     return Array.from(this.descriptors.keys())
   }
 
   /**
-   * 根据能力查询供应商
-   * @param capability - 能力名称 ('chat' | 'embedding' | 'rerank' | 'imageGeneration')
-   * @returns 支持该能力的供应商描述符数组
+   * 기반으로기능쿼리제공자
+   * @param capability - 기능이름 ('chat' | 'embedding' | 'rerank' | 'imageGeneration')
+   * @returns 지원기능의제공자설명배열
    */
   getProvidersByCapability(
     capability: 'chat' | 'embedding' | 'rerank' | 'imageGeneration'
@@ -117,33 +117,33 @@ export class ProviderRegistry {
   }
 
   /**
-   * 获取内置供应商列表
-   * @returns 内置供应商描述符数组
+   * 조회내장제공자목록
+   * @returns 내장제공자설명배열
    */
   getBuiltinProviders(): ProviderDescriptor[] {
     return Array.from(this.descriptors.values()).filter((descriptor) => descriptor.isBuiltin)
   }
 
   /**
-   * 获取自定义供应商列表
-   * @returns 自定义供应商描述符数组
+   * 조회자체정의제공자목록
+   * @returns 자체정의제공자설명배열
    */
   getCustomProviders(): ProviderDescriptor[] {
     return Array.from(this.descriptors.values()).filter((descriptor) => !descriptor.isBuiltin)
   }
 
   /**
-   * 检查供应商是否已注册
-   * @param name - 供应商名称
-   * @returns 是否已注册
+   * 확인제공자예아니오등록
+   * @param name - 제공자이름
+   * @returns 예아니오등록
    */
   has(name: string): boolean {
     return this.descriptors.has(name)
   }
 
   /**
-   * 移除供应商
-   * @param name - 供应商名称
+   * ���동제외제공자
+   * @param name - 제공자이름
    */
   unregister(name: string): void {
     this.descriptors.delete(name)
@@ -152,8 +152,8 @@ export class ProviderRegistry {
   }
 
   /**
-   * 清除所有实例缓存
-   * 用于强制重新创建所有实例
+   * 정리제외모든인스턴스캐시
+   * 용도:강제재새생성모든인스턴스
    */
   clearInstanceCache(): void {
     this.instances.clear()

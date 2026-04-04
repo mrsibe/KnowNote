@@ -1,6 +1,6 @@
 /**
  * Knowledge Store
- * 知识库状态管理
+ * 지식 베이스 상태 관리
  */
 
 import { create } from 'zustand'
@@ -14,7 +14,7 @@ import type {
 } from '../../../shared/types/knowledge'
 
 interface KnowledgeStore {
-  // 状态
+  // 상태
   documents: KnowledgeDocument[]
   searchResults: KnowledgeSearchResult[]
   stats: KnowledgeStats | null
@@ -35,7 +35,7 @@ interface KnowledgeStore {
   setError: (error: string | null) => void
   clearSearchResults: () => void
 
-  // 异步操作
+  // 비동기 작업
   loadDocuments: (notebookId: string) => Promise<void>
   loadStats: (notebookId: string) => Promise<void>
   addDocument: (
@@ -63,7 +63,7 @@ interface KnowledgeStore {
 }
 
 export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
-  // 初始状态
+  // 초기 상태
   documents: [],
   searchResults: [],
   stats: null,
@@ -84,7 +84,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
   setError: (error) => set({ error }),
   clearSearchResults: () => set({ searchResults: [] }),
 
-  // 加载文档列表
+  // 문서 목록 로드
   loadDocuments: async (notebookId) => {
     set({ isLoading: true, error: null })
     try {
@@ -95,7 +95,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 加载统计信息
+  // 통계 정보 로드
   loadStats: async (notebookId) => {
     try {
       const stats = await window.api.knowledge.getStats(notebookId)
@@ -105,7 +105,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 添加文档
+  // 문서 추가
   addDocument: async (notebookId, options) => {
     set({ isIndexing: true, error: null })
     try {
@@ -122,7 +122,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 从文件添加文档
+  // 에서파일문서 추가
   addDocumentFromFile: async (notebookId, filePath) => {
     set({ isIndexing: true, error: null })
     try {
@@ -139,7 +139,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 从 URL 添加文档
+  // 에서 URL 문서 추가
   addDocumentFromUrl: async (notebookId, url) => {
     set({ isIndexing: true, error: null })
     try {
@@ -156,7 +156,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 将 Note 添加到知识库
+  //  Note 추가에지식 베이스
   addNoteToKnowledge: async (notebookId, noteId) => {
     set({ isIndexing: true, error: null })
     try {
@@ -173,7 +173,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 搜索
+  // 검색
   search: async (notebookId, query, options) => {
     if (!query.trim()) {
       set({ searchResults: [] })
@@ -193,7 +193,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 删除文档
+  // 문서 삭제
   deleteDocument: async (notebookId, documentId) => {
     try {
       const result = await window.api.knowledge.deleteDocument(documentId)
@@ -209,7 +209,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 选择文件
+  // 파일 선택
   selectFiles: async () => {
     try {
       return await window.api.knowledge.selectFiles()
@@ -221,7 +221,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
 }))
 
 /**
- * 设置知识库监听器
+ * 설정지식 베이스감시
  */
 export function setupKnowledgeListeners(): () => void {
   const cleanupProgress = window.api.knowledge.onIndexProgress((data: IndexProgress) => {

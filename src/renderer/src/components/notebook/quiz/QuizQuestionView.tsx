@@ -32,11 +32,11 @@ export default function QuizQuestionView() {
   const selectedAnswer = answers[currentQuestion.id]
   const showHint = showHints[currentQuestion.id] || false
 
-  // 查看详情模式下，始终显示解析
+  // 조회보기상세���턴아래，시작최종표시파싱
   const shouldShowExplanation = isReviewMode || showExplanation
 
   const handleSelectAnswer = (answerIndex: number) => {
-    // 查看详情模式下不允许修改答案
+    // 조회보기상세���턴아래아닌허용허용수정수정답변
     if (isReviewMode) return
 
     if (!showExplanation) {
@@ -52,7 +52,7 @@ export default function QuizQuestionView() {
         setShowExplanation(false)
       }
     } else {
-      // 最后一题，显示结果
+      // 마지막하나문제，표시결과
       setResultMode(true)
     }
   }
@@ -71,7 +71,7 @@ export default function QuizQuestionView() {
   return (
     <div className="h-full flex flex-col p-8">
       <div className="w-full flex flex-col gap-6 h-full">
-        {/* 头部 */}
+        {/* 헤더부분 */}
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-semibold text-foreground">
             {t('question')} {currentQuestionIndex + 1}/{totalQuestions}
@@ -82,14 +82,14 @@ export default function QuizQuestionView() {
           </Button>
         </div>
 
-        {/* 内容区域 */}
+        {/* 내용영역 */}
         <div className="flex-1 overflow-auto flex flex-col gap-6">
-          {/* 题目文本 */}
+          {/* 문제텍스트 */}
           <p className="text-lg leading-relaxed font-medium text-foreground">
             {currentQuestion.questionText}
           </p>
 
-          {/* 选项列表 */}
+          {/* 선택지목록 */}
           <div className="flex flex-col gap-3">
             {currentQuestion.options.map((option, index) => {
               const isSelected = selectedAnswer === index
@@ -101,7 +101,7 @@ export default function QuizQuestionView() {
                   key={index}
                   className={cn(
                     'flex items-center gap-4 p-4 rounded-lg border transition-colors',
-                    // 查看详情模式：禁用点击
+                    // 조회보기상세���턴：비활성화점클릭
                     isReviewMode ? 'cursor-default' : 'cursor-pointer',
                     isSelected && !showResult && 'border-primary bg-primary/5',
                     showResult &&
@@ -130,7 +130,7 @@ export default function QuizQuestionView() {
             })}
           </div>
 
-          {/* 提示（可折叠） */}
+          {/* 힌트（접기） */}
           {showHint && (
             <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <div className="flex items-start gap-2">
@@ -144,7 +144,7 @@ export default function QuizQuestionView() {
             </div>
           )}
 
-          {/* 答案解释（答题后或查看详情时显示） */}
+          {/* 답변설명（퀴즈후또는조회보기상세시표시） */}
           {shouldShowExplanation && selectedAnswer !== undefined && (
             <div
               className={cn(
@@ -194,7 +194,7 @@ export default function QuizQuestionView() {
           )}
         </div>
 
-        {/* 底部按钮 */}
+        {/* 바닥부분버튼 */}
         <div
           className={cn(
             'pt-6 border-t',

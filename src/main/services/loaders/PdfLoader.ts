@@ -1,29 +1,29 @@
 /**
  * PdfLoader
- * 使用 pdfjs-dist 解析 PDF，提取文本和页码信息
+ * pdfjs-dist를 사용하여 PDF를 파싱하고 텍스트 및 페이지 정보 추출
  */
 
 import { readFile } from 'fs/promises'
 import { extname } from 'path'
-// 使用 legacy build for Node.js 环境
+// Node.js 환경용 legacy build 사용
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api'
 import Logger from '../../../shared/utils/logger'
 import type { IDocumentLoader, DocumentLoadResult, LoadOptions, PageInfo } from './types'
 
 /**
- * PDF 文档加载器
- * 基于 Mozilla 的 PDF.js（纯 JS 实现）
+ * PDF 문서 로더
+ * Mozilla의 PDF.js 기반 (순수 JS 구현)
  */
 export class PdfLoader implements IDocumentLoader {
   readonly supportedMimeTypes = ['application/pdf']
   readonly supportedExtensions = ['pdf']
 
   constructor() {
-    // 配置 PDF.js worker（使用 legacy build）
-    // 在 Electron/Node.js 环境中,需要使用 legacy 版本
+    // PDF.js worker 설정 (legacy build 사용)
+    // Electron/Node.js 환경에서는 legacy 버전을 사용해야 합니다
     try {
-      // 使用动态 import 代替 require
+      // require 대신 동적 import 사용
       import('pdfjs-dist/legacy/build/pdf.worker.mjs')
         .then((pdfjsWorker) => {
           if (pdfjsWorker) {
@@ -34,7 +34,7 @@ export class PdfLoader implements IDocumentLoader {
           Logger.warn('PdfLoader', 'Failed to load PDF.js worker, using inline mode')
         })
     } catch {
-      // 如果加载 worker 失败，使用内联模式
+      // worker 로드 실패 시 인라인 모드 사용
       Logger.warn('PdfLoader', 'Failed to load PDF.js worker, using inline mode')
     }
   }
@@ -56,7 +56,7 @@ export class PdfLoader implements IDocumentLoader {
     const opts = { preserveStructure: true, ...options }
 
     try {
-      // 加载 PDF 文档
+      // PDF 문서 로드
       const loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(buffer),
         password: opts.password
@@ -65,12 +65,12 @@ export class PdfLoader implements IDocumentLoader {
 
       Logger.info('PdfLoader', `Loading PDF with ${pdfDoc.numPages} pages`)
 
-      // 提取元数据
+      // 메타데이터 추출
       const metadata = await pdfDoc.getMetadata().catch(() => null)
       const metadataInfo = metadata?.info as Record<string, unknown> | undefined
       const title = (metadataInfo?.Title as string) || undefined
 
-      // 逐页提取文本
+      // 순차적으로 페이지별 텍스트 추출
       const pages: PageInfo[] = []
       let fullText = ''
       let currentOffset = 0
@@ -80,17 +80,17 @@ export class PdfLoader implements IDocumentLoader {
         const textContent = await page.getTextContent()
         const viewport = page.getViewport({ scale: 1.0 })
 
-        // 提取页面文本
+        // 페이지 텍스트 추출
         const pageText = textContent.items
           .filter((item): item is TextItem => 'str' in item)
           .map((item) => item.str)
           .join(' ')
 
-        // 清理文本
+        // 텍스트 정리
         const cleanedText = this.cleanPDFText(pageText)
         const pageTextWithNewline = cleanedText + '\n\n'
 
-        // 记录页面信息
+        // 페이지 정보 기록
         if (opts.preserveStructure) {
           pages.push({
             pageNumber: pageNum,
@@ -107,11 +107,11 @@ export class PdfLoader implements IDocumentLoader {
         fullText += pageTextWithNewline
         currentOffset += pageTextWithNewline.length
 
-        // 释放页面资源
+        // 페이지 리소스 해제
         page.cleanup()
       }
 
-      // 清理文档
+      // 문서 정리
       await pdfDoc.cleanup()
       await pdfDoc.destroy()
 
@@ -142,18 +142,18 @@ export class PdfLoader implements IDocumentLoader {
   }
 
   /**
-   * 清理 PDF 提取的文本
+   * PDF 추출 텍스트 정리
    */
   private cleanPDFText(text: string): string {
     return (
       text
-        // 移除多余的空格
+        // 불필요한 공백 자동 제거
         .replace(/[ \t]+/g, ' ')
-        // 修复断行（连续的行可能是同一段落）
+        // 잘못된 줄 바꿈 수정 (연속된 줄을 하나의 단락으로 연결)
         .replace(/([^\n])\n([^\n])/g, '$1 $2')
-        // 统一多个换行为两个
+        // 여러 줄 바꿈을 두 개로 통합
         .replace(/\n{3,}/g, '\n\n')
-        // 移除首尾空白
+        // 앞뒤 공백 자동 제거
         .trim()
     )
   }

@@ -22,7 +22,7 @@ export default function AnkiPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [platform, setPlatform] = useState<string>('')
 
-  // 获取平台信息
+  // 조회플랫폼정보
   useEffect(() => {
     const getPlatform = async () => {
       try {
@@ -35,7 +35,7 @@ export default function AnkiPage() {
     getPlatform()
   }, [])
 
-  // 加载Anki卡片数据
+  // 로드Anki카드데이터
   useEffect(() => {
     let cancelled = false
 
@@ -62,7 +62,7 @@ export default function AnkiPage() {
     }
   }, [notebookId, ankiCardId, loadLatestAnkiCards, loadAnkiCards])
 
-  // 清理
+  // 정리
   useEffect(() => {
     return () => {
       reset()
@@ -73,7 +73,7 @@ export default function AnkiPage() {
     if (!currentAnkiCards) return
 
     try {
-      // 打开系统保存文件对话框
+      // 열기시리즈통합저장파일다이얼로그
       const filePath = await window.api.dialog.saveFile({
         title: t('exportCards'),
         defaultPath: `${currentAnkiCards.title || 'anki-cards'}.apkg`,
@@ -86,11 +86,11 @@ export default function AnkiPage() {
       })
 
       if (!filePath) {
-        // 用户取消了保存
+        // 사용자취소저장
         return
       }
 
-      // 调用导出API
+      // 호출내보내기API
       const result = await window.api.anki.exportToPath(currentAnkiCards.id, filePath)
 
       if (!result.success) {
@@ -110,14 +110,14 @@ export default function AnkiPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
-      {/* 顶部可拖拽标题栏 */}
+      {/* 상단부분드래그제목바 */}
       <div
         className="absolute top-0 left-0 right-0 h-10 z-10 flex items-center justify-between px-4 bg-background border-b"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
-        {/* macOS 左侧空白区域（留给窗口控制按钮） */}
+        {/* macOS 왼쪽빈공백영역（남겨둠윈도우제어버튼） */}
         {platform === 'darwin' && <div className="w-16"></div>}
-        {/* 非 macOS 左侧占位，保持标题居中 */}
+        {/* 비 macOS 왼쪽점유위치，보유지제목가운데 정렬 */}
         {platform !== 'darwin' && <div className="w-32"></div>}
 
         <span className="text-sm text-muted-foreground font-medium">
@@ -135,11 +135,11 @@ export default function AnkiPage() {
           )}
         </div>
 
-        {/* Windows / Linux 右侧空白区域（留给窗口控制按钮） */}
+        {/* Windows / Linux 오른쪽빈공백영역（남겨둠윈도우제어버튼） */}
         {(platform === 'win32' || platform === 'linux') && <div className="w-32"></div>}
       </div>
 
-      {/* 内容区域 */}
+      {/* 내용영역 */}
       <div
         style={{
           flex: 1,
@@ -188,7 +188,7 @@ export default function AnkiPage() {
         )}
       </div>
 
-      {/* 对话框 */}
+      {/* 다이얼로그 */}
       {isConfigDialogOpen && notebookId && (
         <AnkiConfigDialog
           notebookId={notebookId}

@@ -1,10 +1,10 @@
 /**
- * Notebook 相关类型定义
- * 从 shared 模块统一导出所有类型
+ * Notebook 관련타입정의
+ * 에서 shared 모듈통합내보내기모든타입
  */
 
-// 从 shared 导入统一的聊天类型
+// 에서 shared 가져오기통합의채팅 타입
 export type { ChatSession, ChatMessage } from '../../../shared/types/chat'
 
-// 从 shared 导入笔记本和笔记类型
+// 에서 shared 가져오기노트북및노트타입
 export type { Notebook, Note } from '../../../shared/types'

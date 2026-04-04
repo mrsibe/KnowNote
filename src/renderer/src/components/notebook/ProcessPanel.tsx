@@ -101,15 +101,15 @@ export default function ProcessPanel({
     await abortMessage(currentNotebookId)
   }
 
-  // 使用 ref 存储 handleSend 函数的引用，避免事件监听器频繁重注册
+  // 사용 ref 저장 handleSend 함수의참조，회피면이벤트감시빈도복잡재등록
   const handleSendRef = useRef<() => void>(() => {})
 
-  // 保持 ref 指向最新的 handleSend 函数
+  // 보유지 ref 가리키는방향최신의 handleSend 함수
   useEffect(() => {
     handleSendRef.current = handleSend
   })
 
-  // 监听发送消息快捷键（只注册一次）
+  // 감시메시지 전송단축키（등록하나번）
   useEffect(() => {
     const handleSendShortcut = () => {
       handleSendRef.current()
@@ -122,7 +122,7 @@ export default function ProcessPanel({
     }
   }, [])
 
-  // 监听面板切换快捷键（与顶部按钮共用逻辑）
+  // 감시패널전환단축키（와상단부분버튼공용논리편집）
   useEffect(() => {
     if (!onToggleLeft && !onToggleRight) return
 
@@ -235,7 +235,7 @@ export default function ProcessPanel({
               size="icon"
               className="w-8 h-8 shrink-0"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              title={isLeftCollapsed ? '展开知识库' : '折叠知识库'}
+              title={isLeftCollapsed ? '확장열기지식 베이스' : '접기지식 베이스'}
             >
               {isLeftCollapsed ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -283,7 +283,7 @@ export default function ProcessPanel({
               size="icon"
               className="w-8 h-8 shrink-0"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              title={isRightCollapsed ? '展开笔记' : '折叠笔记'}
+              title={isRightCollapsed ? '확장열기노트' : '접기노트'}
             >
               {isRightCollapsed ? (
                 <PanelRightOpen className="w-4 h-4" />
@@ -295,12 +295,12 @@ export default function ProcessPanel({
         }
       />
 
-      {/* 对话消息区域 - 使用 absolute 定位占满剩余空间 */}
+      {/* 대화메시지영역 - 사용 absolute 정위치점유가득남은나머지빈간격 */}
       <div className="absolute top-14 bottom-0 left-0 right-0 overflow-hidden">
         <MessageList messages={messages} />
       </div>
 
-      {/* 底部渐变遮罩 - 独立于消息区域，避免堆叠上下文问题 */}
+      {/* 바닥부분점차변가림오버레이 - 독립즉시메시지영역，회피면힙접기위아래문문제 */}
       <div
         className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none rounded-b-xl z-10"
         style={{
@@ -309,10 +309,10 @@ export default function ProcessPanel({
         }}
       />
 
-      {/* 底部输入区域 - 绝对定位浮动在底部 */}
+      {/* 바닥부분입력영역 - 절대정위치떠다니는동바닥부분 */}
       <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none shrink-0 z-20">
         <div className="relative bg-muted/95 backdrop-blur-md rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-lg pointer-events-auto select-none">
-          {/* 多行输入框 */}
+          {/* 많은행입력창 */}
           <Textarea
             ref={textareaRef}
             value={input}
@@ -334,13 +334,13 @@ export default function ProcessPanel({
             className="w-full bg-transparent border-0 pl-4 pr-14 py-3 text-sm text-foreground placeholder-muted-foreground resize-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto min-h-[84px] max-h-[280px] themed-scrollbar select-text"
           />
 
-          {/* 发送/停止按钮 - 动态切换 */}
+          {/* 전송/중지버튼 - 동상태전환 */}
           {isCurrentNotebookStreaming ? (
-            // 停止按钮
+            // 중지버튼
             <Button
               onClick={handleStop}
               disabled={!canStop}
-              title="停止生成"
+              title="중지생성"
               variant="destructive"
               size="icon"
               className="absolute right-2 bottom-3 w-8 h-8 rounded-full"
@@ -348,7 +348,7 @@ export default function ProcessPanel({
               <StopCircle className="w-4 h-4" />
             </Button>
           ) : (
-            // 发送按钮
+            // 전송버튼
             <Button
               onClick={handleSend}
               disabled={!canSend}

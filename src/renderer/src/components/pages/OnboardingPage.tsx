@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import logo from '../../assets/logo.png'
 
 const languages = [
-  { code: 'zh-CN' as Language, name: '简体中文' },
+  { code: 'ko-KR' as Language, name: '한국어' },
   { code: 'en-US' as Language, name: 'English' }
 ]
 
@@ -40,7 +40,7 @@ export default function OnboardingPage() {
           </p>
         </div>
 
-        {/* 语言选择 */}
+        {/* 언어선택 */}
         <div className="mb-6">
           <Select
             value={selectedLanguage}
@@ -59,7 +59,7 @@ export default function OnboardingPage() {
           </Select>
         </div>
 
-        {/* 确认按钮 */}
+        {/* 확인버튼 */}
         <Button size="lg" onClick={handleComplete} disabled={isCompleting} className="w-full">
           {isCompleting ? 'Starting...' : 'Get Started'}
         </Button>

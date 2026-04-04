@@ -1,21 +1,21 @@
 import { ModelType } from '../../types'
 
 /**
- * 本地模型定义（简化版，用于静态配置）
+ * 로컬 모델 정의 (간소화 버전, 정적 설정용)
  */
 export interface LocalModelDefinition {
   id: string
   type: ModelType
   owned_by?: string
-  max_context?: number // 最大上下文长度
-  description?: string // 模型描述（可选）
+  max_context?: number // 최대 컨텍스트 길이
+  description?: string // 모델 설명 (선택)
 }
 
 /**
- * Provider 本地模型列表配置
+ * Provider 로컬 모델 목록 설정
  */
 export interface ProviderLocalModels {
   providerName: string
-  lastUpdated: string // ISO 日期字符串，便于追踪更新时间
+  lastUpdated: string // ISO 날짜 문자열, 업데이트 시간 추적 용이
   models: LocalModelDefinition[]
 }

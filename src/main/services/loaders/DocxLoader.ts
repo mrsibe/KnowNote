@@ -1,6 +1,6 @@
 /**
  * DocxLoader
- * 使用 mammoth 解析 Word 文档，并提取结构信息
+ * mammoth를 사용하여 Word 문서를 파싱하고 구조 정보 추출
  */
 
 import { readFile } from 'fs/promises'
@@ -11,8 +11,8 @@ import Logger from '../../../shared/utils/logger'
 import type { IDocumentLoader, DocumentLoadResult, LoadOptions, SectionInfo } from './types'
 
 /**
- * Word 文档加载器
- * 基于 mammoth，支持 DOCX 和 DOC
+ * Word 문서 로더
+ * mammoth 기반, DOCX 및 DOC 지원
  */
 export class DocxLoader implements IDocumentLoader {
   readonly supportedMimeTypes = [
@@ -38,11 +38,11 @@ export class DocxLoader implements IDocumentLoader {
     const opts = { preserveStructure: true, ...options }
 
     try {
-      // 提取纯文本
+      // 순수 텍스트 추출
       const textResult = await mammoth.extractRawText({ buffer })
       const content = textResult.value.trim()
 
-      // 提取结构信息（将文档转换为 HTML，从中提取标题）
+      // 구조 정보 추출 (문서를 HTML로 변환한 후 제목 추출)
       let sections: SectionInfo[] | undefined
       let title: string | undefined
 
@@ -50,11 +50,11 @@ export class DocxLoader implements IDocumentLoader {
         const htmlResult = await mammoth.convertToHtml({ buffer })
         const $ = cheerio.load(htmlResult.value)
 
-        // 提取第一个标题作为文档标题
+        // 첫 번째 제목을 문서 제목으로 추출
         const firstH1 = $('h1').first().text().trim()
         title = firstH1 || undefined
 
-        // 提取章节结构
+        // 섹션 구조 추출
         sections = this.extractSectionsFromHtml($, content)
       }
 
@@ -81,7 +81,7 @@ export class DocxLoader implements IDocumentLoader {
   }
 
   /**
-   * 从 HTML 中提取章节结构
+   * HTML에서 섹션 구조 추출
    */
   private extractSectionsFromHtml($: cheerio.CheerioAPI, fullContent: string): SectionInfo[] {
     const sections: SectionInfo[] = []
@@ -95,11 +95,11 @@ export class DocxLoader implements IDocumentLoader {
 
       if (!title) continue
 
-      // 尝试在全文中定位这个标题
+      // 전체 텍스트에서 제목 위치 찾기 시도
       const startOffset = fullContent.indexOf(title)
       if (startOffset === -1) continue
 
-      // 计算到下一个同级或更高级标题的内容
+      // 다음 동일 레벨 또는 상위 레벨 제목까지의 내용 계산
       let endOffset = fullContent.length
       for (let j = i + 1; j < headings.length; j++) {
         const nextHeading = $(headings[j])
@@ -127,28 +127,28 @@ export class DocxLoader implements IDocumentLoader {
       })
     }
 
-    // 构建层级关系
+    // 계층 구조 구축
     return this.buildHierarchy(sections)
   }
 
   /**
-   * 构建章节层级关系
+   * 섹션 계층 구조 구축
    */
   private buildHierarchy(flatSections: SectionInfo[]): SectionInfo[] {
     const root: SectionInfo[] = []
     const stack: SectionInfo[] = []
 
     for (const section of flatSections) {
-      // 弹出比当前章节级别高的节点
+      // 현재 섹션 레벨보다 높은 노드 팝
       while (stack.length > 0 && stack[stack.length - 1].level >= section.level) {
         stack.pop()
       }
 
       if (stack.length === 0) {
-        // 顶级章节
+        // 최상위 섹션
         root.push(section)
       } else {
-        // 子章节
+        // 하위 섹션
         const parent = stack[stack.length - 1]
         if (!parent.children) {
           parent.children = []

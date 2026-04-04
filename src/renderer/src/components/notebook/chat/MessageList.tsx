@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { ChatMessage } from '../../../../../shared/types/chat'
 import MessageItem from './MessageItem'
 import { ScrollArea } from '../../ui/scroll-area'
-// messageList.css 已合并到 effects.css（通过 main.css 全局导入）
+// messageList.css 병합에 effects.css（통해 main.css 전체레이아웃가져오기）
 
 interface MessageListProps {
   messages: ChatMessage[]
@@ -14,14 +14,14 @@ export default function MessageList({ messages }: MessageListProps): ReactElemen
   const bottomRef = useRef<HTMLDivElement>(null)
   const { t } = useTranslation()
 
-  // 自动滚动到底部
+  // 자동스크롤동에바닥부분
   useEffect(() => {
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages])
 
-  // 空状态
+  // 빈상태
   if (messages.length === 0) {
     return (
       <ScrollArea className="h-full">
@@ -38,7 +38,7 @@ export default function MessageList({ messages }: MessageListProps): ReactElemen
     )
   }
 
-  // 消息列表
+  // 메시지목록
   return (
     <ScrollArea className="h-full">
       <div className="px-4 py-6 pb-32">
@@ -46,7 +46,7 @@ export default function MessageList({ messages }: MessageListProps): ReactElemen
           {messages.map((message) => (
             <MessageItem key={message.id} message={message} />
           ))}
-          {/* 滚动锚点 */}
+          {/* 스크롤동앵커점 */}
           <div ref={bottomRef} />
         </div>
       </div>

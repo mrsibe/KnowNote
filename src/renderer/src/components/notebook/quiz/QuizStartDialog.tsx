@@ -42,7 +42,7 @@ export default function QuizStartDialog({
       customPrompt: customPrompt.trim() || undefined
     }
     onStart(params)
-    // 重置状态
+    // 재상태
     setQuestionCount(10)
     setDifficulty('medium')
     setCustomPrompt('')
@@ -60,7 +60,7 @@ export default function QuizStartDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-6 py-4">
-          {/* 题目数量 */}
+          {/* 문제수량 */}
           <div className="flex flex-col gap-2">
             <label htmlFor="questionCount" className="text-sm font-medium">
               {t('questionCount')}
@@ -77,7 +77,7 @@ export default function QuizStartDialog({
             <p className="text-xs text-muted-foreground">{t('questionCountHint')}</p>
           </div>
 
-          {/* 题目难度 */}
+          {/* 문제어려운도 */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium">{t('difficulty')}</label>
             <Select value={difficulty} onValueChange={(value: any) => setDifficulty(value)}>
@@ -96,7 +96,7 @@ export default function QuizStartDialog({
             </Select>
           </div>
 
-          {/* 自定义提示词 */}
+          {/* 자체정의힌트 */}
           <div className="flex flex-col gap-2">
             <label htmlFor="customPrompt" className="text-sm font-medium">
               {t('customPrompt')} <span className="text-muted-foreground">({t('optional')})</span>

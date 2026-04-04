@@ -1,52 +1,52 @@
 /**
  * Provider Descriptor
- * 供应商描述符,用于配置驱动的供应商注册
+ * 제공자설명,용도:설정드라이버동의제공자등록
  */
 
 import type { BaseProvider } from '../capabilities/BaseProvider'
 
 /**
- * Provider 能力配置
+ * Provider 기능설정
  */
 export interface ProviderCapabilities {
-  chat: boolean // 是否支持对话
-  embedding: boolean // 是否支持嵌入
-  rerank?: boolean // 是否支持重排序(未来扩展)
-  imageGeneration?: boolean // 是否支持图像生成(未来扩展)
+  chat: boolean // 예아니오지원대화
+  embedding: boolean // 예아니오지원임베딩
+  rerank?: boolean // 예아니오지원재정렬(향후확장)
+  imageGeneration?: boolean // 예아니오지원이미지생성(향후확장)
 }
 
 /**
- * Provider 描述符
- * 用于配置驱动的供应商定义
+ * Provider 설명
+ * 용도:설정드라이버동의제공자정의
  */
 export interface ProviderDescriptor {
-  // 基本信息
-  name: string // 供应商标识(如 'openai', 'deepseek')
-  displayName: string // 显示名称(如 'OpenAI', 'DeepSeek')
-  isBuiltin: boolean // 是否为内置供应商
+  // 기정보
+  name: string // 제공자표인식(만약 'openai', 'deepseek')
+  displayName: string // 표시이름(만약 'OpenAI', 'DeepSeek')
+  isBuiltin: boolean // 예아니오내장제공자
 
-  // 默认配置
-  defaultBaseUrl: string // 默认 API 地址
-  defaultChatModel?: string // 默认对话模型
-  defaultEmbeddingModel?: string // 默认嵌入模型
-  defaultRerankModel?: string // 默认重排序模型(未来扩展)
-  defaultImageModel?: string // 默认图像生成模型(未来扩展)
+  // 기본설정
+  defaultBaseUrl: string // 기본 API 주소
+  defaultChatModel?: string // 기본대화모델
+  defaultEmbeddingModel?: string // 기본임베딩모델
+  defaultRerankModel?: string // 기본재정렬모델(향후확장)
+  defaultImageModel?: string // 기본이미지생성모델(향후확장)
 
-  // 能力声明
+  // 기능선언
   capabilities: ProviderCapabilities
 
-  // Provider 工厂函数
-  // 用于创建 Provider 实例
+  // Provider 공공장함수
+  // 용도:생성 Provider 인스턴스
   createProvider: (descriptor: ProviderDescriptor) => BaseProvider
 }
 
 /**
- * 自定义供应商配置
- * 用户通过 UI 添加自定义供应商时使用的配置
+ * 자체정의제공자설정
+ * 사용자통해 UI 추가자체정의제공자시사용의설정
  */
 export interface CustomProviderConfig {
-  providerName: string // 供应商名称
-  displayName: string // 显示名称
-  baseUrl: string // API 地址
+  providerName: string // 제공자이름
+  displayName: string // 표시이름
+  baseUrl: string // API 주소
   apiKey: string // API Key
 }

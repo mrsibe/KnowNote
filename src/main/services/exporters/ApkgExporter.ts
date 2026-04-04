@@ -1,6 +1,6 @@
 /**
  * ApkgExporter
- * 将Anki卡片导出为.apkg格式
+ * Anki 카드를 .apkg 형식으로 내보내기
  */
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -8,14 +8,14 @@ const AnkiExport = require('anki-apkg-export').default
 import type { AnkiCardItem } from '../../../shared/types/anki'
 
 /**
- * APKG导出器类
+ * APKG 내보내기 클래스
  */
 export class ApkgExporter {
   /**
-   * 将卡片数组导出为APKG格式的Buffer
-   * @param cards - 卡片数组
-   * @param deckName - 卡组名称
-   * @returns Promise<Buffer> - APKG文件的Buffer
+   * 카드 배열을 APKG 형식의 Buffer로 내보내기
+   * @param cards - 카드 배열
+   * @param deckName - 카드 덱 이름
+   * @returns Promise<Buffer> - APKG 파일의 Buffer
    */
   async export(
     cards: AnkiCardItem[],
@@ -30,11 +30,11 @@ export class ApkgExporter {
     let skippedCount = 0
     const skippedTypes: Record<string, number> = {}
 
-    // 遍历所有卡片并添加到APKG
+    // 모든 카드를 순회하여 APKG에 추가
     for (const card of cards) {
-      // 只处理basic类型卡片
+      // basic 타입 카드 처리
       if (card.type === 'basic') {
-        // 基础卡片:正面问题,背面答案
+        // 기본 카드: 앞면 질문, 뒷면 답변
         apkg.addCard(card.front, card.back, {
           tags: card.tags || []
         })
@@ -45,10 +45,10 @@ export class ApkgExporter {
       }
     }
 
-    // 生成ZIP格式的APKG文件
+    // ZIP 형식의 APKG 파일 생성
     const zip = await apkg.save()
     const buffer = Buffer.from(zip)
-    // 附带 summary 供调用方参考
+    // 호출자 참고용 summary 첨부
     return { buffer, summary: { exportedCount, skippedCount, skippedTypes } }
   }
 }

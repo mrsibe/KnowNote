@@ -1,6 +1,6 @@
 /**
  * WebFetchService
- * 网页抓取服务，支持提取正文和转换为 Markdown
+ * 웹 크롤링 서비스, 본문 추출 및 Markdown 변환 지원
  */
 
 import * as cheerio from 'cheerio'
@@ -8,29 +8,29 @@ import TurndownService from 'turndown'
 import Logger from '../../shared/utils/logger'
 
 /**
- * 抓取结果
+ * 크롤링 결과
  */
 export interface FetchResult {
-  content: string // 提取的文本内容
-  title?: string // 页面标题
-  description?: string // 页面描述
-  url: string // 原始 URL
+  content: string // 추출된 텍스트 내용
+  title?: string // 페이지 제목
+  description?: string // 페이지 설명
+  url: string // 원본 URL
   mimeType: string
   metadata?: Record<string, unknown>
 }
 
 /**
- * 抓取选项
+ * 크롤링 옵션
  */
 export interface FetchOptions {
-  timeout?: number // 超时时间（毫秒），默认 30000
-  extractMainContent?: boolean // 是否提取主要内容，默认 true
-  convertToMarkdown?: boolean // 是否转换为 Markdown，默认 true
-  userAgent?: string // 自定义 User-Agent
+  timeout?: number // 타임아웃 (밀리초), 기본값 30000
+  extractMainContent?: boolean // 주요 내용 추출 여부, 기본값 true
+  convertToMarkdown?: boolean // Markdown으로 변환 여부, 기본값 true
+  userAgent?: string // 사용자 정의 User-Agent
 }
 
 /**
- * 网页抓取服务
+ * 웹 크롤링 서비스
  */
 export class WebFetchService {
   private turndown: TurndownService
@@ -43,25 +43,25 @@ export class WebFetchService {
   }
 
   constructor() {
-    // 配置 Turndown
+    // Turndown 설정
     this.turndown = new TurndownService({
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
       bulletListMarker: '-'
     })
 
-    // 移除不需要的元素
+    // 불필요한 요소 제거
     this.turndown.remove(['script', 'style', 'nav', 'footer', 'header', 'aside', 'iframe'])
   }
 
   /**
-   * 抓取网页内容
+   * 웹페이지 내용 크롤링
    */
   async fetchUrl(url: string, options?: FetchOptions): Promise<FetchResult> {
     const opts = { ...this.defaultOptions, ...options }
 
     try {
-      // 验证 URL
+      // URL 유효성 검사
       const parsedUrl = new URL(url)
       if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
         throw new Error('Only HTTP and HTTPS URLs are supported')
@@ -69,7 +69,7 @@ export class WebFetchService {
 
       Logger.info('WebFetchService', `Fetching: ${url}`)
 
-      // 创建 AbortController 用于超时
+      // 타임아웃용 AbortController 생성
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), opts.timeout)
 
@@ -109,21 +109,21 @@ export class WebFetchService {
   }
 
   /**
-   * 解析 HTML 内容
+   * HTML 내용 파싱
    */
   parseHtml(html: string, url: string, options?: FetchOptions): FetchResult {
     const opts = { ...this.defaultOptions, ...options }
     const $ = cheerio.load(html)
 
-    // 提取标题
+    // 제목 추출
     const title = $('title').text().trim() || $('h1').first().text().trim()
 
-    // 提取描述
+    // 설명 추출
     const description =
       $('meta[name="description"]').attr('content') ||
       $('meta[property="og:description"]').attr('content')
 
-    // 提取主要内容
+    // 주요 내용 추출
     let content: string
     if (opts.extractMainContent) {
       content = this.extractMainContent($)
@@ -131,15 +131,15 @@ export class WebFetchService {
       content = $('body').html() || ''
     }
 
-    // 转换为 Markdown
+    // Markdown으로 변환
     if (opts.convertToMarkdown) {
       content = this.htmlToMarkdown(content)
     } else {
-      // 直接提取文本
+      // 텍스트 직접 추출
       content = cheerio.load(content).text()
     }
 
-    // 清理内容
+    // 내용 정리
     content = this.cleanContent(content)
 
     return {
@@ -155,17 +155,17 @@ export class WebFetchService {
   }
 
   /**
-   * 提取主要内容
+   * 주요 내용 추출
    */
   private extractMainContent($: cheerio.CheerioAPI): string {
-    // 移除不需要的元素
+    // 불필요한 요소 제거
     $(
       'script, style, nav, footer, header, aside, iframe, noscript, ' +
         '.nav, .navigation, .menu, .sidebar, .footer, .header, .ad, .advertisement, ' +
         '.comments, .comment, .social, .share, .related, .recommend'
     ).remove()
 
-    // 尝试找到主要内容区域
+    // 주요 내용 영역 찾기 시도
     const mainSelectors = [
       'article',
       'main',
@@ -187,12 +187,12 @@ export class WebFetchService {
       }
     }
 
-    // 如果没有找到，使用 body
+    // 찾지 못한 경우 body 사용
     return $('body').html() || ''
   }
 
   /**
-   * HTML 转 Markdown
+   * HTML을 Markdown으로 변환
    */
   htmlToMarkdown(html: string): string {
     try {
@@ -204,24 +204,24 @@ export class WebFetchService {
   }
 
   /**
-   * 清理内容
+   * 내용 정리
    */
   private cleanContent(content: string): string {
     return (
       content
-        // 移除多余空行
+        // 불필요한 빈 줄 제거
         .replace(/\n{3,}/g, '\n\n')
-        // 移除行首尾空白
+        // 줄 앞뒤 공백 제거
         .split('\n')
         .map((line) => line.trim())
         .join('\n')
-        // 移除首尾空白
+        // 앞뒤 공백 제거
         .trim()
     )
   }
 
   /**
-   * 验证 URL 是否有效
+   * URL 유효성 검사
    */
   isValidUrl(url: string): boolean {
     try {

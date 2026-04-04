@@ -25,12 +25,12 @@ export default function ShortcutSettings(): ReactElement {
   const [conflictError, setConflictError] = useState<string>('')
   const [showResetDialog, setShowResetDialog] = useState(false)
 
-  // 加载快捷键
+  // 로드단축키
   useEffect(() => {
     loadShortcuts()
   }, [loadShortcuts])
 
-  // 监听键盘事件进行录制
+  // 감시키디스크이벤트행녹화제
   useEffect(() => {
     if (!recordingAction) return
 
@@ -42,9 +42,9 @@ export default function ShortcutSettings(): ReactElement {
       if (e.shiftKey) modifiers.push('Shift')
       if (e.altKey) modifiers.push('Alt')
 
-      // 获取按键
+      // 조회에 따라키
       let key = e.key
-      // 特殊键映射
+      // 특특수키매핑
       if (key === 'Escape') {
         key = 'Escape'
       } else if (key === 'Enter') {
@@ -57,13 +57,13 @@ export default function ShortcutSettings(): ReactElement {
         key = key.toUpperCase()
       }
 
-      // 允许纯Escape键
+      // 허용허용순수Escape키
       if (key === 'Escape' && modifiers.length === 0) {
         setTempAccelerator('Escape')
         return
       }
 
-      // 其他键必须带修饰键
+      // 기타키반드시해야포함하는수정장식키
       if (modifiers.length === 0) {
         setTempAccelerator('')
         return
@@ -89,7 +89,7 @@ export default function ShortcutSettings(): ReactElement {
   const handleSaveShortcut = async () => {
     if (!recordingAction || !tempAccelerator) return
 
-    // 检查冲突
+    // 확인충돌돌발
     if (isConflict(tempAccelerator, recordingAction)) {
       setConflictError(t('shortcuts:conflictError'))
       return
@@ -112,7 +112,7 @@ export default function ShortcutSettings(): ReactElement {
     setShowResetDialog(false)
   }
 
-  // 按类别分组
+  // 에 따라카테고리별도분그룹
   const groupedShortcuts = shortcuts.reduce(
     (acc, shortcut) => {
       const category = getCategoryByAction(shortcut.action)
@@ -125,7 +125,7 @@ export default function ShortcutSettings(): ReactElement {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* 重置按钮 */}
+      {/* 재버튼 */}
       <div className="flex justify-end">
         <Button
           onClick={() => setShowResetDialog(true)}
@@ -138,7 +138,7 @@ export default function ShortcutSettings(): ReactElement {
         </Button>
       </div>
 
-      {/* 冲突错误提示 */}
+      {/* 충돌돌발오류힌트 */}
       {conflictError && (
         <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl animate-in fade-in slide-in-from-top-2">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
@@ -157,7 +157,7 @@ export default function ShortcutSettings(): ReactElement {
         </div>
       )}
 
-      {/* 快捷键列表 - 按类别分组 */}
+      {/* 단축키목록 - 에 따라카테고리별도분그룹 */}
       <div className="flex flex-col gap-4">
         {Object.entries(groupedShortcuts).map(([category, items]) => (
           <div key={category} className="flex flex-col gap-2">
@@ -182,7 +182,7 @@ export default function ShortcutSettings(): ReactElement {
         ))}
       </div>
 
-      {/* 重置确认对话框 */}
+      {/* 재확인다이얼로그 */}
       <Dialog open={showResetDialog} onOpenChange={setShowResetDialog}>
         <DialogContent>
           <DialogHeader>
@@ -190,16 +190,16 @@ export default function ShortcutSettings(): ReactElement {
               <div className="p-2 rounded-lg bg-destructive/10">
                 <RotateCcw className="w-5 h-5 text-destructive" />
               </div>
-              {t('shortcuts:confirmResetTitle') || '重置快捷键'}
+              {t('shortcuts:confirmResetTitle') || '단축키 초기화'}
             </DialogTitle>
             <DialogDescription>{t('shortcuts:confirmReset')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowResetDialog(false)}>
-              {t('shortcuts:cancel') || '取消'}
+              {t('shortcuts:cancel') || '취소'}
             </Button>
             <Button variant="destructive" onClick={handleResetConfirm}>
-              {t('shortcuts:confirm') || '确认重置'}
+              {t('shortcuts:confirm') || '확인재'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -208,7 +208,7 @@ export default function ShortcutSettings(): ReactElement {
   )
 }
 
-// 辅助函数：根据 action 获取类别
+// 보조도움함수：기반으로 action 조회카테고리별도
 function getCategoryByAction(action: ShortcutAction): string {
   const actionStr = action.toString()
   if (actionStr.includes('notebook')) {
@@ -226,7 +226,7 @@ function getCategoryByAction(action: ShortcutAction): string {
   return 'other'
 }
 
-// 快捷键项组件
+// 단축키항목컴포넌트
 interface ShortcutItemProps {
   shortcut: ShortcutConfig
   isRecording: boolean
@@ -252,7 +252,7 @@ function ShortcutItem({
     <SettingItem title={t(shortcut.description)} description="">
       <div className="flex items-center gap-3">
         {isRecording ? (
-          // 录制模式
+          // 녹화제���턴
           <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
             <kbd className="px-4 py-2 bg-accent/50 text-accent-foreground rounded-lg border-2 border-primary/20 text-sm font-mono min-w-[140px] text-center transition-all shadow-lg shadow-primary/10 animate-pulse">
               {tempAccelerator || t('pressKey')}
@@ -276,7 +276,7 @@ function ShortcutItem({
             </Button>
           </div>
         ) : (
-          // 显示模式
+          // 표시���턴
           <>
             <button
               onClick={onStartRecording}
@@ -299,7 +299,7 @@ function ShortcutItem({
   )
 }
 
-// 格式化快捷键显示（将 CommandOrControl 转换为平台相关符号）
+// 포맷팅단축키표시（ CommandOrControl 변환플랫폼관련번호）
 function formatAccelerator(accelerator: string): string {
   return accelerator
     .replace('CommandOrControl', isMac() ? '⌘' : 'Ctrl')

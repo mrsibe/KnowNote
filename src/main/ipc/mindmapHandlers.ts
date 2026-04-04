@@ -1,6 +1,6 @@
 /**
  * MindMap IPC Handlers
- * 思维导图相关的 IPC 处理函数
+ * 마인드맵관련의 IPC 처리함수
  */
 
 import { ipcMain, IpcMainInvokeEvent } from 'electron'
@@ -9,10 +9,10 @@ import { createMindMapWindow } from '../windows/mindMapWindow'
 import Logger from '../../shared/utils/logger'
 
 /**
- * 注册思维导图相关 IPC Handlers
+ * 등록마인드맵관련 IPC Handlers
  */
 export function registerMindMapHandlers(mindMapService: MindMapService) {
-  // 生成思维导图
+  // 마인드맵 생성
   ipcMain.handle(
     'mindmap:generate',
     async (event: IpcMainInvokeEvent, args: { notebookId: string }) => {
@@ -22,7 +22,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
         const mindMapId = await mindMapService.generateMindMap(
           args.notebookId,
           (stage, progress) => {
-            // 发送进度更新（检查窗口是否还存在）
+            // 전송진행업데이트（확인윈도우예아니오아직존재）
             if (!event.sender.isDestroyed()) {
               event.sender.send('mindmap:progress', {
                 notebookId: args.notebookId,
@@ -41,7 +41,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   )
 
-  // 获取最新思维导图
+  // 조회최신마인드맵
   ipcMain.handle('mindmap:get-latest', async (_, args: { notebookId: string }) => {
     try {
       Logger.debug('MindMapHandlers', 'get-latest:', args)
@@ -53,7 +53,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   })
 
-  // 获取思维导图详情
+  // 마인드맵 조회상세
   ipcMain.handle('mindmap:get', async (_, args: { mindMapId: string }) => {
     try {
       Logger.debug('MindMapHandlers', 'get:', args)
@@ -65,7 +65,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   })
 
-  // 获取节点关联的chunks
+  // 조회노드연관된chunks
   ipcMain.handle(
     'mindmap:get-node-chunks',
     async (_, args: { mindMapId: string; nodeId: string }) => {
@@ -80,7 +80,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   )
 
-  // 更新思维导图
+  // 업데이트마인드맵
   ipcMain.handle(
     'mindmap:update',
     async (_, args: { mindMapId: string; updates: Partial<{ title: string }> }) => {
@@ -95,7 +95,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   )
 
-  // 删除思维导图
+  // 마인드맵 삭제
   ipcMain.handle('mindmap:delete', async (_, args: { mindMapId: string }) => {
     try {
       Logger.debug('MindMapHandlers', 'delete:', args)
@@ -107,7 +107,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   })
 
-  // 打开思维导图窗口
+  // 열기마인드맵윈도우
   ipcMain.handle(
     'mindmap:open-window',
     async (_, args: { notebookId: string; mindMapId?: string }) => {

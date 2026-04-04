@@ -53,7 +53,7 @@ async function generateNoteTitle(
  * Register note-related IPC handlers
  */
 export function registerNoteHandlers(providerManager: ProviderManager) {
-  // Create note（带参数验证）
+  // Create note（포함하는매개변수검증）
   ipcMain.handle(
     'create-note',
     validate(NoteSchemas.createNote, async (args) => {
@@ -75,7 +75,7 @@ export function registerNoteHandlers(providerManager: ProviderManager) {
     })
   )
 
-  // Get all notes in notebook（带参数验证）
+  // Get all notes in notebook（포함하는매개변수검증）
   ipcMain.handle(
     'get-notes',
     validate(NoteSchemas.getNotes, async (args) => {
@@ -91,7 +91,7 @@ export function registerNoteHandlers(providerManager: ProviderManager) {
     })
   )
 
-  // Get single note（带参数验证）
+  // Get single note（포함하는매개변수검증）
   ipcMain.handle(
     'get-note',
     validate(NoteSchemas.getNote, async (args) => {
@@ -106,7 +106,7 @@ export function registerNoteHandlers(providerManager: ProviderManager) {
     })
   )
 
-  // Update note（带参数验证）
+  // Update note（포함하는매개변수검증）
   ipcMain.handle(
     'update-note',
     validate(NoteSchemas.updateNote, async (args) => {
@@ -122,7 +122,7 @@ export function registerNoteHandlers(providerManager: ProviderManager) {
     })
   )
 
-  // Delete note（带参数验证）
+  // Delete note（포함하는매개변수검증）
   ipcMain.handle(
     'delete-note',
     validate(NoteSchemas.deleteNote, async (args) => {

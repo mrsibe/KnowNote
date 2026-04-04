@@ -1,10 +1,10 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 
 /**
- * 注册系统对话框相关的 IPC Handlers
+ * 등록시리즈통합다이얼로그관련의 IPC Handlers
  */
 export function registerDialogHandlers() {
-  // 保存文件对话框
+  // 저장파일다이얼로그
   ipcMain.handle(
     'dialog:saveFile',
     async (

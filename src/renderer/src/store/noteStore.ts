@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { Note } from '../../../shared/types'
 
 interface NoteStore {
-  // 状态
+  // 상태
   notes: Note[]
   currentNote: Note | null
   isEditing: boolean
@@ -13,7 +13,7 @@ interface NoteStore {
   setCurrentNote: (note: Note | null) => void
   setIsEditing: (isEditing: boolean) => void
 
-  // 异步操作
+  // 비동기작업
   loadNotes: (notebookId: string) => Promise<void>
   createNote: (notebookId: string, content: string, customTitle?: string) => Promise<Note>
   updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content'>>) => Promise<void>

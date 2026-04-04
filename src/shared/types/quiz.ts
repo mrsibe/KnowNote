@@ -12,14 +12,14 @@ export interface QuizQuestion {
   options: string[] // 고정 4개 선택지
   correctAnswer: number // 0-3
   explanation: string
-  hints: string[] // 1-2个提示
+  hints: string[] // 1-2개 힌트
   metadata?: {
     chunkIds: string[]
   }
 }
 
 /**
- * 题库
+ * 문제 은행
  */
 export interface Quiz {
   id: string
@@ -40,7 +40,7 @@ export interface Quiz {
 }
 
 /**
- * 答题会话
+ * 퀴즈 세션
  */
 export interface QuizSession {
   id: string
@@ -55,7 +55,7 @@ export interface QuizSession {
 }
 
 /**
- * Quiz生成结果（用于LLM streamObject返回）
+ * Quiz 생성 결과 (LLM streamObject 반환용)
  */
 export interface QuizGenerationResult {
   questions: QuizQuestion[]

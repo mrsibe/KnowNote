@@ -30,7 +30,7 @@ export default function DocumentList({
 }: DocumentListProps): ReactElement {
   const { t } = useTranslation('ui')
 
-  // 未配置嵌入模型的提示（优先级最高）
+  // 구성되지 않음임베딩모델의힌트（우선순위가장높은）
   if (!hasEmbeddingModel && documents.length === 0) {
     return (
       <Empty>
@@ -48,7 +48,7 @@ export default function DocumentList({
     )
   }
 
-  // 暂无文档的空状态（使用Empty组件重构）
+  // 임시없음문서의빈상태（사용Empty컴포넌트재구조）
   if (documents.length === 0) {
     return (
       <Empty>
@@ -77,7 +77,7 @@ export default function DocumentList({
   )
 }
 
-// 文档项组件
+// 문서항목컴포넌트
 interface DocumentItemProps {
   document: KnowledgeDocument
   onDelete: (id: string) => void
@@ -103,7 +103,7 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
     }
   }
 
-  // 显示失败提示（仅一次）
+  // 표시실패힌트（만하나번）
   useEffect(() => {
     if (document.status === 'failed' && !hasShownErrorRef.current) {
       hasShownErrorRef.current = true
@@ -120,10 +120,10 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
       onClick={() => onSelect(document)}
       className="group grid grid-cols-[auto_1fr_auto] gap-2 items-start p-3 rounded-lg transition-colors cursor-pointer select-none hover:bg-muted"
     >
-      {/* 图标列 - 固定宽度 */}
+      {/* 도표컬럼 - 고정너비 */}
       {getTypeIcon()}
 
-      {/* 内容列 - 可被压缩 */}
+      {/* 내용컬럼 - 압축 */}
       <div className="min-w-0 flex flex-col gap-1">
         <h3 className="text-sm font-medium truncate">{document.title}</h3>
         <p className="text-xs text-muted-foreground">{document.chunkCount} chunks</p>
@@ -135,7 +135,7 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
         )}
       </div>
 
-      {/* 删除按钮列 - 固定宽度 */}
+      {/* 삭제버튼컬럼 - 고정너비 */}
       <Button
         onClick={(e) => {
           e.stopPropagation()
@@ -149,7 +149,7 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
         <Trash2 className="w-4 h-4" />
       </Button>
 
-      {/* 删除文档确认对话框 */}
+      {/* 문서 삭제확인다이얼로그 */}
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
