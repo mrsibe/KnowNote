@@ -6,15 +6,15 @@ import { settingsManager } from '../config'
 let mindMapWindow: BrowserWindow | null = null
 
 /**
- * 생성마인드맵윈도우
- * @param notebookId - 노트북 ID（용도:생성새마인드맵）
- * @param mindMapId - 마인드맵 ID（용도:조회보기특정버전，선택）
+ * 마인드맵 윈도우 생성
+ * @param notebookId - 노트북 ID (용도: 새 마인드맵 생성)
+ * @param mindMapId - 마인드맵 ID (용도: 특정 버전 보기, 선택)
  */
 export function createMindMapWindow(notebookId: string, mindMapId?: string): void {
-  // 만약마인드맵윈도우이미존재，집중포커스그리고반환
+  // 마인드맵 윈도우가 이미 존재하면 포커스 후 반환
   if (mindMapWindow && !mindMapWindow.isDestroyed()) {
     mindMapWindow.focus()
-    // 만약전달입력새의라우트매개변수，업데이트 URL
+    // 새 라우트 파라미터가 전달되면 URL 업데이트
     const route = mindMapId ? `/mindmap/view/${mindMapId}` : `/mindmap/${notebookId}`
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
       mindMapWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
@@ -26,11 +26,11 @@ export function createMindMapWindow(notebookId: string, mindMapId?: string): voi
     return
   }
 
-  // 기반으로사용자테마설정배배경색
+  // 사용자 테마 설정에 따라 배경색 설정
   const theme = settingsManager.getSettingSync('theme')
   const backgroundColor = theme === 'dark' ? '#1a1b1e' : '#fafafa'
 
-  // 생성마인드맵윈도우
+  // 마인드맵 윈도우 생성
   mindMapWindow = new BrowserWindow({
     width: 1000,
     height: 700,
@@ -59,7 +59,7 @@ export function createMindMapWindow(notebookId: string, mindMapId?: string): voi
     mindMapWindow = null
   })
 
-  // 감시테마변경
+  // 테마 변경 감지
   settingsManager.onSettingsChangeSync((newSettings) => {
     if (mindMapWindow && !mindMapWindow.isDestroyed()) {
       const newBackgroundColor = newSettings.theme === 'dark' ? '#1a1b1e' : '#fafafa'
@@ -67,7 +67,7 @@ export function createMindMapWindow(notebookId: string, mindMapId?: string): voi
     }
   })
 
-  // 로드마인드맵페이지
+  // 마인드맵 페이지 로드
   const route = mindMapId ? `/mindmap/view/${mindMapId}` : `/mindmap/${notebookId}`
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mindMapWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
@@ -79,14 +79,14 @@ export function createMindMapWindow(notebookId: string, mindMapId?: string): voi
 }
 
 /**
- * 마인드맵 조회윈도우인스턴스
+ * 마인드맵 윈도우 인스턴스 조회
  */
 export function getMindMapWindow(): BrowserWindow | null {
   return mindMapWindow
 }
 
 /**
- * 소멸마인드맵윈도우
+ * 마인드맵 윈도우 파괴
  */
 export function destroyMindMapWindow(): void {
   if (mindMapWindow && !mindMapWindow.isDestroyed()) {

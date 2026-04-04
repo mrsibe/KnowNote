@@ -1,5 +1,5 @@
 /**
- * VectorStore 모듈입력포트
+ * VectorStore 모듈 진입점
  */
 
 export * from './types'

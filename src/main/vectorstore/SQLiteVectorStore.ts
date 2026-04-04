@@ -1,6 +1,6 @@
 /**
  * SQLiteVectorStore
- * 기반 sqlite-vec 확장의벡터 저장소현재
+ * sqlite-vec 확장 기반의 벡터 스토어 구현
  */
 
 import { getSqlite } from '../db'
@@ -8,8 +8,8 @@ import type { VectorStore, VectorItem, QueryResult, QueryOptions, VectorStoreCon
 import Logger from '../../shared/utils/logger'
 
 /**
- * SQLite 벡터 저장소현재
- * 사용 sqlite-vec 의 vec0 가상가상테이블행높은성벡터검인덱스
+ * SQLite 벡터 스토어 구현
+ * sqlite-vec의 vec0 가상 테이블을 사용한 고성능 벡터 검색
  */
 export class SQLiteVectorStore implements VectorStore {
   private notebookId: string = ''
@@ -40,7 +40,7 @@ export class SQLiteVectorStore implements VectorStore {
 
     const insertMany = sqlite.transaction((items: VectorItem[]) => {
       for (const item of items) {
-        // 검증벡터 차원
+        // 벡터 차원 검증
         if (item.vector.length !== this.dimensions) {
           Logger.warn(
             'SQLiteVectorStore',
@@ -48,7 +48,7 @@ export class SQLiteVectorStore implements VectorStore {
           )
         }
 
-        // sqlite-vec 으로직접접받 Float32Array
+        // sqlite-vec는 Float32Array를 직접 받음
         insertStmt.run(item.id, item.chunkId, this.notebookId, item.vector)
       }
     })
@@ -127,9 +127,9 @@ export class SQLiteVectorStore implements VectorStore {
     }
 
     try {
-      // 사용 sqlite-vec 의 KNN 쿼리
-      // cosine 거리：0 테이블보여주기완전체동일한，2 테이블보여주기완전체상반
-      // 변환유사도분수：1 - (distance / 2)
+      // sqlite-vec의 KNN 쿼리 사용
+      // cosine 거리: 0은 완전 동일, 2는 완전 반대
+      // 유사도 점수로 변환: 1 - (distance / 2)
       const queryStmt = sqlite.prepare(`
         SELECT
           embedding_id,
@@ -142,16 +142,16 @@ export class SQLiteVectorStore implements VectorStore {
         ORDER BY distance ASC
       `)
 
-      // sqlite-vec 으로직접접받 Float32Array
+      // sqlite-vec는 Float32Array를 직접 받음
       const results = queryStmt.all(queryVector, topK, this.notebookId) as Array<{
         embedding_id: string
         chunk_id: string
         distance: number
       }>
 
-      // 변환결과
+      // 결과 변환
       const queryResults: QueryResult[] = results.map((row) => {
-        // cosine 거리전환유사도（0-1）
+        // cosine 거리를 유사도로 변환 (0-1)
         const score = 1 - row.distance / 2
 
         return {
@@ -162,7 +162,7 @@ export class SQLiteVectorStore implements VectorStore {
         }
       })
 
-      // 앱임계값필터링
+      // 임계값 필터링 적용
       const filteredResults = threshold
         ? queryResults.filter((r) => r.score >= threshold)
         : queryResults

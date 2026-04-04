@@ -252,7 +252,7 @@ function ShortcutItem({
     <SettingItem title={t(shortcut.description)} description="">
       <div className="flex items-center gap-3">
         {isRecording ? (
-          // 녹화제���턴
+          // 녹화 모드
           <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
             <kbd className="px-4 py-2 bg-accent/50 text-accent-foreground rounded-lg border-2 border-primary/20 text-sm font-mono min-w-[140px] text-center transition-all shadow-lg shadow-primary/10 animate-pulse">
               {tempAccelerator || t('pressKey')}
@@ -276,7 +276,7 @@ function ShortcutItem({
             </Button>
           </div>
         ) : (
-          // 표시���턴
+          // 표시 모드
           <>
             <button
               onClick={onStartRecording}

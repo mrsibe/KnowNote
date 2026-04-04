@@ -113,7 +113,7 @@ export default function GeneralSettings({
   return (
     <FieldSet>
       <FieldGroup>
-        {/* 테마���턴설정 */}
+        {/* 테마 모드 설정 */}
         <Field orientation="horizontal">
           <FieldContent>
             <FieldLabel>{t('themeMode')}</FieldLabel>

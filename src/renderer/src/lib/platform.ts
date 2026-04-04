@@ -1,14 +1,14 @@
 /**
- * 플랫폼감지유틸리티
- * 사용메인프로세스의 process.platform 대체대폐기폐기의 navigator.platform
+ * 플랫폼 감지 유틸리티
+ * 메인 프로세스의 process.platform을 사용하여 폐기된 navigator.platform을 대체
  */
 
-// 캐시플랫폼정보，회피면재복 IPC 호출
+// 플랫폼 정보 캐시, 반복 IPC 호출 방지
 let cachedPlatform: string | null = null
 
 /**
- * 비동기조회플랫폼정보（추추천）
- * 에서메인프로세스조회준비확인의플랫폼정보그리고캐시
+ * 비동기 플랫폼 정보 조회 (권장)
+ * 메인 프로세스에서 확인된 플랫폼 정보를 조회하고 캐시
  */
 export async function getPlatform(): Promise<string> {
   if (cachedPlatform) return cachedPlatform
@@ -17,17 +17,17 @@ export async function getPlatform(): Promise<string> {
 }
 
 /**
- * 동기조회플랫폼정보
- * 사용 userAgentData（현재대표준비）또는캐시값
- * 만약아닌사용 가능，회뒤로에 navigator.platform
+ * 동기 플랫폼 정보 조회
+ * userAgentData (현재 표준) 또는 캐시 값 사용
+ * 사용 불가능한 경우 navigator.platform으로 폴백
  */
 export function getPlatformSync(): 'darwin' | 'win32' | 'linux' | 'unknown' {
-  // 우선사용캐시
+  // 캐시 우선 사용
   if (cachedPlatform) {
     return cachedPlatform as 'darwin' | 'win32' | 'linux' | 'unknown'
   }
 
-  // 사용 userAgentData（현재대표준비，chromium 90+）
+  // userAgentData 사용 (현재 표준, chromium 90+)
   const ua = (navigator as any).userAgentData
   if (ua?.platform) {
     const platform = ua.platform.toLowerCase()
@@ -36,7 +36,7 @@ export function getPlatformSync(): 'darwin' | 'win32' | 'linux' | 'unknown' {
     if (platform.includes('linux')) return 'linux'
   }
 
-  // 마지막비선택：이전버전 navigator.platform（겸용성고려고려）
+  // 최후 수단: 이전 버전 navigator.platform (호환성 고려)
   const p = navigator.platform.toUpperCase()
   if (p.includes('MAC')) return 'darwin'
   if (p.includes('WIN')) return 'win32'
@@ -46,23 +46,23 @@ export function getPlatformSync(): 'darwin' | 'win32' | 'linux' | 'unknown' {
 }
 
 /**
- * 판단예아니오 macOS
+ * macOS 여부 판별
  */
 export const isMac = (): boolean => getPlatformSync() === 'darwin'
 
 /**
- * 판단예아니오 Windows
+ * Windows 여부 판별
  */
 export const isWindows = (): boolean => getPlatformSync() === 'win32'
 
 /**
- * 판단예아니오 Linux
+ * Linux 여부 판별
  */
 export const isLinux = (): boolean => getPlatformSync() === 'linux'
 
 /**
- * 초기화플랫폼감지
- * 앱시작동시호출，미리로드플랫폼정보에캐시
+ * 플랫폼 감지 초기화
+ * 앱 시작 시 호출, 플랫폼 정보를 캐시에 미리 로드
  */
 export async function initPlatform(): Promise<void> {
   await getPlatform()

@@ -32,11 +32,11 @@ export default function QuizQuestionView() {
   const selectedAnswer = answers[currentQuestion.id]
   const showHint = showHints[currentQuestion.id] || false
 
-  // 조회보기상세���턴아래，시작최종표시파싱
+  // 리뷰 모드에서는 항상 해설 표시
   const shouldShowExplanation = isReviewMode || showExplanation
 
   const handleSelectAnswer = (answerIndex: number) => {
-    // 조회보기상세���턴아래아닌허용허용수정수정답변
+    // 리뷰 모드에서는 답변 수정 불가
     if (isReviewMode) return
 
     if (!showExplanation) {
@@ -101,7 +101,7 @@ export default function QuizQuestionView() {
                   key={index}
                   className={cn(
                     'flex items-center gap-4 p-4 rounded-lg border transition-colors',
-                    // 조회보기상세���턴：비활성화점클릭
+                    // 리뷰 모드: 클릭 비활성화
                     isReviewMode ? 'cursor-default' : 'cursor-pointer',
                     isSelected && !showResult && 'border-primary bg-primary/5',
                     showResult &&

@@ -1,10 +1,10 @@
 /**
- * VectorStore 추출객체인터페이스
- * 지원 SQLite / LanceDB / Qdrant 등후엔드
+ * VectorStore 추상 인터페이스
+ * SQLite / LanceDB / Qdrant 등 백엔드 지원
  */
 
 /**
- * 벡터항목
+ * 벡터 항목
  */
 export interface VectorItem {
   id: string // embedding_id
@@ -14,24 +14,24 @@ export interface VectorItem {
 }
 
 /**
- * 쿼리결과
+ * 쿼리 결과
  */
 export interface QueryResult {
   id: string // embedding_id
   chunkId: string
-  score: number // 유사도분수（0-1，넘는높은넘는상유사）
-  distance: number // 원본거리값
+  score: number // 유사도 점수 (0-1, 높을수록 유사)
+  distance: number // 원본 거리값
   metadata?: Record<string, unknown>
 }
 
 /**
- * 쿼리선택지
+ * 쿼리 옵션
  */
 export interface QueryOptions {
-  topK?: number // 반환전 K 개결과，기본 5
-  threshold?: number // 유사도임계값（0-1），낮은이값의결과아닌반환
+  topK?: number // 상위 K개 결과 반환, 기본값 5
+  threshold?: number // 유사도 임계값 (0-1), 이 값보다 낮은 결과는 반환하지 않음
   filter?: {
-    chunkIds?: string[] // 제한제가리키는정 chunk 에서검색
+    chunkIds?: string[] // 지정된 chunk에서만 검색 제한
   }
 }
 
@@ -40,69 +40,69 @@ export interface QueryOptions {
  */
 export interface VectorStoreConfig {
   notebookId: string
-  dimensions?: number // 벡터 차원，기본 1536
+  dimensions?: number // 벡터 차원, 기본값 1536
 }
 
 /**
- * 벡터 저장소추출객체인터페이스
- * 업무레이어통해이인터페이스작업벡터 저장소，아닌닫기마음바닥레이어현재
+ * 벡터 스토어 추상 인터페이스
+ * 비즈니스 레이어는 이 인터페이스를 통해 벡터 스토어를 조작하며 하위 구현에 의존하지 않음
  */
 export interface VectorStore {
   /**
-   * 초기화벡터 저장소
+   * 벡터 스토어 초기화
    */
   initialize(config: VectorStoreConfig): Promise<void>
 
   /**
-   * 일괄삽입또는업데이트벡터
+   * 벡터 일괄 삽입 또는 업데이트
    */
   upsert(items: VectorItem[]): Promise<void>
 
   /**
-   * 일괄삭제벡터
+   * 벡터 일괄 삭제
    */
   delete(ids: string[]): Promise<void>
 
   /**
-   * 에 따라 chunk ID 일괄삭제벡터
+   * chunk ID로 벡터 일괄 삭제
    */
   deleteByChunkIds(chunkIds: string[]): Promise<void>
 
   /**
-   * 벡터유사도쿼리
-   * @param vector 쿼리벡터
-   * @param options 쿼리선택지
-   * @returns 유사도정렬의결과목록
+   * 벡터 유사도 쿼리
+   * @param vector 쿼리 벡터
+   * @param options 쿼리 옵션
+   * @returns 유사도 정렬된 결과 목록
    */
   query(vector: Float32Array, options?: QueryOptions): Promise<QueryResult[]>
 
   /**
-   * 비우기현재 notebook 의모든벡터
+   * 현재 notebook의 모든 벡터 비우기
    */
   clear(): Promise<void>
 
   /**
-   * 조회벡터수량
+   * 벡터 수량 조회
    */
   count(): Promise<number>
 
   /**
-   * 닫기연결/해제방리소스
+   * 연결 닫기/리소스 해제
    */
   close(): Promise<void>
 
   /**
-   * 현재 조회 notebook ID
+   * 현재 notebook ID 조회
    */
   getNotebookId(): string
 
   /**
-   * 조회벡터 차원
+   * 벡터 차원 조회
    */
   getDimensions(): number
 }
 
 /**
- * 벡터 저장소타입
+ * 벡터 스토어 타입
  */
 export type VectorStoreType = 'sqlite' | 'lancedb' | 'qdrant'

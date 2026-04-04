@@ -1,7 +1,7 @@
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
-// 가져오기모든언어리소스
+// 모든 언어 리소스 가져오기
 import zhCNCommon from './locales/ko-KR/common.json'
 import zhCNChat from './locales/ko-KR/chat.json'
 import zhCNSettings from './locales/ko-KR/settings.json'
@@ -44,13 +44,13 @@ const resources = {
 }
 
 i18n
-  .use(initReactI18next) //  i18n 인스턴스에 전달 react-i18next
+  .use(initReactI18next) // i18n 인스턴스를 react-i18next에 전달
   .init({
     resources,
-    lng: 'ko-KR', // 기본언어
+    lng: 'ko-KR', // 기본 언어
     fallbackLng: 'ko-KR',
     interpolation: {
-      escapeValue: false // React 이미기본이스케이프됨
+      escapeValue: false // React는 기본적으로 이스케이프됨
     },
     react: {
       useSuspense: false

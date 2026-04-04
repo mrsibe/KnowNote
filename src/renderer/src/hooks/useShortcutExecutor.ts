@@ -2,15 +2,15 @@ import { useEffect } from 'react'
 import { ShortcutAction } from '../../../shared/types'
 
 /**
- * 단축키실행행 Hook
- * 감시래자체메인프로세스의단축키트리거이벤트，그리고통해 CustomEvent 분발에각개컴포넌트
+ * 단축키 실행 Hook
+ * 메인 프로세스에서 오는 단축키 트리거 이벤트를 수신하여 CustomEvent로 각 컴포넌트에 전달
  */
 export function useShortcutExecutor() {
   useEffect(() => {
     const handleShortcut = (_event: any, action: ShortcutAction) => {
-      // 기반으로다른의 action 분발 CustomEvent 의컴포넌트처리
+      // action에 따라 해당 컴포넌트에서 처리할 CustomEvent 발행
       switch (action) {
-        // 노트북관리
+        // 노트북 관리
         case ShortcutAction.CREATE_NOTEBOOK:
           window.dispatchEvent(new CustomEvent('shortcut:create-notebook'))
           break
@@ -19,7 +19,7 @@ export function useShortcutExecutor() {
           window.dispatchEvent(new CustomEvent('shortcut:close-notebook'))
           break
 
-        // 패널전환
+        // 패널 전환
         case ShortcutAction.TOGGLE_KNOWLEDGE_BASE:
           window.dispatchEvent(new CustomEvent('shortcut:toggle-knowledge-base'))
           break
@@ -38,7 +38,7 @@ export function useShortcutExecutor() {
       }
     }
 
-    // 감시래자체메인프로세스의단축키트리거이벤트
+    // 메인 프로세스의 단축키 트리거 이벤트 수신
     window.electron.ipcRenderer.on('shortcut:triggered', handleShortcut)
 
     return () => {

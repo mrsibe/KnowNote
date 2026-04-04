@@ -2,5 +2,5 @@
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference
 /// <reference path="../../../preload/index.d.ts" />
 
-// 이파일사용 중단됨，Window 인터페이스정의 src/preload/index.d.ts 에서
-// 이 파일을 유지파일예하위 호환성，실제타입정의참조하세요 preload/index.d.ts
+// 이 파일은 더 이상 사용되지 않으며, Window 인터페이스 정의는 src/preload/index.d.ts에 있음
+// 하위 호환성을 위해 이 파일을 유지하며, 실제 타입 정의는 preload/index.d.ts를 참조하세요

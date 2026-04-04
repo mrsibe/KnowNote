@@ -6,15 +6,15 @@ import { settingsManager } from '../config'
 let quizWindow: BrowserWindow | null = null
 
 /**
- * 생성퀴즈윈도우
- * @param notebookId - 노트북 ID（용도:생성새퀴즈）
- * @param quizId - 퀴즈 ID（용도:조회보기특정버전，선택）
+ * 퀴즈 윈도우 생성
+ * @param notebookId - 노트북 ID (용도: 새 퀴즈 생성)
+ * @param quizId - 퀴즈 ID (용도: 특정 버전 보기, 선택)
  */
 export function createQuizWindow(notebookId: string, quizId?: string): void {
-  // 만약퀴즈윈도우이미존재，집중포커스그리고반환
+  // 퀴즈 윈도우가 이미 존재하면 포커스 후 반환
   if (quizWindow && !quizWindow.isDestroyed()) {
     quizWindow.focus()
-    // 만약전달입력새의라우트매개변수，업데이트 URL
+    // 새 라우트 파라미터가 전달되면 URL 업데이트
     const route = quizId ? `/quiz/view/${quizId}` : `/quiz/${notebookId}`
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
       quizWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
@@ -26,11 +26,11 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
     return
   }
 
-  // 기반으로사용자테마설정배배경색
+  // 사용자 테마 설정에 따라 배경색 설정
   const theme = settingsManager.getSettingSync('theme')
   const backgroundColor = theme === 'dark' ? '#1a1b1e' : '#fafafa'
 
-  // 생성퀴즈윈도우
+  // 퀴즈 윈도우 생성
   quizWindow = new BrowserWindow({
     width: 900,
     height: 700,
@@ -59,7 +59,7 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
     quizWindow = null
   })
 
-  // 감시테마변경
+  // 테마 변경 감지
   settingsManager.onSettingsChangeSync((newSettings) => {
     if (quizWindow && !quizWindow.isDestroyed()) {
       const newBackgroundColor = newSettings.theme === 'dark' ? '#1a1b1e' : '#fafafa'
@@ -67,7 +67,7 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
     }
   })
 
-  // 로드퀴즈페이지
+  // 퀴즈 페이지 로드
   const route = quizId ? `/quiz/view/${quizId}` : `/quiz/${notebookId}`
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     quizWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
@@ -79,14 +79,14 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
 }
 
 /**
- * 조회퀴즈윈도우인스턴스
+ * 퀴즈 윈도우 인스턴스 조회
  */
 export function getQuizWindow(): BrowserWindow | null {
   return quizWindow
 }
 
 /**
- * 소멸퀴즈윈도우
+ * 퀴즈 윈도우 파괴
  */
 export function destroyQuizWindow(): void {
   if (quizWindow && !quizWindow.isDestroyed()) {

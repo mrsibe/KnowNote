@@ -1,6 +1,6 @@
 /**
  * VectorStoreManager
- * 관리다른 notebook 의 VectorStore 인스턴스
+ * 다른 notebook의 VectorStore 인스턴스 관리
  */
 
 import type { VectorStore, VectorStoreType } from './types'
@@ -8,8 +8,8 @@ import { SQLiteVectorStore } from './SQLiteVectorStore'
 import Logger from '../../shared/utils/logger'
 
 /**
- * 벡터 저장소 관리자
- * 매개 notebook 차원보호독립즉시의 VectorStore 인스턴스
+ * 벡터 스토어 관리자
+ * 각 notebook마다 독립적인 VectorStore 인스턴스 유지
  */
 export class VectorStoreManager {
   private stores: Map<string, VectorStore> = new Map()
@@ -17,10 +17,10 @@ export class VectorStoreManager {
   private defaultDimensions: number = 1024
 
   /**
-   * 조회또는생성 notebook 의 VectorStore
+   * notebook의 VectorStore 조회 또는 생성
    * @param notebookId 노트북 ID
-   * @param type 저장타입（선택，기본 sqlite）
-   * @param dimensions 벡터 차원（선택，만약제공덮어쓰기기본값）
+   * @param type 스토어 타입 (선택, 기본값 sqlite)
+   * @param dimensions 벡터 차원 (선택, 제공 시 기본값 덮어쓰기)
    */
   async getStore(
     notebookId: string,
@@ -31,14 +31,14 @@ export class VectorStoreManager {
     const key = `${notebookId}_${storeType}`
     const targetDimensions = dimensions || this.defaultDimensions
 
-    // 확인예아니오이미 존재함또한차원매칭
+    // 이미 존재하고 차원이 일치하는지 확인
     const existingStore = this.stores.get(key)
     if (existingStore) {
       const existingDimensions = existingStore.getDimensions()
       if (existingDimensions === targetDimensions) {
         return existingStore
       } else {
-        // 차원아닌매칭，필요재새생성
+        // 차원 불일치, 재생성 필요
         Logger.warn(
           'VectorStoreManager',
           `Dimension mismatch for ${key}: existing=${existingDimensions}, new=${targetDimensions}. Recreating store.`
@@ -48,7 +48,7 @@ export class VectorStoreManager {
       }
     }
 
-    // 생성새의 VectorStore
+    // 새 VectorStore 생성
     const store = this.createStore(storeType)
     await store.initialize({
       notebookId,
@@ -65,17 +65,17 @@ export class VectorStoreManager {
   }
 
   /**
-   * 생성 VectorStore 인스턴스
+   * VectorStore 인스턴스 생성
    */
   private createStore(type: VectorStoreType): VectorStore {
     switch (type) {
       case 'sqlite':
         return new SQLiteVectorStore()
       case 'lancedb':
-        // TODO: 현재 LanceDBVectorStore
+        // TODO: LanceDBVectorStore 구현
         throw new Error('LanceDB vector store not implemented yet')
       case 'qdrant':
-        // TODO: 현재 QdrantVectorStore
+        // TODO: QdrantVectorStore 구현
         throw new Error('Qdrant vector store not implemented yet')
       default:
         throw new Error(`Unknown vector store type: ${type}`)
@@ -83,7 +83,7 @@ export class VectorStoreManager {
   }
 
   /**
-   * 닫기가리키는정 notebook 의저장
+   * 지정된 notebook의 스토어 닫기
    */
   async closeStore(notebookId: string): Promise<void> {
     const keysToDelete: string[] = []
@@ -100,7 +100,7 @@ export class VectorStoreManager {
   }
 
   /**
-   * 닫기모든저장
+   * 모든 스토어 닫기
    */
   async closeAll(): Promise<void> {
     for (const [key, store] of this.stores) {
@@ -112,33 +112,33 @@ export class VectorStoreManager {
   }
 
   /**
-   * 설정기본벡터 차원
+   * 기본 벡터 차원 설정
    */
   setDefaultDimensions(dimensions: number): void {
     this.defaultDimensions = dimensions
   }
 
   /**
-   * 조회기본벡터 차원
+   * 기본 벡터 차원 조회
    */
   getDefaultDimensions(): number {
     return this.defaultDimensions
   }
 
   /**
-   * 설정기본저장타입
+   * 기본 스토어 타입 설정
    */
   setDefaultType(type: VectorStoreType): void {
     this.defaultType = type
   }
 
   /**
-   * 조회열기의저장수량
+   * 열린 스토어 수량 조회
    */
   getStoreCount(): number {
     return this.stores.size
   }
 }
 
-// 내보내기단일예인스턴스
+// 싱글턴 인스턴스 내보내기
 export const vectorStoreManager = new VectorStoreManager()

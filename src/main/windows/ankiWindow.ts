@@ -7,15 +7,15 @@ let ankiWindow: BrowserWindow | null = null
 let settingsUnsubscribe: (() => void) | null = null
 
 /**
- * 생성Anki카드윈도우
- * @param notebookId - 노트북 ID（용도:생성새카드）
- * @param ankiCardId - Anki카드세트 ID（용도:조회보기특정버전，선택）
+ * Anki 카드 윈도우 생성
+ * @param notebookId - 노트북 ID (용도: 새 카드 생성)
+ * @param ankiCardId - Anki 카드 세트 ID (용도: 특정 버전 보기, 선택)
  */
 export function createAnkiWindow(notebookId: string, ankiCardId?: string): void {
-  // 만약Anki윈도우이미존재，집중포커스그리고반환
+  // Anki 윈도우가 이미 존재하면 포커스 후 반환
   if (ankiWindow && !ankiWindow.isDestroyed()) {
     ankiWindow.focus()
-    // 만약전달입력새의라우트매개변수，업데이트 URL
+    // 새 라우트 파라미터가 전달되면 URL 업데이트
     const route = ankiCardId ? `/anki/view/${ankiCardId}` : `/anki/${notebookId}`
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
       ankiWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
@@ -27,12 +27,12 @@ export function createAnkiWindow(notebookId: string, ankiCardId?: string): void 
     return
   }
 
-  // 기반으로사용자테마설정배배경색
+  // 사용자 테마 설정에 따라 배경색 설정
   const theme = settingsManager.getSettingSync('theme')
   const backgroundColor = theme === 'dark' ? '#1a1b1e' : '#fafafa'
   const preferDark = nativeTheme.shouldUseDarkColors || theme === 'dark'
 
-  // 생성Anki카드윈도우
+  // Anki 카드 윈도우 생성
   ankiWindow = new BrowserWindow({
     width: 1000,
     height: 700,
@@ -64,7 +64,7 @@ export function createAnkiWindow(notebookId: string, ankiCardId?: string): void 
   })
 
   ankiWindow.on('closed', () => {
-    // 취소settings감시
+    // settings 감시 해제
     if (settingsUnsubscribe) {
       try {
         settingsUnsubscribe()
@@ -77,18 +77,18 @@ export function createAnkiWindow(notebookId: string, ankiCardId?: string): void 
     ankiWindow = null
   })
 
-  // 감시테마변경（사용 async 버전으로편리조회 unsubscribe）
+  // 테마 변경 감지 (async 버전 사용으로 unsubscribe 편의성)
   settingsManager
     .onSettingsChange((newSettings) => {
       if (ankiWindow && !ankiWindow.isDestroyed()) {
         const newBackgroundColor = newSettings.theme === 'dark' ? '#1a1b1e' : '#fafafa'
         ankiWindow.setBackgroundColor(newBackgroundColor)
-        // 업데이트 titleBarOverlay 의번호색상
+        // titleBarOverlay의 기호 색상 업데이트
         const newSymbol = newSettings.theme === 'dark' ? 'white' : 'black'
         try {
           ankiWindow.setTitleBarOverlay({ symbolColor: newSymbol })
         } catch {
-          // 어떤플랫폼또는이전버전미지원 setTitleBarOverlay
+          // 일부 플랫폼이나 이전 버전에서는 setTitleBarOverlay를 지원하지 않음
         }
       }
     })
@@ -96,7 +96,7 @@ export function createAnkiWindow(notebookId: string, ankiCardId?: string): void 
       settingsUnsubscribe = unsubscribe
     })
 
-  // 로드Anki카드페이지
+  // Anki 카드 페이지 로드
   const route = ankiCardId ? `/anki/view/${ankiCardId}` : `/anki/${notebookId}`
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     ankiWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${route}`)
@@ -108,14 +108,14 @@ export function createAnkiWindow(notebookId: string, ankiCardId?: string): void 
 }
 
 /**
- * 조회Anki윈도우인스턴스
+ * Anki 윈도우 인스턴스 조회
  */
 export function getAnkiWindow(): BrowserWindow | null {
   return ankiWindow
 }
 
 /**
- * 소멸Anki윈도우
+ * Anki 윈도우 파괴
  */
 export function destroyAnkiWindow(): void {
   if (ankiWindow && !ankiWindow.isDestroyed()) {
