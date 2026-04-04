@@ -6,8 +6,6 @@ import { UpdateStatus, UpdateState } from '../../shared/types/update'
  * 자동 업데이트 서비스 (온프레미스 배포용 비활성화됨)
  */
 export class UpdateService {
-  private currentState: UpdateState = { status: UpdateStatus.IDLE }
-  private mainWindow: BrowserWindow | null = null
 
   constructor() {
     // 온프레미스 배포: 자동 업데이트 비활성화
@@ -17,6 +15,7 @@ export class UpdateService {
   /**
    * 메인 윈도우 참조 설정 (업데이트 알림 전송용)
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setMainWindow(_window: BrowserWindow): void {
     return
   }
