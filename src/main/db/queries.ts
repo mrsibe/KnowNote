@@ -1,4 +1,4 @@
-import { eq, desc, and } from 'drizzle-orm'
+import { eq, desc, and, sql } from 'drizzle-orm'
 import { getDatabase, executeCheckpoint } from './index'
 import { chatSessions, chatMessages, notebooks, notes, documents, items } from './schema'
 
@@ -102,24 +102,17 @@ export function getSessionById(sessionId: string) {
 /**
  * 세션 토큰 카운트 업데이트
  */
-export function updateSessionTokens(sessionId: string, tokensToAdd: number) {
+export function updateSessionTokens(sessionId: string, tokensToAdd: number): number | undefined {
   const db = getDatabase()
 
-  // 현재 토큰 수 조회
+  // 단일 SQL로 토큰 수 증가 (N+1 쿼리 방지)
+  db.run(
+    sql`UPDATE ${chatSessions} SET ${chatSessions.totalTokens} = COALESCE(${chatSessions.totalTokens}, 0) + ${tokensToAdd}, ${chatSessions.updatedAt} = ${new Date()} WHERE ${chatSessions.id} = ${sessionId}`
+  )
+
+  // 업데이트된 토큰 수 반환
   const session = getSessionById(sessionId)
-  if (!session) return
-
-  const newTotal = (session.totalTokens || 0) + tokensToAdd
-
-  db.update(chatSessions)
-    .set({
-      totalTokens: newTotal,
-      updatedAt: new Date()
-    })
-    .where(eq(chatSessions.id, sessionId))
-    .run()
-
-  return newTotal
+  return session?.totalTokens ?? undefined
 }
 
 /**

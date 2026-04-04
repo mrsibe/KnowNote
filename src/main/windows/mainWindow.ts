@@ -9,9 +9,11 @@ let mainWindow: BrowserWindow | null = null
  * 메인 윈도우 생성
  */
 export function createMainWindow(): BrowserWindow {
-  // 사용자 테마 설정에 따라 배경색 설정, 윈도우 크기 조정 시 흰색 테두리 방지
+  // 사용자 테마 설정에 따라 배경색 및 타이틀바 색상 설정
   const theme = settingsManager.getSettingSync('theme')
-  const backgroundColor = theme === 'dark' ? '#282c34' : '#fafafa'
+  const isDark = theme === 'dark'
+  const backgroundColor = isDark ? '#282c34' : '#fafafa'
+  const symbolColor = isDark ? '#ffffff' : '#333333'
 
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -20,13 +22,10 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 700,
     show: false,
     autoHideMenuBar: true,
-    // remove the default titlebar
     titleBarStyle: 'hidden',
-    // Position macOS traffic lights (window controls)
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
-    // expose window controls in Windows/Linux
     ...(process.platform !== 'darwin'
-      ? { titleBarOverlay: { color: 'rgba(0,0,0,0)', height: 35, symbolColor: 'white' } }
+      ? { titleBarOverlay: { color: 'rgba(0,0,0,0)', height: 35, symbolColor } }
       : {}),
     backgroundColor,
     webPreferences: {
@@ -44,11 +43,20 @@ export function createMainWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
-  // 테마 변경 감지, 윈도우 배경색 동적 업데이트
+  // 테마 변경 감지, 윈도우 배경색 및 타이틀바 색상 동적 업데이트
   settingsManager.onSettingsChangeSync((newSettings) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
-      const newBackgroundColor = newSettings.theme === 'dark' ? '#282c34' : '#fafafa'
+      const newIsDark = newSettings.theme === 'dark'
+      const newBackgroundColor = newIsDark ? '#282c34' : '#fafafa'
+      const newSymbolColor = newIsDark ? '#ffffff' : '#333333'
       mainWindow.setBackgroundColor(newBackgroundColor)
+      if (process.platform !== 'darwin') {
+        mainWindow.setTitleBarOverlay({
+          color: 'rgba(0,0,0,0)',
+          height: 35,
+          symbolColor: newSymbolColor
+        })
+      }
     }
   })
 
