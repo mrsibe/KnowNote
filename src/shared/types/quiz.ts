@@ -1,15 +1,15 @@
 /**
- * Quiz相关类型定义
- * 答题功能的共享类型
+ * Quiz 관련 타입 정의
+ * 퀴즈 기능의 공유 타입
  */
 
 /**
- * 题目
+ * 문제
  */
 export interface QuizQuestion {
   id: string
   questionText: string
-  options: string[] // 固定4个选项
+  options: string[] // 고정 4개 선택지
   correctAnswer: number // 0-3
   explanation: string
   hints: string[] // 1-2个提示

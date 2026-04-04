@@ -1,19 +1,19 @@
 /**
- * 思维导图树节点(纯逻辑结构,不含UI信息)
+ * 마인드맵 트리 노드 (순수 논리 구조, UI 정보 미포함)
  */
 export interface MindMapTreeNode {
   id: string
-  label: string // 节点文本,≤12字
+  label: string // 노드 텍스트, 12자 이하
   children?: MindMapTreeNode[]
   metadata?: {
-    level: number // 层级: 0-3 (根节点为0)
-    chunkIds: string[] // 关联的chunk IDs
+    level: number // 레벨: 0-3 (루트 노드는 0)
+    chunkIds: string[] // 연관된 chunk ID
     keywords?: string[]
   }
 }
 
 /**
- * LLM生成的原始输出格式
+ * LLM이 생성한 원본 출력 형식
  */
 export interface MindMapGenerationResult {
   rootNode: MindMapTreeNode

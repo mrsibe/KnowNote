@@ -50,7 +50,7 @@ export interface IndexProgress {
 }
 
 /**
- * 知识库统计
+ * 지식 베이스 통계
  */
 export interface KnowledgeStats {
   documentCount: number
@@ -59,7 +59,7 @@ export interface KnowledgeStats {
 }
 
 /**
- * 添加文档选项
+ * 문서 추가 옵션
  */
 export interface AddDocumentOptions {
   title: string
@@ -73,7 +73,7 @@ export interface AddDocumentOptions {
 }
 
 /**
- * 搜索选项
+ * 검색 옵션
  */
 export interface SearchOptions {
   topK?: number

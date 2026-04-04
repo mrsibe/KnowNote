@@ -258,7 +258,7 @@ export class KnowledgeService {
 
         db.insert(embeddings).values(newEmbedding).run()
 
-        // 准备向量数据
+        // 벡터 데이터 준비
         vectorItems.push({
           id: embeddingId,
           chunkId: chunkIds[i],
@@ -267,10 +267,10 @@ export class KnowledgeService {
         })
       }
 
-      // 批量添加到向量存储
+      // 벡터 스토어에 일괄 추가
       await vectorStore.upsert(vectorItems)
 
-      // 6. 更新文档状态
+      // 6. 문서 상태 업데이트
       onProgress?.('finalizing', 95)
       db.update(documents)
         .set({
@@ -290,7 +290,7 @@ export class KnowledgeService {
       )
       return documentId
     } catch (error) {
-      // 更新文档状态为失败
+      // 문서 상태를 실패로 업데이트
       db.update(documents)
         .set({
           status: 'failed',
@@ -306,7 +306,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 从文件添加文档
+   * 파일에서 문서 추가
    */
   async addDocumentFromFile(
     notebookId: string,
@@ -320,7 +320,7 @@ export class KnowledgeService {
     try {
       onProgress?.('parsing_file', 0)
 
-      // 先拷贝文件到知识库目录
+      // 먼저 파일을 지식 베이스 디렉토리로 복사
       localFilePath = await this.copyFileToKnowledgeDir(filePath, documentId)
 
       const parseResult = await this.fileParserService.parseFile(filePath)
@@ -332,8 +332,8 @@ export class KnowledgeService {
       // 1. 문서 레코드 생성（包含 localFilePath）
       onProgress?.('creating_document', 0)
 
-      // 根据 MIME 类型决定文档类型
-      // text/plain 和 text/markdown 可以直接预览
+      // MIME 타입에 따라 문서 타입 결정
+      // text/plain 및 text/markdown은 직접 미리보기 가능
       const docType =
         parseResult.mimeType === 'text/plain' || parseResult.mimeType === 'text/markdown'
           ? 'text'
@@ -442,7 +442,7 @@ export class KnowledgeService {
 
         db.insert(embeddings).values(newEmbedding).run()
 
-        // 准备向量数据
+        // 벡터 데이터 준비
         vectorItems.push({
           id: embeddingId,
           chunkId: chunkIds[i],
@@ -451,10 +451,10 @@ export class KnowledgeService {
         })
       }
 
-      // 批量添加到向量存储
+      // 벡터 스토어에 일괄 추가
       await vectorStore.upsert(vectorItems)
 
-      // 6. 更新文档状态
+      // 6. 문서 상태 업데이트
       onProgress?.('finalizing', 95)
       db.update(documents)
         .set({
@@ -474,12 +474,12 @@ export class KnowledgeService {
       )
       return documentId
     } catch (error) {
-      // 失败时删除已拷贝的文件
+      // 실패 시 복사된 파일 삭제
       if (localFilePath) {
         await this.deleteLocalFile(localFilePath)
       }
 
-      // 更新文档状态为失败
+      // 문서 상태를 실패로 업데이트
       db.update(documents)
         .set({
           status: 'failed',
@@ -495,7 +495,7 @@ export class KnowledgeService {
   }
 
   /**
-   * 从 URL 添加文档
+   * URL에서 문서 추가
    */
   async addDocumentFromUrl(
     notebookId: string,
