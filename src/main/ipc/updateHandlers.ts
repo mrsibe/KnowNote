@@ -3,10 +3,10 @@ import { UpdateService } from '../services/UpdateService'
 import Logger from '../../shared/utils/logger'
 
 /**
- * 등록업데이트관련의 IPC Handlers
+ * 업데이트 관련 IPC Handlers 등록
  */
 export function registerUpdateHandlers(updateService: UpdateService): void {
-  // 확인업데이트
+  // 업데이트 확인
   ipcMain.handle('update:check', async () => {
     try {
       Logger.info('UpdateHandlers', 'Checking for updates...')
@@ -18,7 +18,7 @@ export function registerUpdateHandlers(updateService: UpdateService): void {
     }
   })
 
-  // 다운로드업데이트
+  // 업데이트 다운로드
   ipcMain.handle('update:download', async () => {
     try {
       Logger.info('UpdateHandlers', 'Downloading update...')
@@ -30,7 +30,7 @@ export function registerUpdateHandlers(updateService: UpdateService): void {
     }
   })
 
-  // 안장업데이트（뒤로그리고안장）
+  // 업데이트 설치 (종료 후 설치)
   ipcMain.handle('update:install', async () => {
     try {
       Logger.info('UpdateHandlers', 'Installing update...')
@@ -42,7 +42,7 @@ export function registerUpdateHandlers(updateService: UpdateService): void {
     }
   })
 
-  // 현재 조회업데이트상태
+  // 현재 업데이트 상태 조회
   ipcMain.handle('update:get-state', async () => {
     try {
       const state = updateService.getState()

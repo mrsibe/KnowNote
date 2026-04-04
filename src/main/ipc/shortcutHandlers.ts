@@ -5,7 +5,7 @@ import { ShortcutManager } from '../services/ShortcutManager'
 import type { StoreSchema } from '../config/types'
 
 /**
- * 등록단축키관련의 IPC Handlers
+ * 단축키 관련 IPC Handlers 등록
  */
 export function registerShortcutHandlers(
   shortcutManager: ShortcutManager,
@@ -24,17 +24,17 @@ export function registerShortcutHandlers(
     }
   )
 
-  // 전환단축키의활성화/비활성화상태
+  // 단축키 활성화/비활성화 상태 토글
   ipcMain.handle('shortcuts:toggle', (_event, action: ShortcutAction, enabled: boolean): void => {
     shortcutManager.toggleShortcut(action, enabled)
   })
 
-  // 재단일개단축키기본값
+  // 단일 단축키를 기본값으로 재설정
   ipcMain.handle('shortcuts:resetSingle', (_event, action: ShortcutAction): void => {
     shortcutManager.resetSingle(action)
   })
 
-  // 재기본설정
+  // 기본 설정으로 재설정
   ipcMain.handle('shortcuts:reset', (): void => {
     shortcutManager.resetToDefaults()
   })

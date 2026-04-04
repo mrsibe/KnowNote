@@ -1,6 +1,6 @@
 /**
  * MindMap IPC Handlers
- * 마인드맵관련의 IPC 처리함수
+ * 마인드맵 관련 IPC 처리 함수
  */
 
 import { ipcMain, IpcMainInvokeEvent } from 'electron'
@@ -9,7 +9,7 @@ import { createMindMapWindow } from '../windows/mindMapWindow'
 import Logger from '../../shared/utils/logger'
 
 /**
- * 등록마인드맵관련 IPC Handlers
+ * 마인드맵 관련 IPC Handlers 등록
  */
 export function registerMindMapHandlers(mindMapService: MindMapService) {
   // 마인드맵 생성
@@ -22,7 +22,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
         const mindMapId = await mindMapService.generateMindMap(
           args.notebookId,
           (stage, progress) => {
-            // 전송진행업데이트（확인윈도우예아니오아직존재）
+            // 진행률 업데이트 전송 (윈도우 존재 여부 확인)
             if (!event.sender.isDestroyed()) {
               event.sender.send('mindmap:progress', {
                 notebookId: args.notebookId,
@@ -41,7 +41,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   )
 
-  // 조회최신마인드맵
+  // 최신 마인드맵 조회
   ipcMain.handle('mindmap:get-latest', async (_, args: { notebookId: string }) => {
     try {
       Logger.debug('MindMapHandlers', 'get-latest:', args)
@@ -53,7 +53,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   })
 
-  // 마인드맵 조회상세
+  // 마인드맵 상세 조회
   ipcMain.handle('mindmap:get', async (_, args: { mindMapId: string }) => {
     try {
       Logger.debug('MindMapHandlers', 'get:', args)
@@ -65,7 +65,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   })
 
-  // 조회노드연관된chunks
+  // 노드 연관 chunks 조회
   ipcMain.handle(
     'mindmap:get-node-chunks',
     async (_, args: { mindMapId: string; nodeId: string }) => {
@@ -80,7 +80,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   )
 
-  // 업데이트마인드맵
+  // 마인드맵 업데이트
   ipcMain.handle(
     'mindmap:update',
     async (_, args: { mindMapId: string; updates: Partial<{ title: string }> }) => {
@@ -107,7 +107,7 @@ export function registerMindMapHandlers(mindMapService: MindMapService) {
     }
   })
 
-  // 열기마인드맵윈도우
+  // 마인드맵 윈도우 열기
   ipcMain.handle(
     'mindmap:open-window',
     async (_, args: { notebookId: string; mindMapId?: string }) => {

@@ -3,7 +3,7 @@ import { settingsManager, type AppSettings, defaultSettings } from '../config'
 import { SettingsSchemas, validate } from './validation'
 
 /**
- * 방향모든윈도우광범위재생설정변경
+ * 모든 윈도우에 설정 변경 브로드캐스트
  */
 function broadcastSettingsChange(newSettings: AppSettings, oldSettings: AppSettings): void {
   BrowserWindow.getAllWindows().forEach((window) => {
@@ -14,7 +14,7 @@ function broadcastSettingsChange(newSettings: AppSettings, oldSettings: AppSetti
 }
 
 /**
- * 등록설정관련의 IPC Handlers
+ * 설정 관련 IPC Handlers 등록
  */
 export function registerSettingsHandlers(): void {
   // 모든 설정 조회
@@ -22,7 +22,7 @@ export function registerSettingsHandlers(): void {
     return await settingsManager.getAllSettings()
   })
 
-  // 단일 설정 조회（포함하는매개변수검증）
+  // 단일 설정 조회 (매개변수 검증 포함)
   ipcMain.handle(
     'settings:get',
     validate(SettingsSchemas.get, async (args) => {
@@ -30,7 +30,7 @@ export function registerSettingsHandlers(): void {
     })
   )
 
-  // 설정 업데이트（포함하는매개변수검증）
+  // 설정 업데이트 (매개변수 검증 포함)
   ipcMain.handle(
     'settings:update',
     validate(SettingsSchemas.update, async (args) => {
@@ -39,7 +39,7 @@ export function registerSettingsHandlers(): void {
     })
   )
 
-  // 설정단일개값（포함하는매개변수검증）
+  // 단일 값 설정 (매개변수 검증 포함)
   ipcMain.handle(
     'settings:set',
     validate(SettingsSchemas.set, async (args) => {
@@ -54,12 +54,12 @@ export function registerSettingsHandlers(): void {
     return await settingsManager.getAllSettings()
   })
 
-  // 조회기본힌트
+  // 기본 프롬프트 조회
   ipcMain.handle('settings:getDefaultPrompts', async () => {
     return defaultSettings.prompts
   })
 
-  // 감시설정변경그리고광범위재생에모든윈도우
+  // 설정 변경 감지 및 모든 윈도우에 브로드캐스트
   settingsManager.onSettingsChange((newSettings, oldSettings) => {
     console.log('[IPC] Settings changed, broadcasting to all windows')
     broadcastSettingsChange(newSettings, oldSettings)
