@@ -6,18 +6,17 @@ import { ProviderSchemas, validate } from './validation'
 import { getBuiltinModels } from '../../shared/config/models'
 
 /**
- * 등록 Provider 설정관련의 IPC Handlers
+ * Provider 설정 관련 IPC 핸들러 등록
  */
 export function registerProviderHandlers(providerManager: ProviderManager) {
-  // 제공자 설정 저장（직접사용 Electron Store，즉시생효）（포함하는매개변수검증）
+  // 프로바이더 설정 저장 (Electron Store 직접 사용, 즉시 반영) (매개변수 검증 포함)
   ipcMain.handle(
     'save-provider-config',
     validate(ProviderSchemas.saveProviderConfig, async (args) => {
       await providersManager.saveProviderConfig(args.providerName, args.config, args.enabled)
 
-      // 만약예자체정의제공자또한방금활성화,등록에 ProviderManager
+      // 사용자 정의 프로바이더이면서 활성화된 경우, ProviderManager에 등록
       if (args.enabled && !providerManager.getDescriptor(args.providerName)) {
-        // 예하나개새의자체정의제공자,필요등록
         const customConfig = {
           providerName: args.providerName,
           displayName: args.config.displayName || args.providerName,
@@ -30,14 +29,14 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
         }
       }
 
-      // 광범위재생 Provider 설정변더이벤트에모든윈도우
+      // 모든 윈도우에 Provider 설정 변경 이벤트 브로드캐스트
       BrowserWindow.getAllWindows().forEach((win) => {
         win.webContents.send('provider-config-changed')
       })
     })
   )
 
-  // 조회단일개제공자설정（에서 Electron Store 읽기）（포함하는매개변수검증）
+  // 단일 프로바이더 설정 조회 (Electron Store에서 읽기) (매개변수 검증 포함)
   ipcMain.handle(
     'get-provider-config',
     validate(ProviderSchemas.getProviderConfig, async (args) => {
@@ -45,24 +44,24 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
     })
   )
 
-  // 모든 제공자 설정 조회（에서 Electron Store 읽기）
+  // 모든 프로바이더 설정 조회 (Electron Store에서 읽기)
   ipcMain.handle('get-all-provider-configs', async () => {
     return await providersManager.getAllProviderConfigs()
   })
 
-  // 제공자 설정 삭제（포함하는매개변수검증）
+  // 프로바이더 설정 삭제 (매개변수 검증 포함)
   ipcMain.handle(
     'delete-provider-config',
     validate(ProviderSchemas.deleteProviderConfig, async (args) => {
       await providersManager.deleteProviderConfig(args.providerName)
-      // 광범위재생 Provider 설정변더이벤트에모든윈도우
+      // 모든 윈도우에 Provider 설정 변경 이벤트 브로드캐스트
       BrowserWindow.getAllWindows().forEach((win) => {
         win.webContents.send('provider-config-changed')
       })
     })
   )
 
-  // 검증제공자설정（포함하는매개변수검증）
+  // 프로바이더 설정 검증 (매개변수 검증 포함)
   ipcMain.handle(
     'validate-provider-config',
     validate(ProviderSchemas.validateProviderConfig, async (args) => {
@@ -74,87 +73,99 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
     })
   )
 
-  // 모델 목록 조회（포함하는매개변수검증）
+  // 모델 목록 조회 (매개변수 검증 포함)
   ipcMain.handle(
     'fetch-models',
     validate(ProviderSchemas.fetchModels, async (args) => {
       try {
-        // 1. 조회내장모델（시작최종사용 가능）
+        // 1. 내장 모델 조회 (항상 사용 가능)
         const builtinModels = getBuiltinModels(args.providerName)
 
-        // 2. 시도시도네트워크네트워크요청조회최신모델
+        // 2. 네트워크 요청으로 최신 모델 조회 시도
         try {
           let url = ''
           let rawModels: any[] = []
 
-          // 내장제공자사용하드인코딩의 URL
+          // 내장 프로바이더별 URL 설정
           if (args.providerName === 'openai') {
             url = 'https://api.openai.com/v1/models'
           } else if (args.providerName === 'deepseek') {
             url = 'https://api.deepseek.com/models'
-          } else if (args.providerName === 'siliconflow') {
-            url = 'https://api.siliconflow.cn/v1/models'
-          } else if (args.providerName === 'qwen') {
-            url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/models'
-          } else if (args.providerName === 'kimi') {
-            url = 'https://api.moonshot.cn/v1/models'
-          } else if (args.providerName === 'ollama') {
-            // Ollama: 먼저시도시도 OpenAI 겸용형식，실패후회뒤로에원본생형식
+          } else if (args.providerName === 'ollama' || args.providerName === 'lmstudio') {
+            // 로컬 프로바이더: 설정에서 baseUrl 조회
             const providerConfig = await providersManager.getProviderConfig(args.providerName)
-            const baseUrl = providerConfig?.config.baseUrl || 'http://localhost:11434'
+            const defaultBaseUrl =
+              args.providerName === 'ollama'
+                ? 'http://localhost:11434'
+                : 'http://localhost:1234/v1'
+            const baseUrl = providerConfig?.config.baseUrl || defaultBaseUrl
 
-            // ���동제외끝끝의 /api 또는 / (만약존재)
-            const cleanBaseUrl = baseUrl.replace(/\/(api)?\/?$/, '')
+            if (args.providerName === 'ollama') {
+              // Ollama: OpenAI 호환 형식 시도 후 실패 시 네이티브 형식으로 폴백
+              const cleanBaseUrl = baseUrl.replace(/\/(api)?\/?$/, '')
+              const openaiUrl = `${cleanBaseUrl}/v1/models`
+              console.log(`[Ollama] Trying OpenAI-compatible format: ${openaiUrl}`)
 
-            // 시도시도 OpenAI 겸용형식
-            const openaiUrl = `${cleanBaseUrl}/v1/models`
-            console.log(`[Ollama] Trying OpenAI-compatible format: ${openaiUrl}`)
+              try {
+                const openaiResponse = await fetch(openaiUrl, {
+                  method: 'GET',
+                  headers: { Accept: 'application/json' }
+                })
 
-            try {
-              const openaiResponse = await fetch(openaiUrl, {
-                method: 'GET',
-                headers: {
-                  Accept: 'application/json'
+                if (openaiResponse.ok) {
+                  const openaiData = await openaiResponse.json()
+                  rawModels = openaiData.data || []
+                  console.log(
+                    `[Ollama] Successfully fetched ${rawModels.length} models using OpenAI format`
+                  )
+                } else {
+                  throw new Error(`OpenAI format failed with status: ${openaiResponse.status}`)
                 }
-              })
-
-              if (openaiResponse.ok) {
-                const openaiData = await openaiResponse.json()
-                rawModels = openaiData.data || []
+              } catch (openaiError) {
+                // Ollama 네이티브 형식으로 폴백
                 console.log(
-                  `[Ollama] Successfully fetched ${rawModels.length} models using OpenAI format`
+                  `[Ollama] OpenAI format failed, falling back to native format:`,
+                  openaiError
                 )
-              } else {
-                throw new Error(`OpenAI format failed with status: ${openaiResponse.status}`)
-              }
-            } catch (openaiError) {
-              // 회뒤로에 Ollama 원본생형식
-              console.log(
-                `[Ollama] OpenAI format failed, falling back to native format:`,
-                openaiError
-              )
-              const nativeUrl = `${cleanBaseUrl}/api/tags`
-              console.log(`[Ollama] Trying native format: ${nativeUrl}`)
+                const nativeUrl = `${cleanBaseUrl}/api/tags`
+                console.log(`[Ollama] Trying native format: ${nativeUrl}`)
 
-              const nativeResponse = await fetch(nativeUrl, {
-                method: 'GET',
-                headers: {
-                  Accept: 'application/json'
+                const nativeResponse = await fetch(nativeUrl, {
+                  method: 'GET',
+                  headers: { Accept: 'application/json' }
+                })
+
+                if (!nativeResponse.ok) {
+                  throw new Error(`HTTP error! status: ${nativeResponse.status}`)
                 }
+
+                const nativeData = await nativeResponse.json()
+                rawModels = nativeData.models || []
+                console.log(
+                  `[Ollama] Successfully fetched ${rawModels.length} models using native format`
+                )
+              }
+            } else {
+              // LM Studio: OpenAI 호환 API 직접 사용
+              const cleanBaseUrl = baseUrl.replace(/\/?$/, '')
+              url = `${cleanBaseUrl}/models`
+              console.log(`[LM Studio] Fetching models from: ${url}`)
+
+              const response = await fetch(url, {
+                method: 'GET',
+                headers: { Accept: 'application/json' }
               })
 
-              if (!nativeResponse.ok) {
-                throw new Error(`HTTP error! status: ${nativeResponse.status}`)
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`)
               }
 
-              const nativeData = await nativeResponse.json()
-              rawModels = nativeData.models || []
-              console.log(
-                `[Ollama] Successfully fetched ${rawModels.length} models using native format`
-              )
+              const data = await response.json()
+              rawModels = data.data || data.models || []
+              console.log(`[LM Studio] Fetched ${rawModels.length} models`)
             }
 
-            // Ollama 특특수처리：규범화그리고병합
+            // 로컬 프로바이더 모델 정규화 및 병합
             const normalizedModels = rawModels.map((model: any) => ({
               id: model.id || model.name || '',
               object: model.object || 'model',
@@ -165,7 +176,7 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
 
             const remoteModels = enrichModelsWithType(normalizedModels)
 
-            // 스마트병합전략：원격정보 + 내장메타데이터
+            // 스마트 병합 전략: 원격 정보 + 내장 메타데이터
             const mergedModels = mergeModels(builtinModels, remoteModels)
 
             console.log(
@@ -180,10 +191,8 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
               builtinCount: builtinModels.length,
               remoteCount: remoteModels.length
             }
-          } else if (args.providerName === 'zhipu') {
-            url = 'https://open.bigmodel.cn/api/paas/v4/models'
           } else {
-            // 자체정의제공자：에서설정에서조회 baseUrl
+            // 사용자 정의 프로바이더: 설정에서 baseUrl 조회
             const providerConfig = await providersManager.getProviderConfig(args.providerName)
             if (!providerConfig || !providerConfig.config.baseUrl) {
               throw new Error(`Custom provider ${args.providerName} has no baseUrl configured`)
@@ -192,7 +201,7 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
             url = baseUrl.endsWith('/') ? `${baseUrl}models` : `${baseUrl}/models`
           }
 
-          // 기타 provider 의통용처리
+          // 기타 provider 공통 처리
           const headers: Record<string, string> = {
             Accept: 'application/json',
             Authorization: `Bearer ${args.apiKey}`
@@ -210,7 +219,7 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
           const data = await response.json()
           rawModels = data.data || data.models || []
 
-          // 규범화모델객체
+          // 모델 객체 정규화
           const normalizedModels = rawModels.map((model: any) => ({
             id: model.id || model.name || '',
             object: model.object || 'model',
@@ -219,19 +228,17 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
             type: model.type
           }))
 
-          // 모델추가타입정보
+          // 모델 타입 정보 추가
           const remoteModels = enrichModelsWithType(normalizedModels)
 
-          // 3. 스마트병합전략：원격정보 + 내장메타데이터
-          // 원격필드우선: id, owned_by, created (반영최신상태)
-          // 내장필드우선: type, max_context, description (정밀하게설정)
+          // 3. 스마트 병합 전략: 원격 정보 + 내장 메타데이터
           const mergedModels = mergeModels(builtinModels, remoteModels)
 
           console.log(
             `[Models] ${args.providerName}: ${builtinModels.length} builtin + ${remoteModels.length} remote = ${mergedModels.length} total`
           )
 
-          // 4. 저장병합후의모델목록
+          // 4. 병합된 모델 목록 저장
           await providersManager.saveProviderModels(args.providerName, mergedModels)
 
           return {
@@ -241,7 +248,7 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
             remoteCount: remoteModels.length
           }
         } catch (networkError) {
-          // 5. 네트워크네트워크실패，반환내장모델（만약있는）
+          // 5. 네트워크 실패 시 내장 모델 반환 (있는 경우)
           console.warn(`[Fetch Failed] ${args.providerName}:`, networkError)
 
           if (builtinModels.length > 0) {
@@ -253,8 +260,8 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
             }
           }
 
-          // 6. 없있는내장모델，던짐오류
-          throw new Error(`없음방법모델 목록 조회: ${(networkError as Error).message}`)
+          // 6. 내장 모델도 없으면 에러 발생
+          throw new Error(`모델 목록을 조회할 수 없습니다: ${(networkError as Error).message}`)
         }
       } catch (error) {
         console.error('Failed to fetch models:', error)
@@ -263,7 +270,7 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
     })
   )
 
-  // 조회캐시의모델목록（포함하는매개변수검증）
+  // 캐시된 모델 목록 조회 (매개변수 검증 포함)
   ipcMain.handle(
     'get-provider-models',
     validate(ProviderSchemas.getProviderModels, async (args) => {
