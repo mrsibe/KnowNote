@@ -9,7 +9,7 @@ import {
 import Logger from '../../shared/utils/logger'
 
 /**
- * 提供商配置管理器
+ * 제공자 설정 관리자
  */
 export class ProviderConfigManager {
   private getStore: () => Promise<Store<any>>
@@ -19,7 +19,7 @@ export class ProviderConfigManager {
   }
 
   /**
-   * 保存提供商配置（自动加密敏感字段）
+   * 제공자 설정 저장 (민감 필드 자동 암호화)
    */
   async saveProviderConfig(
     providerName: string,
@@ -29,7 +29,7 @@ export class ProviderConfigManager {
     const store = await this.getStore()
     const providers = store.get('providers', {})
 
-    // 加密敏感字段（如 apiKey）
+    // 민감 필드 암호화 (예: apiKey)
     let encryptedConfig = config
     if (isEncryptionAvailable()) {
       encryptedConfig = encryptProviderConfig(config)
@@ -52,7 +52,7 @@ export class ProviderConfigManager {
   }
 
   /**
-   * 获取提供商配置（自动解密敏感字段）
+   * 제공자 설정 조회 (민감 필드 자동 복호화)
    */
   async getProviderConfig(providerName: string): Promise<ProviderConfig | null> {
     const store = await this.getStore()
@@ -63,7 +63,7 @@ export class ProviderConfigManager {
       return null
     }
 
-    // 解密敏感字段
+    // 민감 필드 복호화
     const decryptedConfig = decryptProviderConfig(providerConfig.config)
 
     return {
@@ -73,13 +73,13 @@ export class ProviderConfigManager {
   }
 
   /**
-   * 获取所有提供商配置（自动解密敏感字段）
+   * 모든 제공자 설정 조회 (민감 필드 자동 복호화)
    */
   async getAllProviderConfigs(): Promise<ProviderConfig[]> {
     const store = await this.getStore()
     const providers = store.get('providers', {})
 
-    // 解密每个配置
+    // 각 설정 복호화
     return Object.values(providers).map((providerConfig: any) => ({
       ...providerConfig,
       config: decryptProviderConfig(providerConfig.config)
@@ -87,7 +87,7 @@ export class ProviderConfigManager {
   }
 
   /**
-   * 删除提供商配置
+   * 제공자 설정 삭제
    */
   async deleteProviderConfig(providerName: string): Promise<void> {
     const store = await this.getStore()
@@ -97,7 +97,7 @@ export class ProviderConfigManager {
   }
 
   /**
-   * 监听提供商配置变化
+   * 제공자 설정 변경 감시
    */
   async onProvidersChange(
     callback: (
@@ -114,7 +114,7 @@ export class ProviderConfigManager {
   }
 
   /**
-   * 保存提供商模型列表
+   * 제공자 모델 목록 저장
    */
   async saveProviderModels(providerName: string, models: any[]): Promise<void> {
     const store = await this.getStore()
@@ -128,7 +128,7 @@ export class ProviderConfigManager {
   }
 
   /**
-   * 获取提供商模型列表（带向后兼容）
+   * 제공자 모델 목록 조회 (하위 호환성 포함)
    */
   async getProviderModels(providerName: string): Promise<any[]> {
     const store = await this.getStore()
@@ -137,7 +137,7 @@ export class ProviderConfigManager {
 
     let models = providerModels?.models || []
 
-    // 向后兼容：如果模型没有 type 字段，自动添加
+    // 하위 호환성: 모델에 type 필드가 없으면 자동 추가
     const hasTypeField = models.length > 0 && models.some((m) => m.type)
 
     if (!hasTypeField && models.length > 0) {
@@ -145,7 +145,7 @@ export class ProviderConfigManager {
         `[ProviderConfigManager] Migrating models for ${providerName} - adding type field`
       )
       models = enrichModelsWithType(models)
-      // 更新存储
+      // 저장소 업데이트
       await this.saveProviderModels(providerName, models)
     }
 

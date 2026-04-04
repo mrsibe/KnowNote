@@ -10,7 +10,7 @@ import {
 import { ProviderManager } from './providers/ProviderManager'
 import { SessionAutoSwitchService } from './services/SessionAutoSwitchService'
 import { KnowledgeService } from './services/KnowledgeService'
-import { UpdateService } from './services/UpdateService'
+// import { UpdateService } from './services/UpdateService' // 온프레미스 배포: 자동 업데이트 비활성화
 import { ShortcutManager } from './services/ShortcutManager'
 import { createMainWindow } from './windows'
 import { registerAllHandlers } from './ipc'
@@ -20,7 +20,7 @@ import Logger from '../shared/utils/logger'
 let providerManager: ProviderManager | null = null
 let sessionAutoSwitchService: SessionAutoSwitchService | null = null
 let knowledgeService: KnowledgeService | null = null
-let updateService: UpdateService | null = null
+// let updateService: UpdateService | null = null // 온프레미스 배포: 자동 업데이트 비활성화
 let shortcutManager: ShortcutManager | null = null
 let isQuitting = false // Flag to indicate if app is quitting
 
@@ -61,10 +61,10 @@ app.whenReady().then(async () => {
   knowledgeService = new KnowledgeService(providerManager)
   Logger.info('Main', 'Knowledge Service initialized')
 
-  // Initialize Update Service
-  Logger.info('Main', 'Initializing Update Service...')
-  updateService = new UpdateService()
-  Logger.info('Main', 'Update Service initialized')
+  // 온프레미스 배포: 자동 업데이트 서비스 비활성화
+  // Logger.info('Main', 'Initializing Update Service...')
+  // updateService = new UpdateService()
+  // Logger.info('Main', 'Update Service initialized')
 
   // Initialize electron-store
   Logger.info('Main', 'Initializing electron-store...')
@@ -76,12 +76,11 @@ app.whenReady().then(async () => {
   shortcutManager = new ShortcutManager(store)
   Logger.info('Main', 'Shortcut Manager initialized')
 
-  // Register all IPC Handlers
+  // 모든 IPC 핸들러 등록
   registerAllHandlers(
     providerManager,
     sessionAutoSwitchService,
     knowledgeService,
-    updateService,
     shortcutManager,
     store
   )
@@ -115,16 +114,16 @@ app.whenReady().then(async () => {
   // Create main window
   const mainWindow = createMainWindow()
 
-  // Set main window for update service
-  updateService.setMainWindow(mainWindow)
+  // 온프레미스 배포: 업데이트 서비스 메인 윈도우 설정 비활성화
+  // updateService.setMainWindow(mainWindow)
 
-  // Set main window for shortcut manager and register shortcuts
+  // 단축키 매니저에 메인 윈도우 설정 및 단축키 등록
   shortcutManager.setMainWindow(mainWindow)
   shortcutManager.registerShortcuts()
   Logger.info('Main', 'Shortcuts registered')
 
-  // Check for updates on startup (after 5 seconds)
-  updateService.checkForUpdatesOnStartup()
+  // 온프레미스 배포: 시작 시 업데이트 확인 비활성화
+  // updateService.checkForUpdatesOnStartup()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

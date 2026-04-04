@@ -3,7 +3,7 @@ import type { StoreSchema } from './types'
 import { defaultSettings, defaultShortcuts } from './defaults'
 
 /**
- * 创建 electron-store 实例（使用动态导入）
+ * electron-store 인스턴스 생성 (동적 임포트 사용)
  */
 let store: Store<StoreSchema> | null = null
 
@@ -17,8 +17,8 @@ export async function getStore(): Promise<Store<StoreSchema>> {
         shortcuts: defaultShortcuts
       },
       name: 'knownote-config',
-      // 文件会保存在: ~/Library/Application Support/knownote/knownote-config.json (macOS)
-      encryptionKey: undefined // 如果需要加密可以设置密钥
+      // 파일 저장 위치: ~/Library/Application Support/knownote/knownote-config.json (macOS)
+      encryptionKey: undefined // 암호화가 필요한 경우 키 설정 가능
     })
   }
   return store

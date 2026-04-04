@@ -3,12 +3,12 @@ import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 
 // Import language resources
-import zhCNCommon from '../locales/zh-CN/common.json'
-import zhCNChat from '../locales/zh-CN/chat.json'
-import zhCNUi from '../locales/zh-CN/ui.json'
-import zhCNNotebook from '../locales/zh-CN/notebook.json'
-import zhCNSettings from '../locales/zh-CN/settings.json'
-import zhCNShortcuts from '../locales/zh-CN/shortcuts.json'
+import koKRCommon from '../locales/ko-KR/common.json'
+import koKRChat from '../locales/ko-KR/chat.json'
+import koKRUi from '../locales/ko-KR/ui.json'
+import koKRNotebook from '../locales/ko-KR/notebook.json'
+import koKRSettings from '../locales/ko-KR/settings.json'
+import koKRShortcuts from '../locales/ko-KR/shortcuts.json'
 
 import enUSCommon from '../locales/en-US/common.json'
 import enUSChat from '../locales/en-US/chat.json'
@@ -23,7 +23,7 @@ i18n
   .use(initReactI18next)
   .init({
     fallbackLng: 'en-US',
-    lng: 'en-US', // 默认语言
+    lng: 'ko-KR', // 기본 언어
     debug: process.env.NODE_ENV === 'development',
 
     interpolation: {
@@ -31,13 +31,13 @@ i18n
     },
 
     resources: {
-      'zh-CN': {
-        common: zhCNCommon,
-        chat: zhCNChat,
-        ui: zhCNUi,
-        notebook: zhCNNotebook,
-        settings: zhCNSettings,
-        shortcuts: zhCNShortcuts
+      'ko-KR': {
+        common: koKRCommon,
+        chat: koKRChat,
+        ui: koKRUi,
+        notebook: koKRNotebook,
+        settings: koKRSettings,
+        shortcuts: koKRShortcuts
       },
       'en-US': {
         common: enUSCommon,
@@ -50,7 +50,7 @@ i18n
     },
 
     detection: {
-      order: ['localStorage'], // 只使用 localStorage，不使用浏览器检测
+      order: ['localStorage'], // localStorage만 사용, 브라우저 감지 사용 안 함
       caches: ['localStorage'],
       lookupLocalStorage: 'i18nextLng'
     },

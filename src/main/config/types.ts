@@ -1,7 +1,7 @@
 import type { AppSettings, ShortcutConfig } from '../../shared/types'
 
 /**
- * 提供商配置接口
+ * 제공자 설정 인터페이스
  */
 export interface ProviderConfig {
   providerName: string
@@ -11,7 +11,7 @@ export interface ProviderConfig {
 }
 
 /**
- * Store Schema 定义
+ * Store 스키마 정의
  */
 export interface StoreSchema {
   settings: AppSettings
@@ -19,5 +19,5 @@ export interface StoreSchema {
   shortcuts: ShortcutConfig[]
 }
 
-// 重新导出 AppSettings 以保持向后兼容
+// 하위 호환성을 위해 AppSettings 재내보내기
 export type { AppSettings }

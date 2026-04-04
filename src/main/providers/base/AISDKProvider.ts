@@ -7,7 +7,6 @@
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createDeepSeek } from '@ai-sdk/deepseek'
-import { createQwen } from 'qwen-ai-provider'
 import { createOllama } from 'ollama-ai-provider-v2'
 import { streamText, embed, embedMany } from 'ai'
 import type { BaseProvider, LLMProviderConfig } from '../capabilities/BaseProvider'
@@ -68,33 +67,34 @@ export class AISDKProvider implements BaseProvider {
   configure(config: LLMProviderConfig): void {
     this.config = { ...this.config, ...config }
 
-    // 重新创建 AI SDK provider 实例
-    if (config.apiKey || this.name === 'ollama') {
+    // AI SDK provider 인스턴스 재생성
+    if (config.apiKey || this.name === 'ollama' || this.name === 'lmstudio') {
       if (this.name === 'openai') {
-        // OpenAI 使用官方 provider
+        // OpenAI 공식 provider
         this.aiProvider = createOpenAI({
           baseURL: this.config.baseUrl,
           apiKey: config.apiKey
         })
       } else if (this.name === 'deepseek') {
-        // DeepSeek 使用官方 provider
+        // DeepSeek 공식 provider
         this.aiProvider = createDeepSeek({
           baseURL: this.config.baseUrl,
           apiKey: config.apiKey
         })
-      } else if (this.name === 'qwen') {
-        // Qwen 使用社区 provider
-        this.aiProvider = createQwen({
-          baseURL: this.config.baseUrl,
-          apiKey: config.apiKey
-        })
       } else if (this.name === 'ollama') {
-        // Ollama 使用社区 provider
+        // Ollama 로컬 provider
         this.aiProvider = createOllama({
           baseURL: this.config.baseUrl || 'http://localhost:11434/api'
         })
+      } else if (this.name === 'lmstudio') {
+        // LM Studio 로컬 provider (OpenAI 호환 API)
+        this.aiProvider = createOpenAICompatible({
+          name: 'lmstudio',
+          baseURL: this.config.baseUrl || 'http://localhost:1234/v1',
+          apiKey: 'lm-studio'
+        })
       } else {
-        // 其他所有 provider 都使用 OpenAI Compatible (Kimi, SiliconFlow)
+        // 기타 OpenAI 호환 provider
         this.aiProvider = createOpenAICompatible({
           name: this.name,
           baseURL: this.config.baseUrl || '',
@@ -430,8 +430,8 @@ export class AISDKProvider implements BaseProvider {
       return undefined
     }
 
-    // 支持 dimensions 参数的 providers（白名单机制）
-    const supportedProviders = ['openai', 'deepseek', 'zhipu', 'siliconflow', 'openai-compatible']
+    // dimensions 파라미터를 지원하는 provider (화이트리스트)
+    const supportedProviders = ['openai', 'deepseek', 'lmstudio', 'openai-compatible']
 
     if (!supportedProviders.includes(this.name)) {
       Logger.debug(

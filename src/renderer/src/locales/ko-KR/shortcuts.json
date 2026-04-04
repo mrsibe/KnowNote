@@ -1,0 +1,25 @@
+{
+  "shortcuts": "키보드 단축키",
+  "description": "애플리케이션 단축키를 사용자 정의하여 생산성을 높이세요",
+  "resetToDefaults": "기본값으로 초기화",
+  "confirmReset": "모든 단축키를 기본값으로 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+  "confirmResetTitle": "단축키 초기화",
+  "confirm": "초기화 확인",
+  "cancel": "취소",
+  "conflictError": "이 단축키는 이미 사용 중입니다",
+  "conflictHint": "다른 키 조합을 선택하세요",
+  "pressKey": "키를 누르세요...",
+
+  "category": {
+    "notebook": "노트북 관리",
+    "panel": "패널 전환",
+    "chat": "채팅 및 메시지",
+    "editor": "편집기"
+  },
+
+  "createNotebook": "새 노트북 만들기",
+  "closeNotebook": "노트북 닫기",
+  "toggleKnowledgeBase": "지식 베이스 전환",
+  "toggleCreativeSpace": "창작 공간 전환",
+  "saveNote": "노트 저장"
+}

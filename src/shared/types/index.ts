@@ -1,38 +1,38 @@
 /**
- * 共享的类型定义
- * 基于 Drizzle 推导的数据库 schema,确保类型定义的单一数据源
+ * 공유 타입 정의
+ * Drizzle에서 추론된 데이터베이스 스키마 기반으로, 타입 정의의 단일 데이터 소스를 보장
  */
 
-// 导出知识库类型
+// 지식 베이스 타입 내보내기
 export * from './knowledge'
 
-// 导出聊天类型
+// 채팅 타입 내보내기
 export * from './chat'
 
-// 导出 Result 错误处理类型
+// Result 오류 처리 타입 내보내기
 export * from './result'
 
-// 导出答题类型
+// 퀴즈 타입 내보내기
 export * from './quiz'
 
-// 导出 Anki 类型
+// Anki 타입 내보내기
 export * from './anki'
 
 /**
- * 笔记本接口
- * 与 Drizzle schema 推导的类型兼容
+ * 노트북 인터페이스
+ * Drizzle 스키마에서 추론된 타입과 호환
  */
 export interface Notebook {
   id: string
   title: string
-  description?: string | null | undefined // 兼容 Drizzle 推导的可选字段
+  description?: string | null | undefined // Drizzle에서 추론된 선택적 필드와 호환
   createdAt: Date
   updatedAt: Date
 }
 
 /**
- * 笔记接口
- * 与 Drizzle schema 推导的类型兼容
+ * 노트 인터페이스
+ * Drizzle 스키마에서 추론된 타입과 호환
  */
 export interface Note {
   id: string
@@ -44,7 +44,7 @@ export interface Note {
 }
 
 /**
- * Provider 配置接口
+ * Provider 설정 인터페이스
  */
 export interface ProviderConfig {
   providerName: string
@@ -54,7 +54,7 @@ export interface ProviderConfig {
 }
 
 /**
- * 模型类型枚举
+ * 모델 타입 열거형
  */
 export enum ModelType {
   CHAT = 'chat',
@@ -67,7 +67,7 @@ export enum ModelType {
 }
 
 /**
- * 模型接口
+ * 모델 인터페이스
  */
 export interface Model {
   id: string
@@ -75,12 +75,12 @@ export interface Model {
   owned_by?: string
   created?: number
   type?: ModelType
-  max_context?: number // 最大上下文长度 (来自内置配置)
-  description?: string // 模型描述 (来自内置配置)
+  max_context?: number // 최대 컨텍스트 길이 (내장 설정에서 제공)
+  description?: string // 모델 설명 (내장 설정에서 제공)
 }
 
 /**
- * 分类后的模型列表接口
+ * 분류된 모델 목록 인터페이스
  */
 export interface CategorizedModels {
   chat: Model[]
@@ -90,53 +90,53 @@ export interface CategorizedModels {
 }
 
 /**
- * 应用设置接口
+ * 앱 설정 인터페이스
  */
 export interface AppSettings {
   theme: 'light' | 'dark'
-  language: 'zh-CN' | 'en-US'
+  language: 'ko-KR' | 'en-US'
   autoLaunch: boolean
   hasCompletedOnboarding: boolean
-  defaultChatModel?: string // 默认对话模型
-  defaultEmbeddingModel?: string // 默认嵌入模型
+  defaultChatModel?: string // 기본 대화 모델
+  defaultEmbeddingModel?: string // 기본 임베딩 모델
   prompts?: {
     mindMap?: {
-      'zh-CN'?: string // 中文思维导图生成提示词
-      'en-US'?: string // 英文思维导图生成提示词
+      'ko-KR'?: string // 한국어 마인드맵 생성 프롬프트
+      'en-US'?: string // 영어 마인드맵 생성 프롬프트
     }
     quiz?: {
-      'zh-CN'?: string // 中文答题生成提示词
-      'en-US'?: string // 英文答题生成提示词
+      'ko-KR'?: string // 한국어 퀴즈 생성 프롬프트
+      'en-US'?: string // 영어 퀴즈 생성 프롬프트
     }
     anki?: {
-      'zh-CN'?: string // 中文Anki卡片生成提示词
-      'en-US'?: string // 英文Anki卡片生成提示词
+      'ko-KR'?: string // 한국어 Anki 카드 생성 프롬프트
+      'en-US'?: string // 영어 Anki 카드 생성 프롬프트
     }
   }
 }
 
 /**
- * 快捷键动作枚举
+ * 단축키 액션 열거형
  */
 export enum ShortcutAction {
-  // 笔记本管理
+  // 노트북 관리
   CREATE_NOTEBOOK = 'create_notebook',
   CLOSE_NOTEBOOK = 'close_notebook',
 
-  // 面板切换
-  TOGGLE_KNOWLEDGE_BASE = 'toggle_knowledge_base', // 知识库
-  TOGGLE_CREATIVE_SPACE = 'toggle_creative_space', // 创造空间
+  // 패널 전환
+  TOGGLE_KNOWLEDGE_BASE = 'toggle_knowledge_base', // 지식 베이스
+  TOGGLE_CREATIVE_SPACE = 'toggle_creative_space', // 창작 공간
 
-  // 编辑器
+  // 편집기
   SAVE_NOTE = 'save_note'
 }
 
 /**
- * 快捷键配置接口
+ * 단축키 설정 인터페이스
  */
 export interface ShortcutConfig {
   action: ShortcutAction
-  accelerator: string // 如 "CommandOrControl+N"
+  accelerator: string // 예: "CommandOrControl+N"
   enabled: boolean
   description: string // i18n key
 }

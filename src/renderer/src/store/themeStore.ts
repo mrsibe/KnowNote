@@ -11,12 +11,12 @@ interface ThemeStore {
 }
 
 export const useThemeStore = create<ThemeStore>((set, get) => {
-  // 设置监听器（只设置一次）
+  // 리스너 설정 (한 번만 설정)
   if (typeof window !== 'undefined' && window.api) {
     window.api.settings.onSettingsChange((newSettings) => {
       const newTheme = newSettings.theme
       set({ theme: newTheme })
-      // 更新 HTML 元素的 class
+      // HTML 요소의 class 업데이트
       if (newTheme === 'dark') {
         document.documentElement.classList.add('dark')
       } else {
@@ -27,14 +27,14 @@ export const useThemeStore = create<ThemeStore>((set, get) => {
   }
 
   return {
-    theme: 'dark',
+    theme: 'light',
     isLoading: true,
 
     initTheme: async () => {
       try {
         const theme = await window.api.settings.get('theme')
         set({ theme, isLoading: false })
-        // 更新 HTML 元素的 class
+        // HTML 요소의 class 업데이트
         if (theme === 'dark') {
           document.documentElement.classList.add('dark')
         } else {
@@ -48,14 +48,14 @@ export const useThemeStore = create<ThemeStore>((set, get) => {
 
     setTheme: async (theme) => {
       try {
-        // 先更新 UI
+        // 먼저 UI 업데이트
         set({ theme })
         if (theme === 'dark') {
           document.documentElement.classList.add('dark')
         } else {
           document.documentElement.classList.remove('dark')
         }
-        // 然后保存到 electron-store
+        // 그런 다음 electron-store에 저장
         await window.api.settings.set('theme', theme)
       } catch (error) {
         console.error('Failed to save theme:', error)

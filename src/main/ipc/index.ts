@@ -1,7 +1,6 @@
 import { ProviderManager } from '../providers/ProviderManager'
 import { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
 import { KnowledgeService } from '../services/KnowledgeService'
-import { UpdateService } from '../services/UpdateService'
 import { MindMapService } from '../services/MindMapService'
 import { QuizService } from '../services/QuizService'
 import { AnkiCardService } from '../services/AnkiCardService'
@@ -17,27 +16,25 @@ import { registerKnowledgeHandlers } from './knowledgeHandlers'
 import { registerMindMapHandlers } from './mindmapHandlers'
 import { registerQuizHandlers } from './quizHandlers'
 import { registerAnkiHandlers } from './ankiHandlers'
-import { registerUpdateHandlers } from './updateHandlers'
 import { registerItemHandlers } from './itemHandlers'
 import { registerShortcutHandlers } from './shortcutHandlers'
 import { registerDialogHandlers } from './dialogHandlers'
 
 /**
- * 注册所有 IPC Handlers
+ * 모든 IPC 핸들러 등록
  */
 export function registerAllHandlers(
   providerManager: ProviderManager,
   sessionAutoSwitchService: SessionAutoSwitchService,
   knowledgeService: KnowledgeService,
-  updateService: UpdateService,
   shortcutManager: ShortcutManager,
   store: Store<StoreSchema>
 ) {
-  // 实例化 MindMapService
+  // MindMapService 인스턴스 생성
   const mindMapService = new MindMapService(providerManager)
-  // 实例化 QuizService
+  // QuizService 인스턴스 생성
   const quizService = new QuizService(providerManager)
-  // 实例化 AnkiCardService
+  // AnkiCardService 인스턴스 생성
   const ankiCardService = new AnkiCardService(providerManager)
 
   registerChatHandlers(providerManager, sessionAutoSwitchService, knowledgeService)
@@ -50,7 +47,6 @@ export function registerAllHandlers(
   registerMindMapHandlers(mindMapService)
   registerQuizHandlers(quizService)
   registerAnkiHandlers(ankiCardService)
-  registerUpdateHandlers(updateService)
   registerItemHandlers()
   registerShortcutHandlers(shortcutManager, store)
   console.log('[IPC] All handlers registered')

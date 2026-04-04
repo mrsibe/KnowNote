@@ -1,18 +1,44 @@
 /**
- * Builtin Providers
- * 内置供应商配置注册表
+ * 내장 프로바이더
+ * 내장 프로바이더 설정 레지스트리
  */
 
 import type { ProviderDescriptor } from './ProviderDescriptor'
 import { AISDKProvider } from '../base/AISDKProvider'
 
 /**
- * 内置供应商注册表
- * 所有内置供应商都在这里定义
+ * 내장 프로바이더 레지스트리
+ * 모든 내장 프로바이더가 여기에 정의됩니다.
  *
- * 添加新的内置供应商只需在这个数组中添加配置即可
+ * 새로운 내장 프로바이더를 추가하려면 이 배열에 설정을 추가하면 됩니다.
  */
 export const BUILTIN_PROVIDERS: ProviderDescriptor[] = [
+  {
+    name: 'lmstudio',
+    displayName: 'LM Studio',
+    isBuiltin: true,
+    defaultBaseUrl: 'http://localhost:1234/v1',
+    defaultChatModel: 'llama-3.2-3b-instruct',
+    defaultEmbeddingModel: 'text-embedding-nomic-embed-text-v1.5',
+    capabilities: {
+      chat: true,
+      embedding: true
+    },
+    createProvider: (descriptor) => new AISDKProvider(descriptor)
+  },
+
+  {
+    name: 'ollama',
+    displayName: 'Ollama',
+    isBuiltin: true,
+    defaultBaseUrl: 'http://localhost:11434/api',
+    capabilities: {
+      chat: true,
+      embedding: true
+    },
+    createProvider: (descriptor) => new AISDKProvider(descriptor)
+  },
+
   {
     name: 'openai',
     displayName: 'OpenAI',
@@ -33,74 +59,7 @@ export const BUILTIN_PROVIDERS: ProviderDescriptor[] = [
     isBuiltin: true,
     defaultBaseUrl: 'https://api.deepseek.com',
     defaultChatModel: 'deepseek-chat',
-    defaultEmbeddingModel: 'deepseek-embedding', // 假设 DeepSeek 支持 embedding
-    capabilities: {
-      chat: true,
-      embedding: true
-    },
-    createProvider: (descriptor) => new AISDKProvider(descriptor)
-  },
-
-  {
-    name: 'qwen',
-    displayName: 'Qwen',
-    isBuiltin: true,
-    defaultBaseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    defaultChatModel: 'qwen-max',
-    defaultEmbeddingModel: 'text-embedding-v2',
-    capabilities: {
-      chat: true,
-      embedding: true
-    },
-    createProvider: (descriptor) => new AISDKProvider(descriptor)
-  },
-
-  {
-    name: 'kimi',
-    displayName: 'Kimi',
-    isBuiltin: true,
-    defaultBaseUrl: 'https://api.moonshot.cn/v1',
-    defaultChatModel: 'kimi-k2-turbo-preview',
-    capabilities: {
-      chat: true,
-      embedding: false // Kimi 不支持 embedding
-    },
-    createProvider: (descriptor) => new AISDKProvider(descriptor)
-  },
-
-  {
-    name: 'siliconflow',
-    displayName: 'SiliconFlow',
-    isBuiltin: true,
-    defaultBaseUrl: 'https://api.siliconflow.cn/v1',
-    defaultChatModel: 'deepseek-ai/DeepSeek-V3',
-    defaultEmbeddingModel: 'BAAI/bge-m3',
-    capabilities: {
-      chat: true,
-      embedding: true // SiliconFlow 作为模型聚合平台支持 embedding
-    },
-    createProvider: (descriptor) => new AISDKProvider(descriptor)
-  },
-
-  {
-    name: 'ollama',
-    displayName: 'Ollama',
-    isBuiltin: true,
-    defaultBaseUrl: 'http://localhost:11434/api',
-    capabilities: {
-      chat: true,
-      embedding: true
-    },
-    createProvider: (descriptor) => new AISDKProvider(descriptor)
-  },
-
-  {
-    name: 'zhipu',
-    displayName: '智谱AI',
-    isBuiltin: true,
-    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    defaultChatModel: 'glm-4-plus',
-    defaultEmbeddingModel: 'embedding-3',
+    defaultEmbeddingModel: 'deepseek-embedding',
     capabilities: {
       chat: true,
       embedding: true
@@ -110,18 +69,18 @@ export const BUILTIN_PROVIDERS: ProviderDescriptor[] = [
 ]
 
 /**
- * 根据名称获取内置供应商描述符
- * @param name - 供应商名称
- * @returns ProviderDescriptor 或 undefined
+ * 이름으로 내장 프로바이더 디스크립터 조회
+ * @param name - 프로바이더 이름
+ * @returns ProviderDescriptor 또는 undefined
  */
 export function getBuiltinProvider(name: string): ProviderDescriptor | undefined {
   return BUILTIN_PROVIDERS.find((p) => p.name === name)
 }
 
 /**
- * 检查是否为内置供应商
- * @param name - 供应商名称
- * @returns 是否为内置供应商
+ * 내장 프로바이더 여부 확인
+ * @param name - 프로바이더 이름
+ * @returns 내장 프로바이더 여부
  */
 export function isBuiltinProvider(name: string): boolean {
   return BUILTIN_PROVIDERS.some((p) => p.name === name)

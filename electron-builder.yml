@@ -45,10 +45,3 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
-publish:
-  provider: github
-  owner: MrSibe
-  repo: KnowNote
-  releaseType: release
-electronDownload:
-  mirror: https://npmmirror.com/mirrors/electron/

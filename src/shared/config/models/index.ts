@@ -1,28 +1,22 @@
 import { Model } from '../../types'
 import { OPENAI_BUILTIN_MODELS } from './openai'
 import { DEEPSEEK_BUILTIN_MODELS } from './deepseek'
-import { SILICONFLOW_BUILTIN_MODELS } from './siliconflow'
-import { QWEN_BUILTIN_MODELS } from './qwen'
-import { ZHIPU_BUILTIN_MODELS } from './zhipu'
-import { KIMI_BUILTIN_MODELS } from './kimi'
 import { OLLAMA_BUILTIN_MODELS } from './ollama'
+import { LMSTUDIO_BUILTIN_MODELS } from './lmstudio'
 import type { ProviderLocalModels, LocalModelDefinition } from './types'
 
 /**
- * 所有 Provider 的内置模型配置
+ * 모든 Provider의 내장 모델 설정
  */
 const BUILTIN_MODELS_MAP: Record<string, ProviderLocalModels> = {
+  lmstudio: LMSTUDIO_BUILTIN_MODELS,
+  ollama: OLLAMA_BUILTIN_MODELS,
   openai: OPENAI_BUILTIN_MODELS,
-  deepseek: DEEPSEEK_BUILTIN_MODELS,
-  siliconflow: SILICONFLOW_BUILTIN_MODELS,
-  qwen: QWEN_BUILTIN_MODELS,
-  zhipu: ZHIPU_BUILTIN_MODELS,
-  kimi: KIMI_BUILTIN_MODELS,
-  ollama: OLLAMA_BUILTIN_MODELS
+  deepseek: DEEPSEEK_BUILTIN_MODELS
 }
 
 /**
- * 将本地模型定义转换为标准 Model 对象
+ * 로컬 모델 정의를 표준 Model 객체로 변환
  */
 function convertToModel(def: LocalModelDefinition, providerName: string): Model {
   return {
@@ -30,7 +24,7 @@ function convertToModel(def: LocalModelDefinition, providerName: string): Model 
     object: 'model',
     owned_by: def.owned_by,
     type: def.type,
-    // 将 lastUpdated 转为 created 时间戳（Unix timestamp）
+    // lastUpdated를 created 타임스탬프(Unix timestamp)로 변환
     created: Math.floor(
       new Date(BUILTIN_MODELS_MAP[providerName]?.lastUpdated || Date.now()).getTime() / 1000
     )
@@ -38,9 +32,9 @@ function convertToModel(def: LocalModelDefinition, providerName: string): Model 
 }
 
 /**
- * 获取指定 Provider 的内置模型列表
- * @param providerName Provider 名称
- * @returns 内置模型列表，如果未找到则返回空数组
+ * 지정된 Provider의 내장 모델 목록 조회
+ * @param providerName Provider 이름
+ * @returns 내장 모델 목록, 없으면 빈 배열 반환
  */
 export function getBuiltinModels(providerName: string): Model[] {
   const config = BUILTIN_MODELS_MAP[providerName]
@@ -52,17 +46,17 @@ export function getBuiltinModels(providerName: string): Model[] {
 }
 
 /**
- * 检查是否有内置模型配置
- * @param providerName Provider 名称
- * @returns 是否存在内置模型配置
+ * 내장 모델 설정 존재 여부 확인
+ * @param providerName Provider 이름
+ * @returns 내장 모델 설정 존재 여부
  */
 export function hasBuiltinModels(providerName: string): boolean {
   return providerName in BUILTIN_MODELS_MAP
 }
 
 /**
- * 获取所有 Provider 的内置模型列表
- * @returns 所有内置模型的映射表 { providerName: Model[] }
+ * 모든 Provider의 내장 모델 목록 조회
+ * @returns 모든 내장 모델의 매핑 테이블 { providerName: Model[] }
  */
 export function getAllBuiltinModels(): Record<string, Model[]> {
   const result: Record<string, Model[]> = {}
@@ -75,10 +69,10 @@ export function getAllBuiltinModels(): Record<string, Model[]> {
 }
 
 /**
- * 根据类型过滤内置模型
- * @param providerName Provider 名称
- * @param type 模型类型
- * @returns 过滤后的模型列表
+ * 타입별 내장 모델 필터링
+ * @param providerName Provider 이름
+ * @param type 모델 타입
+ * @returns 필터링된 모델 목록
  */
 export function getBuiltinModelsByType(providerName: string, type: string): Model[] {
   const models = getBuiltinModels(providerName)
@@ -86,7 +80,7 @@ export function getBuiltinModelsByType(providerName: string, type: string): Mode
 }
 
 /**
- * 获取内置模型的统计信息
+ * 내장 모델 통계 정보 조회
  */
 export function getBuiltinModelsStats(): {
   totalProviders: number
@@ -117,5 +111,5 @@ export function getBuiltinModelsStats(): {
   }
 }
 
-// 导出类型
+// 타입 내보내기
 export * from './types'

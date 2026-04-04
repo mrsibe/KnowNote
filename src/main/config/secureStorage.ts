@@ -1,19 +1,19 @@
 /**
- * 安全存储工具
- * 使用 Electron safeStorage API 加密敏感数据
+ * 보안 저장소 유틸리티
+ * Electron safeStorage API를 사용하여 민감 데이터 암호화
  */
 
 import { safeStorage } from 'electron'
 import Logger from '../../shared/utils/logger'
 
 /**
- * 加密文本数据
- * @param plainText 明文
- * @returns Base64 编码的加密数据，如果加密失败返回 null
+ * 텍스트 데이터 암호화
+ * @param plainText 평문
+ * @returns Base64 인코딩된 암호화 데이터, 암호화 실패 시 null 반환
  */
 export function encryptString(plainText: string): string | null {
   try {
-    // 检查加密是否可用
+    // 암호화 가능 여부 확인
     if (!safeStorage.isEncryptionAvailable()) {
       Logger.warn('SecureStorage', 'Encryption not available on this platform')
       return null
@@ -28,9 +28,9 @@ export function encryptString(plainText: string): string | null {
 }
 
 /**
- * 解密文本数据
- * @param encryptedBase64 Base64 编码的加密数据
- * @returns 解密后的明文，如果解密失败返回 null
+ * 텍스트 데이터 복호화
+ * @param encryptedBase64 Base64 인코딩된 암호화 데이터
+ * @returns 복호화된 평문, 복호화 실패 시 null 반환
  */
 export function decryptString(encryptedBase64: string): string | null {
   try {
@@ -48,17 +48,17 @@ export function decryptString(encryptedBase64: string): string | null {
 }
 
 /**
- * 检查加密是否可用
+ * 암호화 가능 여부 확인
  */
 export function isEncryptionAvailable(): boolean {
   return safeStorage.isEncryptionAvailable()
 }
 
 /**
- * 加密对象中的敏感字段
- * @param obj 包含敏感数据的对象
- * @param sensitiveFields 需要加密的字段名数组
- * @returns 加密后的对象（原对象会被修改）
+ * 객체의 민감 필드 암호화
+ * @param obj 민감 데이터를 포함하는 객체
+ * @param sensitiveFields 암호화할 필드명 배열
+ * @returns 암호화된 객체 (원본 객체가 수정됨)
  */
 export function encryptObjectFields<T extends Record<string, any>>(
   obj: T,
@@ -71,7 +71,7 @@ export function encryptObjectFields<T extends Record<string, any>>(
       const encrypted = encryptString(result[field])
       if (encrypted) {
         result[field] = encrypted
-        // 添加标记表示该字段已加密
+        // 해당 필드가 암호화되었음을 표시하는 마커 추가
         result[`__encrypted_${field}`] = true
       }
     }
@@ -81,10 +81,10 @@ export function encryptObjectFields<T extends Record<string, any>>(
 }
 
 /**
- * 解密对象中的敏感字段
- * @param obj 包含加密数据的对象
- * @param sensitiveFields 需要解密的字段名数组
- * @returns 解密后的对象（原对象会被修改）
+ * 객체의 민감 필드 복호화
+ * @param obj 암호화된 데이터를 포함하는 객체
+ * @param sensitiveFields 복호화할 필드명 배열
+ * @returns 복호화된 객체 (원본 객체가 수정됨)
  */
 export function decryptObjectFields<T extends Record<string, any>>(
   obj: T,
@@ -93,14 +93,14 @@ export function decryptObjectFields<T extends Record<string, any>>(
   const result: Record<string, any> = { ...obj }
 
   for (const field of sensitiveFields) {
-    // 检查是否有加密标记
+    // 암호화 마커 확인
     const encryptedMarker = `__encrypted_${field}`
     if (result[encryptedMarker] && field in result && typeof result[field] === 'string') {
       const decrypted = decryptString(result[field])
       if (decrypted) {
         result[field] = decrypted
       }
-      // 移除加密标记
+      // 암호화 마커 제거
       delete result[encryptedMarker]
     }
   }
@@ -109,23 +109,23 @@ export function decryptObjectFields<T extends Record<string, any>>(
 }
 
 /**
- * Provider 配置的敏感字段列表
+ * Provider 설정의 민감 필드 목록
  */
 export const PROVIDER_SENSITIVE_FIELDS = ['apiKey', 'apiSecret', 'accessToken']
 
 /**
- * 加密 Provider 配置
- * @param config Provider 配置对象
- * @returns 加密后的配置
+ * Provider 설정 암호화
+ * @param config Provider 설정 객체
+ * @returns 암호화된 설정
  */
 export function encryptProviderConfig(config: Record<string, any>): Record<string, any> {
   return encryptObjectFields(config, PROVIDER_SENSITIVE_FIELDS)
 }
 
 /**
- * 解密 Provider 配置
- * @param config 加密的 Provider 配置对象
- * @returns 解密后的配置
+ * Provider 설정 복호화
+ * @param config 암호화된 Provider 설정 객체
+ * @returns 복호화된 설정
  */
 export function decryptProviderConfig(config: Record<string, any>): Record<string, any> {
   return decryptObjectFields(config, PROVIDER_SENSITIVE_FIELDS)
