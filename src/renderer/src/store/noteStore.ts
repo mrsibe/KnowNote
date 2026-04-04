@@ -13,7 +13,7 @@ interface NoteStore {
   setCurrentNote: (note: Note | null) => void
   setIsEditing: (isEditing: boolean) => void
 
-  // 비동기작업
+  // 비동기 작업
   loadNotes: (notebookId: string) => Promise<void>
   createNote: (notebookId: string, content: string, customTitle?: string) => Promise<Note>
   updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content'>>) => Promise<void>

@@ -1,6 +1,6 @@
 /**
  * QuizService
- * 퀴즈서비스 - 생성및관리노트북의퀴즈문제라이브러리
+ * 퀴즈 서비스 - 노트북의 퀴즈 문제 은행 생성 및 관리
  */
 
 import { getDatabase, executeCheckpoint } from '../db'
@@ -16,43 +16,43 @@ import Logger from '../../shared/utils/logger'
 import { settingsManager } from '../config'
 
 /**
- * 진행콜백함수타입
+ * 진행률 콜백 함수 타입
  */
 export type QuizProgressCallback = (stage: string, progress: number) => void
 
 /**
- * 퀴즈생성선택지
+ * 퀴즈 생성 옵션
  */
 export interface QuizGenerationOptions {
-  questionCount?: number // 문제수량，기본10
-  difficulty?: 'easy' | 'medium' | 'hard' // 어려운도，기본medium
-  customPrompt?: string // 자체정의힌트
+  questionCount?: number // 문제 수, 기본값 10
+  difficulty?: 'easy' | 'medium' | 'hard' // 난이도, 기본값 medium
+  customPrompt?: string // 사용자 정의 프롬프트
 }
 
 /**
- * 조회quiz생성 Prompt（지원국실제화및자체정의）
+ * 퀴즈 생성 Prompt 조회 (국제화 및 사용자 정의 지원)
  */
 async function getQuizPrompt(customPrompt?: string): Promise<string> {
-  // 만약제공자체정의힌트，직접사용
+  // 사용자 정의 프롬프트가 제공된 경우 직접 사용
   if (customPrompt && customPrompt.trim()) {
     return customPrompt.trim()
   }
 
-  // 아니오에서설정에서조회
+  // 그렇지 않으면 설정에서 조회
   const settings = await settingsManager.getAllSettings()
-  const language = settings.language || 'ko-KR'
+  const language = settings.language || 'zh-CN'
 
   const prompt = settings.prompts?.quiz?.[language]
 
   if (!prompt) {
-    throw new Error(`찾을 수 없음 ${language} 언어의퀴즈생성힌트`)
+    throw new Error(`${language} 언어의 퀴즈 생성 프롬프트를 찾을 수 없습니다`)
   }
 
   return prompt
 }
 
 /**
- * 조회어려운도가리키는명령텍스트
+ * 난이도 지시 텍스트 조회
  */
 function getDifficultyInstruction(
   difficulty: 'easy' | 'medium' | 'hard',
@@ -60,47 +60,47 @@ function getDifficultyInstruction(
 ): string {
   const difficultyInstructions = {
     easy: {
-      'ko-KR':
-        '난이도 요��: 쉬움 - 기본 개념과 정의에 초점을 맞춘 쉬운 난이도의 문제를 생성하세요. 선택지 간의 차이가 명확해야 합니다.',
+      'zh-CN':
+        '难度要求：简单 - 请生成简单难度的题目，重点考察基础概念和定义，选项之间的差异要明显。',
       'en-US':
         'Difficulty: Easy - Generate easy-difficulty questions that focus on basic concepts and definitions. Options should have clear differences.'
     },
     medium: {
-      'ko-KR':
-        '난이도 요구: 보통 - 지식 포인트의 이해와 적용이 필요한 보통 난이도의 문제를 생성하세요. 선택지의 유사성을 적절히 높이세요.',
+      'zh-CN':
+        '难度要求：中等 - 请生成中等难度的题目，需要理解和应用知识点，适当增加选项的相似性。',
       'en-US':
         'Difficulty: Medium - Generate medium-difficulty questions that require understanding and applying knowledge points, with moderately similar options.'
     },
     hard: {
-      'ko-KR':
-        '난이도 요구: 어려움 - 깊은 이해, 종합적 적용 및 분석 능력이 필요한 어려운 문제를 생성하세요. 선택지에 어느 정도의 혼동성이 있어야 합니다.',
+      'zh-CN':
+        '难度要求：困难 - 请生成困难题目，需要深度理解、综合应用和分析能力，选项之间要有一定的迷惑性。',
       'en-US':
         'Difficulty: Hard - Generate hard-difficulty questions that require deep understanding, comprehensive application, and analytical ability. Options should be somewhat confusing.'
     }
   }
 
-  return difficultyInstructions[difficulty][language] || difficultyInstructions[difficulty]['ko-KR']
+  return difficultyInstructions[difficulty][language] || difficultyInstructions[difficulty]['zh-CN']
 }
 
 /**
- * Zod Schema 정의퀴즈결구조
+ * 퀴즈 구조를 정의하는 Zod Schema
  */
 const QuizQuestionSchema: z.ZodType<QuizQuestion> = z.object({
   id: z.string().describe('문제 고유 ID'),
-  questionText: z.string().max(200).describe('문제 텍스트, 200자 이내'),
+  questionText: z.string().max(200).describe('문제 텍스트, 200자 이하'),
   options: z.array(z.string().max(100)).length(4).describe('4개 선택지'),
   correctAnswer: z.number().min(0).max(3).describe('정답 인덱스 (0-3)'),
-  explanation: z.string().max(300).describe('답변 설명, 300자 이내'),
+  explanation: z.string().max(300).describe('정답 해설, 300자 이하'),
   hints: z.array(z.string().max(100)).min(1).max(2).describe('1-2개 힌트'),
   metadata: z
     .object({
-      chunkIds: z.array(z.string()).describe('관련 chunk ID 목록')
+      chunkIds: z.array(z.string()).describe('연관된 chunk ID 목록')
     })
     .optional()
 })
 
 /**
- * 생성동상태Quiz Schema
+ * 동적 Quiz Schema 생성
  */
 function createQuizSchema(questionCount: number) {
   return z.object({
@@ -112,20 +112,20 @@ function createQuizSchema(questionCount: number) {
 }
 
 /**
- * 퀴즈서비스
+ * 퀴즈 서비스
  */
 export class QuizService {
   constructor(private providerManager: ProviderManager) {}
 
   /**
-   * 집계노트북내용
+   * 노트북 내용 집계
    */
   private async aggregateNotebookContent(notebookId: string): Promise<string> {
     const db = getDatabase()
     const contentParts: string[] = []
 
     try {
-      // 1. 조회모든인덱스문서
+      // 1. 모든 인덱싱된 문서 조회
       const docs = db
         .select({
           id: documents.id,
@@ -139,10 +139,10 @@ export class QuizService {
       Logger.info('QuizService', `Found ${docs.length} indexed documents`)
 
       if (docs.length === 0) {
-        throw new Error('노트북없있는사용 가능내용생성문제，요청먼저문서 추가에지식 베이스')
+        throw new Error('노트북에 문제를 생성할 수 있는 콘텐츠가 없습니다. 먼저 문서를 지식 베이스에 추가하세요')
       }
 
-      // 2. 집계문서chunks (매개문서가장많은10개chunks)
+      // 2. 문서 chunks 집계 (문서당 최대 10개 chunks)
       for (const doc of docs) {
         const docChunks = db
           .select()
@@ -159,7 +159,7 @@ export class QuizService {
       }
 
       if (contentParts.length === 0) {
-        throw new Error('노트북없있는사용 가능내용생성문제')
+        throw new Error('노트북에 문제를 생성할 수 있는 콘텐츠가 없습니다')
       }
 
       return contentParts.join('\n\n---\n\n')
@@ -170,7 +170,7 @@ export class QuizService {
   }
 
   /**
-   * 호출LLM생성문제 (사용 streamObject 결구조화출력)
+   * LLM을 호출하여 문제 생성 (streamObject 구조화 출력 사용)
    */
   private async callLLMForGeneration(
     content: string,
@@ -179,54 +179,54 @@ export class QuizService {
   ): Promise<QuizGenerationResult> {
     const provider = await this.providerManager.getActiveChatProvider()
     if (!provider) {
-      throw new Error('없있는사용 가능의대화모델,요청먼저설정LLM제공자')
+      throw new Error('사용 가능한 대화 모델이 없습니다. LLM 제공자를 먼저 설정하세요')
     }
 
-    // 보장 provider 예 AISDKProvider 인스턴스
+    // provider가 AISDKProvider 인스턴스인지 확인
     if (!(provider instanceof AISDKProvider)) {
-      throw new Error('현재 provider 미지원결구조화출력')
+      throw new Error('현재 provider는 구조화 출력을 지원하지 않습니다')
     }
 
     Logger.info('QuizService', `Using provider: ${provider.name}`)
 
-    // 조회기본힌트
+    // 기본 프롬프트 조회
     const promptTemplate = await getQuizPrompt(options?.customPrompt)
 
-    // 조회생성매개변수
+    // 생성 파라미터 조회
     const questionCount = options?.questionCount || 10
     const difficulty = options?.difficulty || 'medium'
 
     // 프롬프트 언어 감지
-    const isKorean = promptTemplate.includes('한국어') || promptTemplate.includes('문제')
-    const language = isKorean ? 'ko-KR' : 'en-US'
+    const isChinese = promptTemplate.includes('中文') || promptTemplate.includes('题目')
+    const language = isChinese ? 'zh-CN' : 'en-US'
 
-    // 조회어려운도가리키는명령
+    // 난이도 지시 조회
     const difficultyInstruction = getDifficultyInstruction(difficulty, language)
 
-    // 치환변수플레이스홀더
+    // 변수 플레이스홀더 대체
     let prompt = promptTemplate.replace(/\{\{QUESTION_COUNT\}\}/g, questionCount.toString())
     prompt = prompt.replace(/\{\{DIFFICULTY_INSTRUCTION\}\}/g, difficultyInstruction)
 
-    // 치환내용플레이스홀더
+    // 내용 플레이스홀더 대체
     prompt = prompt.replace(/\{\{CONTENT\}\}/g, content)
 
     try {
       onProgress?.('generating_quiz', 30)
 
-      // 조회 AI SDK 모델인스턴스
+      // AI SDK 모델 인스턴스 가져오기
       const model = provider.getAIModel()
 
-      // 생성동상태Schema
+      // 동적 Schema 생성
       const QuizSchema = createQuizSchema(questionCount)
 
-      // 사용 streamObject 생성결구조화데이터
+      // streamObject를 사용하여 구조화 데이터 생성
       const { partialObjectStream, object } = streamObject({
         model: model,
         schema: QuizSchema,
         prompt: prompt
       })
 
-      // 감시스트림형식업데이트 (용도:표시진행)
+      // 스트리밍 업데이트 모니터링 (진행률 표시용)
       let lastProgress = 30
       let chunkCount = 0
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -241,13 +241,13 @@ export class QuizService {
 
       onProgress?.('parsing_result', 70)
 
-      // 등대기완전한객체
+      // 완전한 객체 대기
       const result = await object
       Logger.info('QuizService', `Generated quiz: ${result.metadata.totalQuestions} questions`)
 
-      // 기본검증
+      // 기본 검증
       if (!result.questions || result.questions.length < 1) {
-        throw new Error('생성의문제수량아닌정확인')
+        throw new Error('생성된 문제 수가 올바르지 않습니다')
       }
 
       return {
@@ -256,12 +256,12 @@ export class QuizService {
       }
     } catch (error) {
       Logger.error('QuizService', 'Error calling LLM:', error)
-      throw new Error(`생성문제실패: ${(error as Error).message}`)
+      throw new Error(`문제 생성 실패: ${(error as Error).message}`)
     }
   }
 
   /**
-   * 검증및정리세척문제데이터
+   * 문제 데이터 검증 및 정리
    */
   private async validateAndCleanQuiz(
     notebookId: string,
@@ -269,7 +269,7 @@ export class QuizService {
   ): Promise<QuizGenerationResult> {
     const db = getDatabase()
 
-    // 수세트모든제에의chunkIds
+    // 모든 언급된 chunkIds 수집
     const allChunkIds = new Set<string>()
     result.questions.forEach((question) => {
       if (question.metadata?.chunkIds) {
@@ -277,7 +277,7 @@ export class QuizService {
       }
     })
 
-    // 검증chunkIds예아니오존재
+    // chunkIds 존재 여부 검증
     if (allChunkIds.size > 0) {
       const validChunks = db
         .select({ id: chunks.id })
@@ -287,7 +287,7 @@ export class QuizService {
 
       const validChunkIds = new Set(validChunks.map((c) => c.id))
 
-      // 필터링유효하지 않음의chunkIds
+      // 유효하지 않은 chunkIds 필터링
       result.questions = result.questions.map((question) => {
         if (question.metadata?.chunkIds) {
           question.metadata.chunkIds = question.metadata.chunkIds.filter((id) =>
@@ -298,7 +298,7 @@ export class QuizService {
       })
     }
 
-    // 문제제거재（확인questionText예아니오재복）
+    // 문제 중복 제거 (questionText 중복 확인)
     const uniqueQuestions: QuizQuestion[] = []
     const seenTexts = new Set<string>()
     result.questions.forEach((question) => {
@@ -314,7 +314,7 @@ export class QuizService {
   }
 
   /**
-   * 생성문제
+   * 문제 생성
    */
   async generateQuiz(
     notebookId: string,
@@ -326,19 +326,19 @@ export class QuizService {
     const startTime = Date.now()
 
     try {
-      // 1. 생성기록
+      // 1. 레코드 생성
       onProgress?.('creating_record', 0)
 
       const notebook = db.select().from(notebooks).where(eq(notebooks.id, notebookId)).get()
       if (!notebook) {
-        throw new Error('노트북존재하지 않음')
+        throw new Error('노트북이 존재하지 않습니다')
       }
 
-      // 현재 조회언어설정
+      // 현재 언어 설정 조회
       const settings = await settingsManager.getAllSettings()
-      const language = settings.language || 'ko-KR'
+      const language = settings.language || 'zh-CN'
 
-      // 현재 조회버전번호
+      // 현재 버전 번호 조회
       const latestVersion = db
         .select({ version: quizzes.version })
         .from(quizzes)
@@ -349,9 +349,9 @@ export class QuizService {
 
       const newVersion = (latestVersion?.version || 0) + 1
 
-      // 기반으로언어생성제목
+      // 언어에 따라 제목 생성
       const titleTemplate =
-        language === 'en-US' ? `${notebook.title} Quiz` : `${notebook.title}의퀴즈`
+        language === 'en-US' ? `${notebook.title} Quiz` : `${notebook.title}의 퀴즈`
 
       const newQuiz: NewQuiz = {
         id: quizId,
@@ -368,7 +368,7 @@ export class QuizService {
       db.insert(quizzes).values(newQuiz).run()
       Logger.info('QuizService', `Created quiz: ${quizId}, version: ${newVersion}`)
 
-      // 생성의 item（추가에목록끝끝）
+      // 해당하는 item 생성 (목록 끝에 추가)
       const existingItems = db.select().from(items).where(eq(items.notebookId, notebookId)).all()
       const maxOrder = existingItems.reduce((max, item) => Math.max(max, item.order), -1)
       const newOrder = maxOrder + 1
@@ -387,18 +387,18 @@ export class QuizService {
         .run()
       Logger.info('QuizService', `Created item for quiz: ${itemId} with order: ${newOrder}`)
 
-      // 2. 집계내용
+      // 2. 내용 집계
       onProgress?.('aggregating_content', 10)
       const content = await this.aggregateNotebookContent(notebookId)
 
-      // 3. 호출LLM생성
+      // 3. LLM 호출하여 생성
       const result = await this.callLLMForGeneration(content, options, onProgress)
 
-      // 4. 검증및정리세척데이터
+      // 4. 데이터 검증 및 정리
       onProgress?.('validating_data', 80)
       const validatedResult = await this.validateAndCleanQuiz(notebookId, result)
 
-      // 5. 빌드chunkMapping
+      // 5. chunkMapping 구축
       const chunkMapping: Record<string, string[]> = {}
       validatedResult.questions.forEach((question) => {
         if (question.metadata?.chunkIds && question.metadata.chunkIds.length > 0) {
@@ -406,7 +406,7 @@ export class QuizService {
         }
       })
 
-      // 6. 업데이트데이터베이스
+      // 6. 데이터베이스 업데이트
       onProgress?.('saving_quiz', 90)
 
       const generationTime = Date.now() - startTime
@@ -434,7 +434,7 @@ export class QuizService {
     } catch (error) {
       Logger.error('QuizService', 'Error generating quiz:', error)
 
-      // 업데이트상태실패
+      // 상태를 실패로 업데이트
       db.update(quizzes)
         .set({
           status: 'failed',
@@ -449,7 +449,7 @@ export class QuizService {
   }
 
   /**
-   * 문제은행 조회
+   * 문제 은행 조회
    */
   getQuiz(quizId: string): Quiz | undefined {
     const db = getDatabase()
@@ -458,7 +458,7 @@ export class QuizService {
   }
 
   /**
-   * 노트북 조회최신버전문제라이브러리
+   * 노트북의 최신 버전 문제 은행 조회
    */
   getLatestQuiz(notebookId: string): Quiz | undefined {
     const db = getDatabase()
@@ -473,21 +473,21 @@ export class QuizService {
   }
 
   /**
-   * 제출퀴즈세션
+   * 퀴즈 세션 제출
    */
   submitSession(quizId: string, answers: Record<string, number>): string {
     const db = getDatabase()
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 
-    // 문제은행 조회
+    // 문제 은행 조회
     const quiz = this.getQuiz(quizId)
     if (!quiz) {
-      throw new Error('문제라이브러리존재하지 않음')
+      throw new Error('문제 은행이 존재하지 않습니다')
     }
 
     const questions = quiz.questionsData as any as QuizQuestion[]
 
-    // 계산분수
+    // 점수 계산
     let correctCount = 0
     questions.forEach((question) => {
       const userAnswer = answers[question.id]
@@ -499,7 +499,7 @@ export class QuizService {
     const totalQuestions = questions.length
     const score = Math.round((correctCount / totalQuestions) * 100)
 
-    // 세션 생성기록
+    // 세션 레코드 생성
     const newSession: NewQuizSession = {
       id: sessionId,
       quizId,
@@ -520,7 +520,7 @@ export class QuizService {
   }
 
   /**
-   * 조회퀴즈세션
+   * 퀴즈 세션 조회
    */
   getSession(sessionId: string): QuizSession | undefined {
     const db = getDatabase()
@@ -529,7 +529,7 @@ export class QuizService {
   }
 
   /**
-   * 업데이트문제라이브러리
+   * 문제 은행 업데이트
    */
   updateQuiz(quizId: string, updates: Partial<{ title: string }>): void {
     const db = getDatabase()
@@ -542,18 +542,18 @@ export class QuizService {
   }
 
   /**
-   * 문제은행 삭제
+   * 문제 은행 삭제
    */
   deleteQuiz(quizId: string): void {
     const db = getDatabase()
 
-    // 먼저삭제연관된 item
+    // 연관된 item 먼저 삭제
     db.delete(items)
       .where(and(eq(items.type, 'quiz'), eq(items.resourceId, quizId)))
       .run()
     Logger.info('QuizService', `Deleted item for quiz: ${quizId}`)
 
-    // 문제은행 삭제자（레벨연삭제quizSessions）
+    // 문제 은행 자체 삭제 (quizSessions 캐스케이드 삭제)
     db.delete(quizzes).where(eq(quizzes.id, quizId)).run()
     executeCheckpoint('PASSIVE')
     Logger.info('QuizService', `Quiz deleted: ${quizId}`)

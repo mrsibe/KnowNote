@@ -122,7 +122,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 에서파일문서 추가
+  // 파일에서 문서 추가
   addDocumentFromFile: async (notebookId, filePath) => {
     set({ isIndexing: true, error: null })
     try {
@@ -139,7 +139,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 에서 URL 문서 추가
+  // URL에서 문서 추가
   addDocumentFromUrl: async (notebookId, url) => {
     set({ isIndexing: true, error: null })
     try {
@@ -156,7 +156,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  //  Note 추가에지식 베이스
+  // 지식 베이스에 Note 추가
   addNoteToKnowledge: async (notebookId, noteId) => {
     set({ isIndexing: true, error: null })
     try {
@@ -221,7 +221,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
 }))
 
 /**
- * 설정지식 베이스감시
+ * 지식 베이스 리스너 설정
  */
 export function setupKnowledgeListeners(): () => void {
   const cleanupProgress = window.api.knowledge.onIndexProgress((data: IndexProgress) => {

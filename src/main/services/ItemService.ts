@@ -4,25 +4,25 @@ import { eq, and } from 'drizzle-orm'
 import { nanoid } from 'nanoid'
 
 /**
- * Item 타입열거형
+ * Item 타입 열거
  */
 export type ItemType = 'note' | 'mindmap' | 'quiz' | 'anki' | 'ppt' | 'audio' | 'video'
 
 /**
- * Item 상세（패키지포함연관된리소스데이터）
+ * Item 상세 (연관된 리소스 데이터 포함)
  */
 export interface ItemDetail extends Item {
-  resource: any // 기반으로 type 반환의리소스데이터（Note | MindMap | ...）
+  resource: any // type에 따라 해당하는 리소스 데이터 반환 (Note | MindMap | ...)
 }
 
 /**
  * Item 서비스
- * 통합관리노트북아래의모든내용항목
+ * 노트북 내의 모든 콘텐츠 항목을 통합 관리
  */
 export class ItemService {
   /**
-   * 노트북 조회아래의모든 items（패키지포함닫기연리소스）
-   * 에 따라참조 order 오름차순정렬
+   * 노트북의 모든 items 조회 (연관 리소스 포함)
+   * order 오름차순 정렬
    */
   async getItemsByNotebook(notebookId: string): Promise<ItemDetail[]> {
     const db = getDatabase()
@@ -32,7 +32,7 @@ export class ItemService {
       .where(eq(items.notebookId, notebookId))
       .orderBy(items.order)
 
-    // 로드매개 item 의닫기연리소스
+    // 각 item의 연관 리소스 로드
     const itemDetails: ItemDetail[] = []
     for (const item of itemsList) {
       let resource: any = null
@@ -78,7 +78,7 @@ export class ItemService {
           break
         }
 
-        // 향후으로추가더 많은타입
+        // 향후 더 많은 타입 추가 가능
         default:
           resource = null
       }
@@ -95,7 +95,7 @@ export class ItemService {
   }
 
   /**
-   * 생성 item（자동추가에목록마지막）
+   * item 생성 (자동으로 목록 마지막에 추가)
    */
   async createItem(data: {
     notebookId: string
@@ -106,7 +106,7 @@ export class ItemService {
     const db = getDatabase()
     const now = new Date()
 
-    // 만약없있는가리키는정 order，현재 조회노트북의최대 order 값
+    // order가 지정되지 않은 경우 현재 노트북의 최대 order 값 조회
     let order = data.order
     if (order === undefined) {
       const existingItems = await db
@@ -114,7 +114,7 @@ export class ItemService {
         .from(items)
         .where(eq(items.notebookId, data.notebookId))
 
-      // 찾에최대의 order 값，새 item 의 order 최대값 + 1
+      // 최대 order 값 찾기, 새 item의 order는 최대값 + 1
       const maxOrder = existingItems.reduce((max, item) => Math.max(max, item.order), -1)
       order = maxOrder + 1
     }
@@ -134,7 +134,7 @@ export class ItemService {
   }
 
   /**
-   * 삭제 item（아닌삭제연관된리소스）
+   * item 삭제 (연관 리소스는 삭제하지 않음)
    */
   async deleteItem(itemId: string): Promise<void> {
     const db = getDatabase()
@@ -142,7 +142,7 @@ export class ItemService {
   }
 
   /**
-   * 업데이트 item 의순서순서
+   * item 순서 업데이트
    */
   async updateItemOrder(itemId: string, order: number): Promise<void> {
     const db = getDatabase()
@@ -150,8 +150,8 @@ export class ItemService {
   }
 
   /**
-   * 일괄업데이트 items 의순서순서
-   * @param updates - { itemId: order } 의매핑
+   * items 순서 일괄 업데이트
+   * @param updates - { itemId: order } 매핑
    */
   async batchUpdateOrder(updates: Record<string, number>): Promise<void> {
     const db = getDatabase()
@@ -162,7 +162,7 @@ export class ItemService {
   }
 
   /**
-   * 기반으로리소스 ID 및타입찾기 item
+   * 리소스 ID 및 타입으로 item 찾기
    */
   async findItemByResource(resourceId: string, type: ItemType): Promise<Item | null> {
     const db = getDatabase()
@@ -176,7 +176,7 @@ export class ItemService {
   }
 
   /**
-   * 삭제연관된리소스및 item
+   * 연관 리소스와 item 함께 삭제
    */
   async deleteItemWithResource(itemId: string): Promise<void> {
     const db = getDatabase()
@@ -188,7 +188,7 @@ export class ItemService {
 
     const { type, resourceId } = item[0]
 
-    // 삭제연관된리소스
+    // 연관 리소스 삭제
     switch (type) {
       case 'note':
         await db.delete(notes).where(eq(notes.id, resourceId))
@@ -202,10 +202,10 @@ export class ItemService {
       case 'anki':
         await db.delete(ankiCards).where(eq(ankiCards.id, resourceId))
         break
-      // 향후으로추가더 많은타입
+      // 향후 더 많은 타입 추가 가능
     }
 
-    // 삭제 item（만약리소스있는레벨연삭제，이미삭제）
+    // item 삭제 (리소스에 캐스케이드 삭제가 있으면 이미 삭제되었을 수 있음)
     await db.delete(items).where(eq(items.id, itemId))
   }
 }

@@ -3,17 +3,17 @@ import type { AnkiCard } from '../../../main/db/schema'
 import type { AnkiCardItem } from '../../../shared/types/anki'
 
 interface AnkiStore {
-  // 핵심마음상태
+  // 핵심 상태
   currentAnkiCards: AnkiCard | null
   selectedCardIds: Set<string>
   isGenerating: boolean
   generationProgress: { stage: string; progress: number } | null
 
-  // Dialog상태
+  // Dialog 상태
   isConfigDialogOpen: boolean
   isExportDialogOpen: boolean
 
-  // 카드편편집상태
+  // 카드 편집 상태
   editingCard: AnkiCardItem | null
   isEditing: boolean
 
@@ -29,11 +29,11 @@ interface AnkiStore {
   setEditingCard: (card: AnkiCardItem | null) => void
   setIsEditing: (isEditing: boolean) => void
 
-  // 계산속성
+  // 계산 속성
   getTotalCards: () => number
   getSelectedCards: () => AnkiCardItem[]
 
-  // 비동기작업
+  // 비동기 작업
   loadLatestAnkiCards: (notebookId: string) => Promise<void>
   loadAnkiCards: (ankiCardId: string) => Promise<void>
   generateAnkiCards: (
@@ -55,7 +55,7 @@ interface AnkiStore {
 }
 
 export const useAnkiStore = create<AnkiStore>()((set, get) => ({
-  // 초기시작상태
+  // 초기 상태
   currentAnkiCards: null,
   selectedCardIds: new Set(),
   isGenerating: false,
@@ -86,7 +86,7 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
   setEditingCard: (card) => set({ editingCard: card }),
   setIsEditing: (isEditing) => set({ isEditing }),
 
-  // 계산속성
+  // 계산 속성
   getTotalCards: () => {
     const { currentAnkiCards } = get()
     if (!currentAnkiCards) return 0
@@ -100,7 +100,7 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
     return cards.filter((card) => selectedCardIds.has(card.id))
   },
 
-  // 비동기작업
+  // 비동기 작업
   loadLatestAnkiCards: async (notebookId: string) => {
     try {
       const cards = await window.api.anki.getLatest(notebookId)
@@ -134,8 +134,8 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
     try {
       const result = await window.api.anki.generate(notebookId, options)
       if (result.success) {
-        // 생성성공，아닌업데이트currentAnkiCards
-        // 사용자으로계속조회보기현재카드，동시새카드후대생성
+        // 생성 성공, currentAnkiCards 업데이트 안 함
+        // 사용자가 현재 카드를 계속 볼 수 있고, 새 카드는 나중에 생성
         set({
           isGenerating: false,
           generationProgress: null
@@ -186,7 +186,7 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   deleteCards: async (_cardIds: string[]) => {
-    // 현재미지원단일개카드삭제，만지원삭제정개카드세트
+    // 현재 개별 카드 삭제는 미지원, 전체 카드 세트 삭제만 지원
     throw new Error('deleteCards not implemented: only whole-deck deletion supported')
   },
 
@@ -203,7 +203,7 @@ export const useAnkiStore = create<AnkiStore>()((set, get) => ({
   }
 }))
 
-// 설정진행감시
+// 진행률 리스너 설정
 export function setupAnkiListeners() {
   return window.api.anki.onProgress((data) => {
     useAnkiStore.setState({

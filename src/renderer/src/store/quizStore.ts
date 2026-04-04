@@ -3,7 +3,7 @@ import type { Quiz, QuizSession } from '../../../main/db/schema'
 import type { QuizQuestion } from '../../../shared/types/quiz'
 
 interface QuizStore {
-  // 핵심마음상태
+  // 핵심 상태
   currentQuiz: Quiz | null
   currentQuestionIndex: number
   answers: Record<string, number> // questionId -> answerIndex
@@ -11,10 +11,10 @@ interface QuizStore {
   isGenerating: boolean
   generationProgress: { stage: string; progress: number } | null
 
-  // Dialog상태
+  // Dialog 상태
   isDialogOpen: boolean
-  isResultMode: boolean // 예아니오표시결과페이지
-  isReviewMode: boolean // 예아니오조회보기상세���턴（탐색탐색퀴즈，아닌수정수정）
+  isResultMode: boolean // 결과 페이지 표시 여부
+  isReviewMode: boolean // 상세 보기 모드 여부 (퀴즈 탐색, 수정 불가)
 
   // Actions
   setCurrentQuiz: (quiz: Quiz | null) => void
@@ -27,11 +27,11 @@ interface QuizStore {
   setResultMode: (isResult: boolean) => void
   setReviewMode: (isReview: boolean) => void
 
-  // 계산속성
+  // 계산 속성
   getCorrectCount: () => number
   getTotalQuestions: () => number
 
-  // 비동기작업
+  // 비동기 작업
   loadLatestQuiz: (notebookId: string) => Promise<void>
   loadQuiz: (quizId: string) => Promise<void>
   generateQuiz: (
@@ -47,7 +47,7 @@ interface QuizStore {
 }
 
 export const useQuizStore = create<QuizStore>()((set, get) => ({
-  // 초기시작상태
+  // 초기 상태
   currentQuiz: null,
   currentQuestionIndex: 0,
   answers: {},
@@ -75,7 +75,7 @@ export const useQuizStore = create<QuizStore>()((set, get) => ({
   setResultMode: (isResult) => set({ isResultMode: isResult }),
   setReviewMode: (isReview) => set({ isReviewMode: isReview }),
 
-  // 계산속성
+  // 계산 속성
   getCorrectCount: () => {
     const { currentQuiz, answers } = get()
     if (!currentQuiz) return 0
@@ -100,7 +100,7 @@ export const useQuizStore = create<QuizStore>()((set, get) => ({
     return questions.length
   },
 
-  // 비동기작업
+  // 비동기 작업
   loadLatestQuiz: async (notebookId: string) => {
     try {
       const quiz = await window.api.quiz.getLatest(notebookId)
@@ -180,7 +180,7 @@ export const useQuizStore = create<QuizStore>()((set, get) => ({
   }
 }))
 
-// 설정진행감시
+// 진행률 리스너 설정
 export function setupQuizListeners() {
   return window.api.quiz.onProgress((data) => {
     useQuizStore.setState({

@@ -45,9 +45,9 @@ export const useNotebookStore = create<NotebookStore>()((set) => ({
         notebooks: [dbNotebook, ...state.notebooks]
       }))
 
-      // 자동생성첫 번째개세션
+      // 첫 번째 세션 자동 생성
       try {
-        await window.api.createChatSession(dbNotebook.id, '새대화')
+        await window.api.createChatSession(dbNotebook.id, '새 대화')
         console.log(`[NotebookStore] Created initial session for notebook ${dbNotebook.id}`)
       } catch (error) {
         console.error('[NotebookStore] Failed to create initial session:', error)
@@ -90,7 +90,7 @@ export const useNotebookStore = create<NotebookStore>()((set) => ({
         const updatedNotebooks = state.notebooks.map((nb) =>
           nb.id === id ? { ...nb, ...updates, updatedAt: new Date() } : nb
         )
-        // 동시업데이트 openedNotebooks 및 currentNotebook
+        // openedNotebooks 및 currentNotebook도 동시 업데이트
         const updatedOpenedNotebooks = state.openedNotebooks.map((nb) =>
           nb.id === id ? { ...nb, ...updates, updatedAt: new Date() } : nb
         )
@@ -120,7 +120,7 @@ export const useNotebookStore = create<NotebookStore>()((set) => ({
     set((state) => {
       const notebook = state.notebooks.find((nb) => nb.id === id)
       if (!notebook) return state
-      // 만약이미열기，아닌재복추가
+      // 이미 열려 있으면 중복 추가하지 않음
       if (state.openedNotebooks.some((nb) => nb.id === id)) return state
       return {
         openedNotebooks: [...state.openedNotebooks, notebook]
