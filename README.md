@@ -127,12 +127,12 @@ NotebookLM 스타일의 워크플로우를 **로컬 우선, Docker 불필요 환
 
 ## 프로바이더 지원
 
-| 프로바이더 | 유형 | 채팅 | 임베딩 | 비고 |
-|-----------|------|------|--------|------|
-| **LM Studio** | 로컬 | ✅ | ✅ | 1순위 권장, OpenAI 호환 API |
-| **Ollama** | 로컬 | ✅ | ✅ | 로컬 LLM 대안 |
-| **OpenAI** | API | ✅ | ✅ | GPT-4o, text-embedding-3-small |
-| **DeepSeek** | API | ✅ | ✅ | DeepSeek-Chat, 추론 지원 |
+| 프로바이더    | 유형 | 채팅 | 임베딩 | 비고                           |
+| ------------- | ---- | ---- | ------ | ------------------------------ |
+| **LM Studio** | 로컬 | ✅   | ✅     | 1순위 권장, OpenAI 호환 API    |
+| **Ollama**    | 로컬 | ✅   | ✅     | 로컬 LLM 대안                  |
+| **OpenAI**    | API  | ✅   | ✅     | GPT-4o, text-embedding-3-small |
+| **DeepSeek**  | API  | ✅   | ✅     | DeepSeek-Chat, 추론 지원       |
 
 ---
 

@@ -6,7 +6,6 @@ import { UpdateStatus, UpdateState } from '../../shared/types/update'
  * 자동 업데이트 서비스 (온프레미스 배포용 비활성화됨)
  */
 export class UpdateService {
-
   constructor() {
     // 온프레미스 배포: 자동 업데이트 비활성화
     Logger.info('UpdateService', 'Auto-update service disabled for on-premise deployment')

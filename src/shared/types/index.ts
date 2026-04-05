@@ -99,6 +99,13 @@ export interface AppSettings {
   hasCompletedOnboarding: boolean
   defaultChatModel?: string // 기본 대화 모델
   defaultEmbeddingModel?: string // 기본 임베딩 모델
+  rag?: {
+    topK?: number // 반환 결과 수, 기본값 5
+    threshold?: number // 유사도 임계값, 기본값 0.3
+    searchMode?: 'semantic' | 'keyword' | 'hybrid' // 검색 모드, 기본값 'hybrid'
+    overRetrievalMultiplier?: number // Over-retrieval 배수, 기본값 4
+    enableReranking?: boolean // 재순위화 활성화, 기본값 true
+  }
   prompts?: {
     mindMap?: {
       'ko-KR'?: string // 한국어 마인드맵 생성 프롬프트

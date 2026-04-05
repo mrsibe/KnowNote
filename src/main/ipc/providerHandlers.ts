@@ -95,9 +95,7 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
             // 로컬 프로바이더: 설정에서 baseUrl 조회
             const providerConfig = await providersManager.getProviderConfig(args.providerName)
             const defaultBaseUrl =
-              args.providerName === 'ollama'
-                ? 'http://localhost:11434'
-                : 'http://localhost:1234/v1'
+              args.providerName === 'ollama' ? 'http://localhost:11434' : 'http://localhost:1234/v1'
             const baseUrl = providerConfig?.config.baseUrl || defaultBaseUrl
 
             if (args.providerName === 'ollama') {

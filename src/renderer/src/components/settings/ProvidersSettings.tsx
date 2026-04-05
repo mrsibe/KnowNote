@@ -460,7 +460,9 @@ export default function ProvidersSettings({
         {activeProvider === 'lmstudio' && (
           <ProviderConfigPanel
             displayName="LM Studio"
-            description={t('lmstudioDesc', { defaultValue: 'Local LLM server (OpenAI compatible)' })}
+            description={t('lmstudioDesc', {
+              defaultValue: 'Local LLM server (OpenAI compatible)'
+            })}
             platformUrl="https://lmstudio.ai"
             provider={lmstudioProvider}
             models={models.lmstudio || []}

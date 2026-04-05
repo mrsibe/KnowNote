@@ -104,7 +104,10 @@ const QuizQuestionSchema: z.ZodType<QuizQuestion> = z.object({
  */
 function createQuizSchema(questionCount: number) {
   return z.object({
-    questions: z.array(QuizQuestionSchema).length(questionCount).describe(`${questionCount}개 문제`),
+    questions: z
+      .array(QuizQuestionSchema)
+      .length(questionCount)
+      .describe(`${questionCount}개 문제`),
     metadata: z.object({
       totalQuestions: z.number().describe('총 문제 수')
     })
@@ -139,7 +142,9 @@ export class QuizService {
       Logger.info('QuizService', `Found ${docs.length} indexed documents`)
 
       if (docs.length === 0) {
-        throw new Error('노트북에 문제를 생성할 수 있는 콘텐츠가 없습니다. 먼저 문서를 지식 베이스에 추가하세요')
+        throw new Error(
+          '노트북에 문제를 생성할 수 있는 콘텐츠가 없습니다. 먼저 문서를 지식 베이스에 추가하세요'
+        )
       }
 
       // 2. 문서 chunks 집계 (문서당 최대 10개 chunks)

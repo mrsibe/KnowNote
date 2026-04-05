@@ -30,7 +30,10 @@ export const SettingsSchemas = {
  */
 export const NotebookSchemas = {
   createNotebook: z.object({
-    title: z.string().min(1, '제목은 비어 있을 수 없습니다').max(200, '제목은 200자를 초과할 수 없습니다'),
+    title: z
+      .string()
+      .min(1, '제목은 비어 있을 수 없습니다')
+      .max(200, '제목은 200자를 초과할 수 없습니다'),
     description: z.string().max(1000, '설명은 1000자를 초과할 수 없습니다').optional()
   }),
 
@@ -179,7 +182,10 @@ export const KnowledgeSchemas = {
 
   search: z.object({
     notebookId: z.string().min(1, '노트북 ID는 비어 있을 수 없습니다'),
-    query: z.string().min(1, '검색 쿼리는 비어 있을 수 없습니다').max(1000, '검색 쿼리는 1000자를 초과할 수 없습니다'),
+    query: z
+      .string()
+      .min(1, '검색 쿼리는 비어 있을 수 없습니다')
+      .max(1000, '검색 쿼리는 1000자를 초과할 수 없습니다'),
     options: z
       .object({
         topK: z.number().int().min(1).max(100).optional(),
@@ -196,7 +202,10 @@ export const KnowledgeSchemas = {
 export const ChatSchemas = {
   sendMessage: z.object({
     sessionId: z.string().min(1, '세션 ID는 비어 있을 수 없습니다'),
-    content: z.string().min(1, '메시지 내용은 비어 있을 수 없습니다').max(10000, '메시지 내용은 10000자를 초과할 수 없습니다')
+    content: z
+      .string()
+      .min(1, '메시지 내용은 비어 있을 수 없습니다')
+      .max(10000, '메시지 내용은 10000자를 초과할 수 없습니다')
   }),
 
   createSession: z.object({
@@ -214,7 +223,10 @@ export const ChatSchemas = {
 
   updateSessionTitle: z.object({
     sessionId: z.string().min(1, '세션 ID는 비어 있을 수 없습니다'),
-    title: z.string().min(1, '제목은 비어 있을 수 없습니다').max(200, '제목은 200자를 초과할 수 없습니다')
+    title: z
+      .string()
+      .min(1, '제목은 비어 있을 수 없습니다')
+      .max(200, '제목은 200자를 초과할 수 없습니다')
   }),
 
   deleteSession: z.object({

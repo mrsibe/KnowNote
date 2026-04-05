@@ -7,7 +7,7 @@ import { createHash } from 'crypto'
 import { app } from 'electron'
 import { join, basename } from 'path'
 import { mkdir, copyFile, unlink, stat } from 'fs/promises'
-import { getDatabase, executeCheckpoint } from '../db'
+import { getDatabase, getSqlite, executeCheckpoint } from '../db'
 import { documents, chunks, embeddings, notes } from '../db/schema'
 import type { Document, Chunk, NewDocument, NewChunk, NewEmbedding } from '../db/schema'
 import { eq, desc, inArray, sql } from 'drizzle-orm'
@@ -15,6 +15,7 @@ import { EmbeddingService } from './EmbeddingService'
 import { ChunkingService, type ChunkOptions } from './ChunkingService'
 import { FileParserService } from './FileParserService'
 import { WebFetchService } from './WebFetchService'
+import { HybridSearchService, type SearchMode } from './HybridSearchService'
 import { vectorStoreManager } from '../vectorstore'
 import { ProviderManager } from '../providers/ProviderManager'
 import Logger from '../../shared/utils/logger'
@@ -41,6 +42,7 @@ export interface SearchOptions {
   topK?: number // 반환 결과 수, 기본값 5
   threshold?: number // 유사도 임계값, 기본값 0.5
   includeContent?: boolean // chunk 내용 포함 여부, 기본값 true
+  searchMode?: SearchMode // 검색 모드: 'semantic' | 'keyword' | 'hybrid'
 }
 
 /**
@@ -71,6 +73,7 @@ export class KnowledgeService {
   private chunkingService: ChunkingService
   private fileParserService: FileParserService
   private webFetchService: WebFetchService
+  private hybridSearchService: HybridSearchService
   private knowledgeFilesDir: string
 
   constructor(providerManager: ProviderManager) {
@@ -78,6 +81,7 @@ export class KnowledgeService {
     this.chunkingService = new ChunkingService()
     this.fileParserService = new FileParserService()
     this.webFetchService = new WebFetchService()
+    this.hybridSearchService = new HybridSearchService(this.embeddingService)
     // 지식 베이스 파일 저장 디렉토리
     this.knowledgeFilesDir = join(app.getPath('userData'), 'knowledge-files')
     this.ensureKnowledgeFilesDir()
@@ -210,11 +214,28 @@ export class KnowledgeService {
         db.insert(chunks).values(newChunk).run()
       }
 
+      // 3.1 FTS5 인덱스에 청크 삽입
+      const sqliteDb = getSqlite()
+      if (sqliteDb) {
+        const ftsStmt = sqliteDb.prepare(
+          'INSERT INTO chunks_fts(content, chunk_id, notebook_id) VALUES (?, ?, ?)'
+        )
+        for (let i = 0; i < chunkIds.length; i++) {
+          ftsStmt.run(chunkContents[i], chunkIds[i], notebookId)
+        }
+      }
+
       // 4. 임베딩 벡터 생성
       onProgress?.('generating_embeddings', 30)
+
+      // Contextual chunk enrichment: prepend document title for better embedding quality
+      const enrichedContents = chunkContents.map(
+        (content) => `제목: ${options.title}\n\n${content}`
+      )
+
       const embeddingResults = await this.embeddingService.embedBatch(
-        chunkContents,
-        { dimensions: 1024 }, // 명시적으로 1024차원 지정
+        enrichedContents,
+        {},
         (completed, total) => {
           const progress = 30 + (completed / total) * 50
           onProgress?.('generating_embeddings', Math.round(progress))
@@ -367,6 +388,7 @@ export class KnowledgeService {
         throw new Error('No chunks generated from document')
       }
 
+      const title = parseResult.title || basename(filePath) || 'Untitled'
       Logger.info('KnowledgeService', `Document ${documentId}: ${chunkResults.length} chunks`)
 
       // 3. 청크 저장
@@ -394,11 +416,26 @@ export class KnowledgeService {
         db.insert(chunks).values(newChunk).run()
       }
 
+      // 3.1 FTS5 인덱스에 청크 삽입
+      const sqliteDbFile = getSqlite()
+      if (sqliteDbFile) {
+        const ftsStmtFile = sqliteDbFile.prepare(
+          'INSERT INTO chunks_fts(content, chunk_id, notebook_id) VALUES (?, ?, ?)'
+        )
+        for (let i = 0; i < chunkIds.length; i++) {
+          ftsStmtFile.run(chunkContents[i], chunkIds[i], notebookId)
+        }
+      }
+
       // 4. 임베딩 벡터 생성
       onProgress?.('generating_embeddings', 30)
+
+      // Contextual chunk enrichment: prepend document title for better embedding quality
+      const enrichedContents = chunkContents.map((content) => `제목: ${title}\n\n${content}`)
+
       const embeddingResults = await this.embeddingService.embedBatch(
-        chunkContents,
-        { dimensions: 1024 }, // 명시적으로 1024차원 지정
+        enrichedContents,
+        {},
         (completed, total) => {
           const progress = 30 + (completed / total) * 50
           onProgress?.('generating_embeddings', Math.round(progress))
@@ -564,8 +601,41 @@ export class KnowledgeService {
     query: string,
     options: SearchOptions = {}
   ): Promise<SearchResult[]> {
-    const { topK = 5, threshold = 0.5, includeContent = true } = options
+    const { topK = 5, threshold = 0.5, includeContent = true, searchMode } = options
 
+    Logger.info(
+      'RAG',
+      `Search: mode=${searchMode || 'semantic'}, query="${query.substring(0, 50)}..."`
+    )
+
+    // Use HybridSearchService for 'hybrid' or 'keyword' modes
+    if (searchMode === 'hybrid' || searchMode === 'keyword') {
+      const hybridResults = await this.hybridSearchService.search(notebookId, query, {
+        topK,
+        threshold,
+        searchMode,
+        includeContent
+      })
+
+      const mappedResults = hybridResults.map((r) => ({
+        chunkId: r.chunkId,
+        documentId: r.documentId,
+        documentTitle: r.documentTitle,
+        documentType: r.documentType,
+        content: r.content,
+        score: r.score,
+        chunkIndex: r.chunkIndex,
+        metadata: r.metadata
+      }))
+
+      Logger.info(
+        'RAG',
+        `Results: total=${mappedResults.length}, after_rerank=${mappedResults.length}`
+      )
+      return mappedResults
+    }
+
+    // Default: vector-only semantic search
     // 1. 쿼리 벡터 생성
     const queryEmbedding = await this.embeddingService.embed(query)
 
@@ -577,6 +647,7 @@ export class KnowledgeService {
     })
 
     if (vectorResults.length === 0) {
+      Logger.info('RAG', `Results: fts=0, vector=0, after_rerank=0`)
       return []
     }
 
@@ -623,6 +694,10 @@ export class KnowledgeService {
       results.push(result)
     }
 
+    Logger.info(
+      'RAG',
+      `Results: fts=0, vector=${vectorResults.length}, after_rerank=${results.length}`
+    )
     return results
   }
 
@@ -676,6 +751,15 @@ export class KnowledgeService {
     if (docChunks.length > 0) {
       const vectorStore = await vectorStoreManager.getStore(doc.notebookId)
       await vectorStore.deleteByChunkIds(docChunks.map((c) => c.id))
+
+      // FTS5 인덱스에서 삭제
+      const sqliteDbDel = getSqlite()
+      if (sqliteDbDel) {
+        const ftsDelStmt = sqliteDbDel.prepare('DELETE FROM chunks_fts WHERE chunk_id = ?')
+        for (const c of docChunks) {
+          ftsDelStmt.run(c.id)
+        }
+      }
     }
 
     // 로컬 복사 파일 삭제 (존재하는 경우)

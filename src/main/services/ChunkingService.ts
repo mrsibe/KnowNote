@@ -9,8 +9,8 @@ import Logger from '../../shared/utils/logger'
  * 청킹 옵션
  */
 export interface ChunkOptions {
-  chunkSize?: number // 각 청크의 목표 문자 수, 기본값 500
-  chunkOverlap?: number // 청크 간 겹치는 문자 수, 기본값 50
+  chunkSize?: number // 각 청크의 목표 문자 수, 기본값 800
+  chunkOverlap?: number // 청크 간 겹치는 문자 수, 기본값 100
   separators?: string[] // 구분자 우선순위 목록
   minChunkSize?: number // 최소 청크 크기, 기본값 100
 }
@@ -32,10 +32,13 @@ export interface ChunkResult {
  */
 export class ChunkingService {
   private defaultOptions: Required<ChunkOptions> = {
-    chunkSize: 500,
-    chunkOverlap: 50,
+    chunkSize: 800,
+    chunkOverlap: 100,
     minChunkSize: 100,
     separators: [
+      '\n# ', // Markdown H1 헤더
+      '\n## ', // Markdown H2 헤더
+      '\n### ', // Markdown H3 헤더
       '\n\n\n', // 여러 빈 줄 (장 구분)
       '\n\n', // 단락 구분
       '\n', // 줄 구분

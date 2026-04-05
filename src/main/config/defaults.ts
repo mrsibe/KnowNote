@@ -12,6 +12,13 @@ export const defaultSettings: AppSettings = {
   hasCompletedOnboarding: false,
   defaultChatModel: undefined,
   defaultEmbeddingModel: undefined,
+  rag: {
+    topK: 5,
+    threshold: 0.3,
+    searchMode: 'hybrid' as const,
+    overRetrievalMultiplier: 4,
+    enableReranking: true
+  },
   prompts: {
     mindMap: {
       'ko-KR': `당신은 지식 구조 분석 전문가로, 노트북 내용에서 핵심 지식 구조를 추출하는 역할을 합니다.

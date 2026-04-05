@@ -94,7 +94,9 @@ export function registerChatHandlers(
       throw new Error('IPC 호출에 매개변수 누락')
     }
     if (args.length > 1) {
-      throw new Error(`IPC 호출 매개변수 오류: 단일 객체 매개변수 전달이 예상되었으나 ${args.length} 개의 매개변수를 수신`)
+      throw new Error(
+        `IPC 호출 매개변수 오류: 단일 객체 매개변수 전달이 예상되었으나 ${args.length} 개의 매개변수를 수신`
+      )
     }
 
     const validatedArgs = ChatSchemas.sendMessage.parse(args[0])
@@ -136,8 +138,8 @@ export function registerChatHandlers(
         const session = queries.getSessionById(sessionId)
         if (session?.notebookId) {
           const searchResults = await knowledgeService.search(session.notebookId, content, {
-            topK: 3,
-            threshold: 0.5
+            topK: 5,
+            threshold: 0.3
           })
 
           if (searchResults.length > 0) {

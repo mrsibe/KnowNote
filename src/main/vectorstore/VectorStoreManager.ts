@@ -5,6 +5,7 @@
 
 import type { VectorStore, VectorStoreType } from './types'
 import { SQLiteVectorStore } from './SQLiteVectorStore'
+import { getSqlite } from '../db'
 import Logger from '../../shared/utils/logger'
 
 /**
@@ -130,6 +131,63 @@ export class VectorStoreManager {
    */
   setDefaultType(type: VectorStoreType): void {
     this.defaultType = type
+  }
+
+  /**
+   * 기존 Float32 벡터를 INT8로 마이그레이션
+   * INT8 테이블이 비어있고 Float32에 데이터가 있는 경우에만 실행
+   */
+  async migrateExistingToInt8(notebookId: string): Promise<void> {
+    const sqlite = getSqlite()
+    if (!sqlite) {
+      Logger.warn('VectorStoreManager', 'SQLite instance not available for INT8 migration')
+      return
+    }
+
+    try {
+      // INT8 테이블에 해당 notebook의 데이터가 있는지 확인
+      const int8Count = sqlite
+        .prepare(`SELECT COUNT(*) as count FROM vec_embeddings_int8 WHERE notebook_id = ?`)
+        .get(notebookId) as { count: number }
+
+      // Float32 테이블에 데이터가 있는지 확인
+      const float32Count = sqlite
+        .prepare(`SELECT COUNT(*) as count FROM vec_embeddings WHERE notebook_id = ?`)
+        .get(notebookId) as { count: number }
+
+      if (int8Count.count > 0) {
+        Logger.debug(
+          'VectorStoreManager',
+          `INT8 table already has ${int8Count.count} vectors for notebook: ${notebookId}, skipping migration`
+        )
+        return
+      }
+
+      if (float32Count.count === 0) {
+        Logger.debug(
+          'VectorStoreManager',
+          `No float32 vectors for notebook: ${notebookId}, nothing to migrate`
+        )
+        return
+      }
+
+      Logger.info(
+        'VectorStoreManager',
+        `Migrating ${float32Count.count} vectors to INT8 for notebook: ${notebookId}`
+      )
+
+      // Get or create a store to perform migration
+      const store = await this.getStore(notebookId)
+      if (store instanceof SQLiteVectorStore) {
+        const migrated = await store.migrateToInt8()
+        Logger.info(
+          'VectorStoreManager',
+          `INT8 migration complete: ${migrated} vectors migrated for notebook: ${notebookId}`
+        )
+      }
+    } catch (error) {
+      Logger.warn('VectorStoreManager', 'INT8 migration failed (non-critical):', error)
+    }
   }
 
   /**

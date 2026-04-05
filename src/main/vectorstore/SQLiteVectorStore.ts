@@ -5,6 +5,7 @@
 
 import { getSqlite } from '../db'
 import type { VectorStore, VectorItem, QueryResult, QueryOptions, VectorStoreConfig } from './types'
+import { float32ToInt8 } from './quantize'
 import Logger from '../../shared/utils/logger'
 
 /**
@@ -60,6 +61,19 @@ export class SQLiteVectorStore implements VectorStore {
       Logger.error('SQLiteVectorStore', 'Failed to upsert vectors:', error)
       throw error
     }
+
+    // Also insert INT8 quantized vectors for fast search
+    try {
+      const int8Stmt = sqlite.prepare(
+        `INSERT OR REPLACE INTO vec_embeddings_int8(embedding_id, chunk_id, notebook_id, embedding) VALUES (?, ?, ?, ?)`
+      )
+      for (const item of items) {
+        const int8Vector = float32ToInt8(item.vector)
+        int8Stmt.run(item.id, item.chunkId, this.notebookId, int8Vector)
+      }
+    } catch (error) {
+      Logger.warn('SQLiteVectorStore', 'INT8 table insert failed (non-critical):', error)
+    }
   }
 
   async delete(ids: string[]): Promise<void> {
@@ -85,6 +99,16 @@ export class SQLiteVectorStore implements VectorStore {
     } catch (error) {
       Logger.error('SQLiteVectorStore', 'Failed to delete vectors:', error)
       throw error
+    }
+
+    // Also delete from INT8 table
+    try {
+      const deleteInt8Stmt = sqlite.prepare(
+        `DELETE FROM vec_embeddings_int8 WHERE embedding_id IN (${placeholders})`
+      )
+      deleteInt8Stmt.run(...ids)
+    } catch (error) {
+      Logger.warn('SQLiteVectorStore', 'INT8 table delete failed (non-critical):', error)
     }
   }
 
@@ -112,6 +136,20 @@ export class SQLiteVectorStore implements VectorStore {
       Logger.error('SQLiteVectorStore', 'Failed to delete vectors by chunk IDs:', error)
       throw error
     }
+
+    // Also delete from INT8 table
+    try {
+      const deleteInt8Stmt = sqlite.prepare(
+        `DELETE FROM vec_embeddings_int8 WHERE chunk_id IN (${placeholders})`
+      )
+      deleteInt8Stmt.run(...chunkIds)
+    } catch (error) {
+      Logger.warn(
+        'SQLiteVectorStore',
+        'INT8 table delete by chunk IDs failed (non-critical):',
+        error
+      )
+    }
   }
 
   async query(queryVector: Float32Array, options: QueryOptions = {}): Promise<QueryResult[]> {
@@ -122,6 +160,126 @@ export class SQLiteVectorStore implements VectorStore {
     const { topK = 5, threshold } = options
 
     const sqlite = getSqlite()
+    if (!sqlite) {
+      throw new Error('SQLite instance not available')
+    }
+
+    // Try INT8 dual-table search first: fast candidate retrieval with INT8, then rescore with float32
+    try {
+      const candidates = this.queryInt8Candidates(sqlite, queryVector, topK)
+      if (candidates && candidates.length > 0) {
+        // Rescore candidates using float32 vectors
+        const rescored = this.rescoreWithFloat32(sqlite, queryVector, candidates)
+
+        // Sort by score descending and take topK
+        rescored.sort((a, b) => b.score - a.score)
+        const topResults = rescored.slice(0, topK)
+
+        // Apply threshold filtering
+        const filteredResults = threshold
+          ? topResults.filter((r) => r.score >= threshold)
+          : topResults
+
+        Logger.debug(
+          'SQLiteVectorStore',
+          `INT8 dual-table query returned ${filteredResults.length} results (threshold: ${threshold})`
+        )
+
+        return filteredResults
+      }
+    } catch (error) {
+      Logger.warn('SQLiteVectorStore', 'INT8 query failed, falling back to float32:', error)
+    }
+
+    // Fallback: direct float32 query
+    return this.queryFloat32(sqlite, queryVector, topK, threshold)
+  }
+
+  /**
+   * INT8 테이블에서 빠른 후보 검색 (over-retrieval)
+   */
+  private queryInt8Candidates(
+    sqlite: ReturnType<typeof getSqlite>,
+    queryVector: Float32Array,
+    topK: number
+  ): Array<{ embedding_id: string; chunk_id: string }> | null {
+    if (!sqlite) return null
+
+    // Over-retrieve 3x candidates from INT8 for better recall after rescoring
+    const overRetrievalK = Math.min(topK * 3, 100)
+    const int8QueryVector = float32ToInt8(queryVector)
+
+    const int8Stmt = sqlite.prepare(`
+      SELECT
+        embedding_id,
+        chunk_id
+      FROM vec_embeddings_int8
+      WHERE embedding MATCH ?
+        AND k = ?
+        AND notebook_id = ?
+      ORDER BY distance ASC
+    `)
+
+    const candidates = int8Stmt.all(int8QueryVector, overRetrievalK, this.notebookId) as Array<{
+      embedding_id: string
+      chunk_id: string
+    }>
+
+    return candidates
+  }
+
+  /**
+   * Float32 벡터로 후보 리스코어링
+   */
+  private rescoreWithFloat32(
+    sqlite: ReturnType<typeof getSqlite>,
+    queryVector: Float32Array,
+    candidates: Array<{ embedding_id: string; chunk_id: string }>
+  ): QueryResult[] {
+    if (!sqlite || candidates.length === 0) return []
+
+    const placeholders = candidates.map(() => '?').join(',')
+    const rescoreStmt = sqlite.prepare(`
+      SELECT
+        embedding_id,
+        chunk_id,
+        distance
+      FROM vec_embeddings
+      WHERE embedding MATCH ?
+        AND k = ?
+        AND notebook_id = ?
+        AND embedding_id IN (${placeholders})
+    `)
+
+    const candidateIds = candidates.map((c) => c.embedding_id)
+    const results = rescoreStmt.all(
+      queryVector,
+      candidates.length,
+      this.notebookId,
+      ...candidateIds
+    ) as Array<{
+      embedding_id: string
+      chunk_id: string
+      distance: number
+    }>
+
+    return results.map((row) => ({
+      id: row.embedding_id,
+      chunkId: row.chunk_id,
+      score: 1 - row.distance / 2,
+      distance: row.distance
+    }))
+  }
+
+  /**
+   * Float32 직접 쿼리 (폴백)
+   */
+  private async queryFloat32(
+    sqlite: ReturnType<typeof getSqlite>,
+    queryVector: Float32Array,
+    topK: number,
+    threshold?: number
+  ): Promise<QueryResult[]> {
     if (!sqlite) {
       throw new Error('SQLite instance not available')
     }
@@ -200,6 +358,16 @@ export class SQLiteVectorStore implements VectorStore {
       Logger.error('SQLiteVectorStore', 'Failed to clear vectors:', error)
       throw error
     }
+
+    // Also clear INT8 table
+    try {
+      const deleteInt8Stmt = sqlite.prepare(`
+        DELETE FROM vec_embeddings_int8 WHERE notebook_id = ?
+      `)
+      deleteInt8Stmt.run(this.notebookId)
+    } catch (error) {
+      Logger.warn('SQLiteVectorStore', 'INT8 table clear failed (non-critical):', error)
+    }
   }
 
   async count(): Promise<number> {
@@ -221,6 +389,69 @@ export class SQLiteVectorStore implements VectorStore {
       return result?.count || 0
     } catch (error) {
       Logger.error('SQLiteVectorStore', 'Failed to count vectors:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 기존 Float32 벡터를 INT8로 마이그레이션
+   * Float32 테이블의 모든 벡터를 읽어 INT8로 변환 후 삽입
+   */
+  async migrateToInt8(): Promise<number> {
+    if (!this.initialized) {
+      throw new Error('VectorStore not initialized')
+    }
+
+    const sqlite = getSqlite()
+    if (!sqlite) {
+      throw new Error('SQLite instance not available')
+    }
+
+    try {
+      // Float32 테이블에서 모든 벡터 조회
+      const selectStmt = sqlite.prepare(`
+        SELECT embedding_id, chunk_id, embedding
+        FROM vec_embeddings
+        WHERE notebook_id = ?
+      `)
+      const rows = selectStmt.all(this.notebookId) as Array<{
+        embedding_id: string
+        chunk_id: string
+        embedding: Buffer
+      }>
+
+      if (rows.length === 0) {
+        Logger.info('SQLiteVectorStore', `No vectors to migrate for notebook: ${this.notebookId}`)
+        return 0
+      }
+
+      // INT8 테이블에 배치 삽입
+      const int8Stmt = sqlite.prepare(
+        `INSERT OR REPLACE INTO vec_embeddings_int8(embedding_id, chunk_id, notebook_id, embedding) VALUES (?, ?, ?, ?)`
+      )
+
+      const insertMany = sqlite.transaction(
+        (rows: Array<{ embedding_id: string; chunk_id: string; embedding: Buffer }>) => {
+          for (const row of rows) {
+            const float32Vector = new Float32Array(
+              row.embedding.buffer,
+              row.embedding.byteOffset,
+              row.embedding.byteLength / 4
+            )
+            const int8Vector = float32ToInt8(float32Vector)
+            int8Stmt.run(row.embedding_id, row.chunk_id, this.notebookId, int8Vector)
+          }
+        }
+      )
+
+      insertMany(rows)
+      Logger.info(
+        'SQLiteVectorStore',
+        `Migrated ${rows.length} vectors to INT8 for notebook: ${this.notebookId}`
+      )
+      return rows.length
+    } catch (error) {
+      Logger.error('SQLiteVectorStore', 'Failed to migrate vectors to INT8:', error)
       throw error
     }
   }

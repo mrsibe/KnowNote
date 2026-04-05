@@ -206,7 +206,32 @@ export function initVectorStore() {
       );
     `)
 
-    console.log('[Database] Vector store initialized successfully')
+    // INT8 양자화 벡터 테이블 생성 (빠른 후보 검색용)
+    try {
+      sqlite.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings_int8 USING vec0(
+          embedding_id TEXT PRIMARY KEY,
+          chunk_id TEXT,
+          notebook_id TEXT,
+          embedding INT8[1024] distance_metric=cosine
+        );
+      `)
+      console.log('[Database] INT8 vector table initialized successfully')
+    } catch (error) {
+      console.warn('[Database] Failed to create INT8 vector table (non-critical):', error)
+    }
+
+    // FTS5 전문 검색 가상 테이블 생성
+    sqlite.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+        content,
+        chunk_id UNINDEXED,
+        notebook_id UNINDEXED,
+        tokenize='unicode61'
+      );
+    `)
+
+    console.log('[Database] Vector store and FTS5 initialized successfully')
   } catch (error) {
     console.error('[Database] Failed to initialize vector store:', error)
     throw error
