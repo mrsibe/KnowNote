@@ -1,6 +1,4 @@
-import { getDatabase, getSqlite } from '../db'
-import { chunks, documents } from '../db/schema'
-import { inArray } from 'drizzle-orm'
+import { getSqlite } from '../db'
 import { vectorStoreManager } from '../vectorstore'
 import { EmbeddingService } from './EmbeddingService'
 import Logger from '../../shared/utils/logger'
@@ -11,19 +9,10 @@ export interface HybridSearchOptions {
   topK?: number
   threshold?: number
   searchMode?: SearchMode
-  includeContent?: boolean
 }
 
 export interface HybridSearchResult {
   chunkId: string
-  documentId: string
-  documentTitle: string
-  documentType: string
-  content: string
-  score: number
-  chunkIndex: number
-  metadata?: Record<string, unknown>
-  source: 'fts' | 'vector' | 'hybrid'
 }
 
 export class HybridSearchService {
@@ -33,31 +22,30 @@ export class HybridSearchService {
     this.embeddingService = embeddingService
   }
 
+  /**
+   * 하이브리드 검색 → chunkId 목록 반환 (결과 조립은 KnowledgeService에서)
+   */
   async search(
     notebookId: string,
     query: string,
     options: HybridSearchOptions = {}
   ): Promise<HybridSearchResult[]> {
-    const { topK = 5, threshold = 0.3, searchMode = 'hybrid', includeContent = true } = options
-
-    const overRetrievalK = topK * 4 // Over-retrieval: fetch 4x candidates
+    const { topK = 20, threshold = 0.3, searchMode = 'hybrid' } = options
 
     let ftsResults: { chunkId: string; rank: number }[] = []
     let vectorResults: { chunkId: string; score: number; rank: number }[] = []
 
-    // FTS5 keyword search
     if (searchMode === 'keyword' || searchMode === 'hybrid') {
-      ftsResults = this.ftsSearch(notebookId, query, overRetrievalK)
+      ftsResults = this.ftsSearch(notebookId, query, topK)
       Logger.debug('HybridSearch', `FTS5 returned ${ftsResults.length} results`)
     }
 
-    // Vector semantic search
     if (searchMode === 'semantic' || searchMode === 'hybrid') {
       try {
         const queryEmbedding = await this.embeddingService.embed(query)
         const vectorStore = await vectorStoreManager.getStore(notebookId)
         const rawResults = await vectorStore.query(queryEmbedding.embedding, {
-          topK: overRetrievalK,
+          topK,
           threshold
         })
         vectorResults = rawResults.map((r, i) => ({
@@ -71,7 +59,6 @@ export class HybridSearchService {
       }
     }
 
-    // Combine results using RRF (Reciprocal Rank Fusion)
     let rankedChunkIds: string[]
     if (searchMode === 'hybrid' && ftsResults.length > 0 && vectorResults.length > 0) {
       rankedChunkIds = this.rrfFusion(ftsResults, vectorResults, topK)
@@ -81,14 +68,7 @@ export class HybridSearchService {
       rankedChunkIds = ftsResults.slice(0, topK).map((r) => r.chunkId)
     }
 
-    if (rankedChunkIds.length === 0) return []
-
-    // Fetch chunk and document details
-    return this.assembleResults(
-      rankedChunkIds,
-      includeContent,
-      searchMode === 'hybrid' ? 'hybrid' : searchMode === 'keyword' ? 'fts' : 'vector'
-    )
+    return rankedChunkIds.map((chunkId) => ({ chunkId }))
   }
 
   /**
@@ -153,53 +133,5 @@ export class HybridSearchService {
       .sort((a, b) => b[1] - a[1])
       .slice(0, topK)
       .map(([chunkId]) => chunkId)
-  }
-
-  /**
-   * Assemble search results with chunk and document details
-   */
-  private assembleResults(
-    chunkIds: string[],
-    includeContent: boolean,
-    source: 'fts' | 'vector' | 'hybrid'
-  ): HybridSearchResult[] {
-    const db = getDatabase()
-    const chunkDetails = db.select().from(chunks).where(inArray(chunks.id, chunkIds)).all()
-
-    const documentIds = [...new Set(chunkDetails.map((c) => c.documentId))]
-    const documentDetails = db
-      .select()
-      .from(documents)
-      .where(inArray(documents.id, documentIds))
-      .all()
-
-    const documentMap = new Map(documentDetails.map((d) => [d.id, d]))
-    const chunkMap = new Map(chunkDetails.map((c) => [c.id, c]))
-
-    // Preserve the original ordering from chunkIds
-    const results: HybridSearchResult[] = []
-    for (let i = 0; i < chunkIds.length; i++) {
-      const chunk = chunkMap.get(chunkIds[i])
-      if (!chunk) continue
-      const doc = documentMap.get(chunk.documentId)
-
-      results.push({
-        chunkId: chunkIds[i],
-        documentId: chunk.documentId,
-        documentTitle: doc?.title || 'Unknown',
-        documentType: doc?.type || 'unknown',
-        content: includeContent ? chunk.content : '',
-        score: 1 - i * 0.05, // Approximate score based on rank position
-        chunkIndex: chunk.chunkIndex,
-        metadata: chunk.metadata
-          ? typeof chunk.metadata === 'string'
-            ? JSON.parse(chunk.metadata)
-            : chunk.metadata
-          : undefined,
-        source
-      })
-    }
-
-    return results
   }
 }

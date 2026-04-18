@@ -137,9 +137,11 @@ export function registerChatHandlers(
       if (hasEmbeddingModel) {
         const session = queries.getSessionById(sessionId)
         if (session?.notebookId) {
+          const ragConfig = settings.rag
           const searchResults = await knowledgeService.search(session.notebookId, content, {
-            topK: 5,
-            threshold: 0.3
+            topK: ragConfig?.topK ?? 5,
+            threshold: ragConfig?.threshold ?? 0.3,
+            searchMode: ragConfig?.searchMode ?? 'hybrid'
           })
 
           if (searchResults.length > 0) {

@@ -16,6 +16,7 @@ import { ChunkingService, type ChunkOptions } from './ChunkingService'
 import { FileParserService } from './FileParserService'
 import { WebFetchService } from './WebFetchService'
 import { HybridSearchService, type SearchMode } from './HybridSearchService'
+import { RerankService } from './RerankService'
 import { vectorStoreManager } from '../vectorstore'
 import { ProviderManager } from '../providers/ProviderManager'
 import Logger from '../../shared/utils/logger'
@@ -74,6 +75,7 @@ export class KnowledgeService {
   private fileParserService: FileParserService
   private webFetchService: WebFetchService
   private hybridSearchService: HybridSearchService
+  private rerankService: RerankService
   private knowledgeFilesDir: string
 
   constructor(providerManager: ProviderManager) {
@@ -82,6 +84,7 @@ export class KnowledgeService {
     this.fileParserService = new FileParserService()
     this.webFetchService = new WebFetchService()
     this.hybridSearchService = new HybridSearchService(this.embeddingService)
+    this.rerankService = new RerankService(this.embeddingService)
     // 지식 베이스 파일 저장 디렉토리
     this.knowledgeFilesDir = join(app.getPath('userData'), 'knowledge-files')
     this.ensureKnowledgeFilesDir()
@@ -214,16 +217,7 @@ export class KnowledgeService {
         db.insert(chunks).values(newChunk).run()
       }
 
-      // 3.1 FTS5 인덱스에 청크 삽입
-      const sqliteDb = getSqlite()
-      if (sqliteDb) {
-        const ftsStmt = sqliteDb.prepare(
-          'INSERT INTO chunks_fts(content, chunk_id, notebook_id) VALUES (?, ?, ?)'
-        )
-        for (let i = 0; i < chunkIds.length; i++) {
-          ftsStmt.run(chunkContents[i], chunkIds[i], notebookId)
-        }
-      }
+      this.indexChunksToFts(chunkContents, chunkIds, notebookId)
 
       // 4. 임베딩 벡터 생성
       onProgress?.('generating_embeddings', 30)
@@ -416,16 +410,7 @@ export class KnowledgeService {
         db.insert(chunks).values(newChunk).run()
       }
 
-      // 3.1 FTS5 인덱스에 청크 삽입
-      const sqliteDbFile = getSqlite()
-      if (sqliteDbFile) {
-        const ftsStmtFile = sqliteDbFile.prepare(
-          'INSERT INTO chunks_fts(content, chunk_id, notebook_id) VALUES (?, ?, ?)'
-        )
-        for (let i = 0; i < chunkIds.length; i++) {
-          ftsStmtFile.run(chunkContents[i], chunkIds[i], notebookId)
-        }
-      }
+      this.indexChunksToFts(chunkContents, chunkIds, notebookId)
 
       // 4. 임베딩 벡터 생성
       onProgress?.('generating_embeddings', 30)
@@ -594,70 +579,100 @@ export class KnowledgeService {
   }
 
   /**
-   * 시맨틱 검색
+   * FTS5 인덱스에 청크 일괄 삽입
+   */
+  private indexChunksToFts(contents: string[], chunkIds: string[], notebookId: string): void {
+    const sqliteDb = getSqlite()
+    if (!sqliteDb) return
+    try {
+      const stmt = sqliteDb.prepare(
+        'INSERT INTO chunks_fts(content, chunk_id, notebook_id) VALUES (?, ?, ?)'
+      )
+      for (let i = 0; i < chunkIds.length; i++) {
+        stmt.run(contents[i], chunkIds[i], notebookId)
+      }
+    } catch (error) {
+      Logger.warn('KnowledgeService', 'FTS5 indexing failed (non-critical):', error)
+    }
+  }
+
+  /**
+   * 검색 (hybrid/keyword/semantic)
    */
   async search(
     notebookId: string,
     query: string,
     options: SearchOptions = {}
   ): Promise<SearchResult[]> {
-    const { topK = 5, threshold = 0.5, includeContent = true, searchMode } = options
+    const { topK = 5, threshold = 0.3, includeContent = true, searchMode = 'hybrid' } = options
 
-    Logger.info(
-      'RAG',
-      `Search: mode=${searchMode || 'semantic'}, query="${query.substring(0, 50)}..."`
-    )
+    Logger.info('RAG', `Search: mode=${searchMode}, query="${query.substring(0, 50)}..."`)
 
-    // Use HybridSearchService for 'hybrid' or 'keyword' modes
-    if (searchMode === 'hybrid' || searchMode === 'keyword') {
-      const hybridResults = await this.hybridSearchService.search(notebookId, query, {
-        topK,
-        threshold,
-        searchMode,
-        includeContent
-      })
-
-      const mappedResults = hybridResults.map((r) => ({
-        chunkId: r.chunkId,
-        documentId: r.documentId,
-        documentTitle: r.documentTitle,
-        documentType: r.documentType,
-        content: r.content,
-        score: r.score,
-        chunkIndex: r.chunkIndex,
-        metadata: r.metadata
-      }))
-
-      Logger.info(
-        'RAG',
-        `Results: total=${mappedResults.length}, after_rerank=${mappedResults.length}`
-      )
-      return mappedResults
-    }
-
-    // Default: vector-only semantic search
-    // 1. 쿼리 벡터 생성
-    const queryEmbedding = await this.embeddingService.embed(query)
-
-    // 2. 벡터 검색
-    const vectorStore = await vectorStoreManager.getStore(notebookId)
-    const vectorResults = await vectorStore.query(queryEmbedding.embedding, {
+    // 1. 검색 실행 → chunkId[] 획득
+    const candidateChunkIds = await this.retrieveChunkIds(
+      notebookId,
+      query,
+      searchMode,
       topK,
       threshold
-    })
+    )
 
-    if (vectorResults.length === 0) {
-      Logger.info('RAG', `Results: fts=0, vector=0, after_rerank=0`)
+    if (candidateChunkIds.length === 0) {
+      Logger.info('RAG', `Results: candidates=0, after_rerank=0`)
       return []
     }
 
-    // 3. chunk 상세 정보 조회
-    const db = getDatabase()
-    const chunkIds = vectorResults.map((r) => r.chunkId)
+    // 2. 결과 조립 (1곳에서만)
+    let results = this.assembleSearchResults(candidateChunkIds, includeContent)
 
+    // 3. 재순위화 (후보가 topK보다 많을 때)
+    if (results.length > topK) {
+      results = await this.applyReranking(query, results, topK)
+    }
+
+    Logger.info(
+      'RAG',
+      `Results: candidates=${candidateChunkIds.length}, after_rerank=${results.length}`
+    )
+    return results
+  }
+
+  /**
+   * 검색 모드에 따라 chunkId 목록 획득
+   */
+  private async retrieveChunkIds(
+    notebookId: string,
+    query: string,
+    searchMode: SearchMode,
+    topK: number,
+    threshold: number
+  ): Promise<string[]> {
+    if (searchMode === 'hybrid' || searchMode === 'keyword') {
+      const hybridResults = await this.hybridSearchService.search(notebookId, query, {
+        topK: topK * 4,
+        threshold,
+        searchMode
+      })
+      return hybridResults.map((r) => r.chunkId)
+    }
+
+    // semantic: 벡터 검색만
+    const queryEmbedding = await this.embeddingService.embed(query)
+    const vectorStore = await vectorStoreManager.getStore(notebookId)
+    const vectorResults = await vectorStore.query(queryEmbedding.embedding, {
+      topK: topK * 4,
+      threshold
+    })
+    return vectorResults.map((r) => r.chunkId)
+  }
+
+  /**
+   * chunkId 목록으로 SearchResult 조립 (단일 코드 경로)
+   */
+  private assembleSearchResults(chunkIds: string[], includeContent: boolean): SearchResult[] {
+    const db = getDatabase()
     const chunkDetails = db.select().from(chunks).where(inArray(chunks.id, chunkIds)).all()
 
-    // 문서 정보 조회
     const documentIds = [...new Set(chunkDetails.map((c) => c.documentId))]
     const documentDetails = db
       .select()
@@ -668,37 +683,67 @@ export class KnowledgeService {
     const documentMap = new Map(documentDetails.map((d) => [d.id, d]))
     const chunkMap = new Map(chunkDetails.map((c) => [c.id, c]))
 
-    // 4. 결과 조립
     const results: SearchResult[] = []
-
-    for (const vr of vectorResults) {
-      const chunk = chunkMap.get(vr.chunkId)
+    for (let i = 0; i < chunkIds.length; i++) {
+      const chunk = chunkMap.get(chunkIds[i])
       if (!chunk) continue
-
       const doc = documentMap.get(chunk.documentId)
 
-      const result: SearchResult = {
-        chunkId: vr.chunkId,
+      results.push({
+        chunkId: chunkIds[i],
         documentId: chunk.documentId,
         documentTitle: doc?.title || 'Unknown',
         documentType: doc?.type || 'unknown',
         content: includeContent ? chunk.content : '',
-        score: vr.score,
-        chunkIndex: chunk.chunkIndex
-      }
-
-      if (chunk.metadata) {
-        result.metadata = chunk.metadata
-      }
-
-      results.push(result)
+        score: 1 - i * 0.01,
+        chunkIndex: chunk.chunkIndex,
+        metadata: chunk.metadata
+          ? typeof chunk.metadata === 'string'
+            ? JSON.parse(chunk.metadata as string)
+            : chunk.metadata
+          : undefined
+      })
     }
 
-    Logger.info(
-      'RAG',
-      `Results: fts=0, vector=${vectorResults.length}, after_rerank=${results.length}`
-    )
     return results
+  }
+
+  /**
+   * 재순위화 적용
+   */
+  private async applyReranking(
+    query: string,
+    results: SearchResult[],
+    topN: number
+  ): Promise<SearchResult[]> {
+    try {
+      const candidates = results.map((r) => ({
+        chunkId: r.chunkId,
+        content: r.content,
+        score: r.score,
+        documentId: r.documentId,
+        documentTitle: r.documentTitle,
+        documentType: r.documentType,
+        chunkIndex: r.chunkIndex,
+        metadata: r.metadata
+      }))
+
+      const reranked = await this.rerankService.rerank(query, candidates, topN)
+
+      return reranked.map((r) => ({
+        chunkId: r.chunkId,
+        documentId: r.documentId as string,
+        documentTitle: r.documentTitle as string,
+        documentType: r.documentType as string,
+        content: r.content,
+        score: r.score,
+        chunkIndex: r.chunkIndex as number,
+        metadata: r.metadata as Record<string, unknown> | undefined
+      }))
+    } catch (error) {
+      Logger.warn('RAG', 'Reranking failed, using original order:', error)
+      return results.slice(0, topN)
+    }
   }
 
   /**

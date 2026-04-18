@@ -8,16 +8,19 @@
 ## 작업 1: Electron Sandbox 보안 강화
 
 ### 현재 상태
+
 - `src/main/windows/mainWindow.ts` line 33: `sandbox: false`
 - `src/preload/index.ts`: `contextBridge.exposeInMainWorld('api', api)` 사용 중
 - contextIsolation은 electron-vite 기본값으로 `true` (명시적 설정 없음)
 
 ### 왜 sandbox: true가 중요한가
+
 - sandbox가 false이면 preload 스크립트가 전체 Node.js API에 접근 가능
 - XSS 취약점이 발생할 경우 공격자가 파일시스템, 네트워크 등에 접근 가능
 - Electron 공식 보안 가이드에서 sandbox: true를 강력 권장
 
 ### 변경 방법
+
 ```typescript
 // src/main/windows/mainWindow.ts line 31-34
 webPreferences: {
@@ -29,17 +32,20 @@ webPreferences: {
 ### 위험 분석
 
 현재 preload 스크립트(`src/preload/index.ts`)는 이미 `contextBridge`를 올바르게 사용:
+
 ```typescript
-contextBridge.exposeInMainWorld('api', api)      // line 309
-contextBridge.exposeInMainWorld('electron', electronAPI)  // line 310
+contextBridge.exposeInMainWorld('api', api) // line 309
+contextBridge.exposeInMainWorld('electron', electronAPI) // line 310
 ```
 
 **잠재적 문제점:**
+
 1. `@electron-toolkit/preload`의 `electronAPI`가 sandbox 모드에서 동작하는지 확인 필요
 2. preload에서 `ipcRenderer`는 sandbox 모드에서도 사용 가능 (Electron 공식 지원)
 3. `require()`나 `process`, `fs` 등 Node.js API를 preload에서 직접 사용하지 않으므로 대부분 안전
 
 **확인 필요 사항 (각 항목별 앱 실행 테스트):**
+
 - [ ] 앱 정상 시작 확인
 - [ ] 채팅 메시지 전송/수신 확인
 - [ ] 문서 업로드 (PDF, DOCX) 확인
@@ -50,26 +56,32 @@ contextBridge.exposeInMainWorld('electron', electronAPI)  // line 310
 - [ ] 프로바이더 설정 (LM Studio 연결) 확인
 
 ### 롤백 계획
+
 sandbox: true가 문제를 일으키면 즉시 `sandbox: false`로 되돌리세요.
 
 ### 다른 윈도우도 확인
+
 mindMapWindow, quizWindow, ankiWindow에도 sandbox 설정이 있을 수 있습니다:
+
 - `src/main/windows/mindMapWindow.ts`
-- `src/main/windows/quizWindow.ts`  
+- `src/main/windows/quizWindow.ts`
 - `src/main/windows/ankiWindow.ts`
-모든 윈도우의 webPreferences를 동일하게 변경해야 합니다.
+  모든 윈도우의 webPreferences를 동일하게 변경해야 합니다.
 
 ---
 
 ## 작업 2: 테스트 프레임워크 도입 (vitest)
 
 ### 설치
+
 ```bash
 pnpm add -D vitest @vitest/coverage-v8
 ```
 
 ### 설정 파일 생성
+
 `vitest.config.ts` (프로젝트 루트):
+
 ```typescript
 import { defineConfig } from 'vitest/config'
 
@@ -94,6 +106,7 @@ export default defineConfig({
 ```
 
 ### package.json 스크립트 추가
+
 ```json
 {
   "scripts": {
@@ -107,9 +120,11 @@ export default defineConfig({
 ### 우선순위별 테스트 파일
 
 #### 1순위: 순수 유틸리티 (의존성 없음, 즉시 테스트 가능)
+
 ```
 src/main/vectorstore/__tests__/quantize.test.ts
 ```
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { float32ToInt8, int8ToFloat32 } from '../quantize'
@@ -120,15 +135,15 @@ describe('float32ToInt8', () => {
     const result = float32ToInt8(input)
     expect(result).toBeInstanceOf(Int8Array)
     expect(result.length).toBe(3)
-    expect(result[0]).toBe(-128)  // min → -128
-    expect(result[2]).toBe(127)   // max → 127
+    expect(result[0]).toBe(-128) // min → -128
+    expect(result[2]).toBe(127) // max → 127
   })
 
   it('음수값 포함 양자화', () => {
     const input = new Float32Array([-1.0, 0.0, 1.0])
     const result = float32ToInt8(input)
     expect(result[0]).toBe(-128)
-    expect(result[1]).toBe(0)     // midpoint → ~0
+    expect(result[1]).toBe(0) // midpoint → ~0
     expect(result[2]).toBe(127)
   })
 
@@ -160,9 +175,11 @@ describe('int8ToFloat32', () => {
 ```
 
 #### 2순위: 내장 모델 설정 테스트
+
 ```
 src/shared/config/models/__tests__/index.test.ts
 ```
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { getBuiltinModels, hasBuiltinModels, getAllBuiltinModels } from '../index'
@@ -171,8 +188,8 @@ describe('getBuiltinModels', () => {
   it('LM Studio 모델 반환', () => {
     const models = getBuiltinModels('lmstudio')
     expect(models.length).toBeGreaterThan(0)
-    expect(models.some(m => m.type === 'chat')).toBe(true)
-    expect(models.some(m => m.type === 'embedding')).toBe(true)
+    expect(models.some((m) => m.type === 'chat')).toBe(true)
+    expect(models.some((m) => m.type === 'embedding')).toBe(true)
   })
 
   it('Ollama 모델 반환', () => {
@@ -220,9 +237,11 @@ describe('getAllBuiltinModels', () => {
 ```
 
 #### 3순위: 프로바이더 레지스트리 테스트
+
 ```
 src/main/providers/registry/__tests__/builtinProviders.test.ts
 ```
+
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { BUILTIN_PROVIDERS, getBuiltinProvider, isBuiltinProvider } from '../builtinProviders'
@@ -241,7 +260,7 @@ describe('BUILTIN_PROVIDERS', () => {
   })
 
   it('삭제된 프로바이더가 포함되지 않음', () => {
-    const names = BUILTIN_PROVIDERS.map(p => p.name)
+    const names = BUILTIN_PROVIDERS.map((p) => p.name)
     expect(names).not.toContain('qwen')
     expect(names).not.toContain('kimi')
     expect(names).not.toContain('siliconflow')
@@ -274,9 +293,11 @@ describe('isBuiltinProvider', () => {
 ```
 
 #### 4순위: RerankService 테스트 (mock 필요)
+
 ```
 src/main/services/__tests__/RerankService.test.ts
 ```
+
 ```typescript
 import { describe, it, expect, vi } from 'vitest'
 import { RerankService } from '../RerankService'
@@ -301,13 +322,16 @@ describe('RerankService', () => {
 ```
 
 #### 5순위: HybridSearchService의 RRF 테스트 (순수 로직)
+
 ```
 src/main/services/__tests__/HybridSearchService.test.ts
 ```
+
 이 테스트는 HybridSearchService의 private `rrfFusion` 메서드를 테스트하려면
 메서드를 public이나 static으로 변경하거나, 전체 search를 mock으로 테스트해야 합니다.
 
 ### 테스트 실행
+
 ```bash
 pnpm test           # 전체 실행
 pnpm test:watch     # 감시 모드
@@ -315,6 +339,7 @@ pnpm test:coverage  # 커버리지 포함
 ```
 
 ### 주의사항
+
 - Electron 의존 코드(ipcMain, BrowserWindow 등)는 vitest에서 직접 테스트 불가
 - DB 의존 코드는 in-memory SQLite mock 필요 (better-sqlite3로 가능)
 - 위 1~3순위 테스트는 순수 TypeScript 코드이므로 즉시 실행 가능
