@@ -45,6 +45,7 @@ export default function ProvidersSettings({
   // 定义每个提供商的默认 baseUrl
   const defaultBaseUrls: Record<string, string> = {
     openai: 'https://api.openai.com/v1',
+    atlascloud: 'https://api.atlascloud.ai/v1',
     deepseek: 'https://api.deepseek.com',
     siliconflow: 'https://api.siliconflow.cn/v1',
     qwen: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -56,7 +57,16 @@ export default function ProvidersSettings({
   // 加载已缓存的模型列表
   useEffect(() => {
     const loadCachedModels = async () => {
-      const providerList = ['deepseek', 'openai', 'siliconflow', 'qwen', 'kimi', 'ollama', 'zhipu']
+      const providerList = [
+        'deepseek',
+        'openai',
+        'atlascloud',
+        'siliconflow',
+        'qwen',
+        'kimi',
+        'ollama',
+        'zhipu'
+      ]
       const loadedModels: Record<string, Model[]> = {}
 
       for (const providerName of providerList) {
@@ -227,6 +237,7 @@ export default function ProvidersSettings({
   }
 
   const openaiProvider = getProviderConfig('openai')
+  const atlasCloudProvider = getProviderConfig('atlascloud')
   const deepseekProvider = getProviderConfig('deepseek')
   const siliconflowProvider = getProviderConfig('siliconflow')
   const qwenProvider = getProviderConfig('qwen')
@@ -248,6 +259,13 @@ export default function ProvidersSettings({
       description: t('openaiDesc'),
       platformUrl: 'https://platform.openai.com',
       enabled: openaiProvider.enabled
+    },
+    {
+      id: 'atlascloud',
+      name: t('atlasCloudName'),
+      description: t('atlasCloudDesc'),
+      platformUrl: 'https://www.atlascloud.ai',
+      enabled: atlasCloudProvider.enabled
     },
     {
       id: 'siliconflow',
@@ -291,6 +309,7 @@ export default function ProvidersSettings({
     const builtInProviders = [
       'deepseek',
       'openai',
+      'atlascloud',
       'siliconflow',
       'qwen',
       'kimi',
@@ -533,6 +552,21 @@ export default function ProvidersSettings({
           />
         )}
 
+        {activeProvider === 'atlascloud' && (
+          <ProviderConfigPanel
+            displayName={t('atlasCloudName')}
+            description={t('atlasCloudDesc')}
+            platformUrl="https://www.atlascloud.ai"
+            provider={atlasCloudProvider}
+            models={models.atlascloud || []}
+            isFetching={fetchingModels.atlascloud || false}
+            onConfigChange={(config) => updateProviderConfig('atlascloud', { config })}
+            onEnabledChange={(enabled) => updateProviderConfig('atlascloud', { enabled })}
+            onFetchModels={() => fetchModels('atlascloud')}
+            defaultBaseUrl={defaultBaseUrls.atlascloud}
+          />
+        )}
+
         {activeProvider === 'siliconflow' && (
           <ProviderConfigPanel
             displayName={t('siliconflowName')}
@@ -609,9 +643,16 @@ export default function ProvidersSettings({
         )}
 
         {/* 自定义供应商配置 */}
-        {!['deepseek', 'openai', 'siliconflow', 'qwen', 'kimi', 'ollama', 'zhipu'].includes(
-          activeProvider
-        ) &&
+        {![
+          'deepseek',
+          'openai',
+          'atlascloud',
+          'siliconflow',
+          'qwen',
+          'kimi',
+          'ollama',
+          'zhipu'
+        ].includes(activeProvider) &&
           (() => {
             const customProvider = getProviderConfig(activeProvider)
             return customProvider && customProvider.providerName ? (

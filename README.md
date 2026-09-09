@@ -46,7 +46,7 @@ It’s still early, but the core idea works — and I’m excited to share it an
 
 - 📚 Build a local knowledge base from documents and notes
 - 💬 Chat, summarize, and reason with your content using LLMs
-- 🔌 Provider-based LLM design (OpenAI, DeepSeek, Ollama, and more)
+- 🔌 Provider-based LLM design (OpenAI, Atlas Cloud, DeepSeek, Ollama, and more)
 - 🔍 RAG-powered retrieval with precise source traceability
 - 🖥️ Desktop app built with Electron — no Docker, no server setup
 

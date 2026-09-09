@@ -28,6 +28,19 @@ export const BUILTIN_PROVIDERS: ProviderDescriptor[] = [
   },
 
   {
+    name: 'atlascloud',
+    displayName: 'Atlas Cloud',
+    isBuiltin: true,
+    defaultBaseUrl: 'https://api.atlascloud.ai/v1',
+    defaultChatModel: 'openai/gpt-4.1-mini',
+    capabilities: {
+      chat: true,
+      embedding: false
+    },
+    createProvider: (descriptor) => new AISDKProvider(descriptor)
+  },
+
+  {
     name: 'deepseek',
     displayName: 'DeepSeek',
     isBuiltin: true,

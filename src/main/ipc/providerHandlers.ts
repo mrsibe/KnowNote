@@ -90,6 +90,8 @@ export function registerProviderHandlers(providerManager: ProviderManager) {
           // 内置供应商使用硬编码的 URL
           if (args.providerName === 'openai') {
             url = 'https://api.openai.com/v1/models'
+          } else if (args.providerName === 'atlascloud') {
+            url = 'https://api.atlascloud.ai/v1/models'
           } else if (args.providerName === 'deepseek') {
             url = 'https://api.deepseek.com/models'
           } else if (args.providerName === 'siliconflow') {

@@ -101,6 +101,8 @@
   "deepseekDesc": "DeepSeek AI models with reasoning capabilities",
   "openaiName": "OpenAI",
   "openaiDesc": "OpenAI GPT models including GPT-4 and GPT-3.5",
+  "atlasCloudName": "Atlas Cloud",
+  "atlasCloudDesc": "OpenAI-compatible access to Atlas Cloud's model catalog",
   "siliconflowName": "SiliconFlow",
   "siliconflowDesc": "SiliconFlow AI model platform providing various open-source and commercial models",
   "qwenName": "Qwen",
