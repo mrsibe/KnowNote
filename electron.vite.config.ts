@@ -45,7 +45,21 @@ export default defineConfig({
     plugins: [copyMigrationsPlugin()],
     build: {
       rollupOptions: {
-        external: ['remark', 'remark-gfm', 'remark-parse', 'unified', 'unist-util-visit']
+        // Only things rollup CANNOT inline may stay external.
+        //
+        // Native addons: better-sqlite3 (binding) and sqlite-vec (loadable
+        // extension) are real binaries. They must be resolved from node_modules
+        // at runtime and must therefore also stay in package.json
+        // `dependencies` so electron-builder packages them, and in
+        // `asarUnpack` so they are not trapped inside the archive.
+        //
+        // Optional native peers that jsdom and pdfjs-dist reach for lazily:
+        // listing them keeps rollup from failing on an unresolvable import.
+        // They are intentionally NOT in `dependencies`, so they are simply
+        // absent at runtime - both packages degrade gracefully (jsdom without
+        // node-canvas, pdfjs without @napi-rs/canvas, which is only used by
+        // page.render() and this app never renders).
+        external: ['better-sqlite3', 'sqlite-vec', 'canvas', '@napi-rs/canvas']
       }
     }
   },

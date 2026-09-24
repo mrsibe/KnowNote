@@ -3,8 +3,7 @@
  * 将Anki卡片导出为.apkg格式
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const AnkiExport = require('anki-apkg-export').default
+import AnkiExport from 'anki-apkg-export'
 import type { AnkiCardItem } from '../../../shared/types/anki'
 
 /**
