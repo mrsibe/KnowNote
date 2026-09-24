@@ -76,7 +76,7 @@ function App(): React.JSX.Element {
   // 如果正在加载引导状态，显示加载中
   if (onboardingLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="flex items-center justify-center min-h-screen bg-surface-base">
         <div className="text-foreground">Loading...</div>
       </div>
     )

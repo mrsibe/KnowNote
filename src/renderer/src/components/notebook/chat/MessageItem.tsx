@@ -59,7 +59,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   if (isSystem) {
     return (
       <div className="flex justify-center">
-        <div className="max-w-[85%] min-w-0 bg-muted border border-border text-muted-foreground rounded-xl px-4 py-3 shadow-sm w-fit">
+        <div className="max-w-[85%] min-w-0 bg-muted text-muted-foreground rounded-lg px-4 py-3 w-fit">
           <div className="prose prose-sm max-w-none">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
@@ -94,7 +94,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
     return (
       <div className="flex justify-end group">
         <div className="flex flex-col gap-1 max-w-[85%] min-w-0 items-end">
-          <div className="bg-primary text-primary-foreground rounded-2xl px-4 py-3 shadow-sm w-fit">
+          <div className="bg-muted text-foreground rounded-lg px-4 py-3 w-fit">
             <p className="text-sm whitespace-pre-wrap wrap-break-word message-content-selectable">
               {message.content}
             </p>
@@ -103,7 +103,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
           <Button
             onClick={handleCopy}
             variant="ghost"
-            className="self-end px-2 py-1 text-xs h-auto text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
+            className="self-end px-2 py-1 text-xs h-auto text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
             title={copied ? t('common:copied') : t('common:copy')}
           >
             {copied ? (
@@ -193,7 +193,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
             <Button
               onClick={handleCopy}
               variant="ghost"
-              className="px-2 py-1 text-xs h-auto text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
+              className="px-2 py-1 text-xs h-auto text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               title={copied ? t('common:copied') : t('common:copy')}
             >
               {copied ? (
@@ -227,7 +227,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
             <Button
               onClick={handleAddToNote}
               variant="ghost"
-              className="px-2 py-1 text-xs h-auto text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
+              className="px-2 py-1 text-xs h-auto text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               title={addedToNote ? t('chat:addedToNote') : t('chat:addToNote')}
             >
               {addedToNote ? (

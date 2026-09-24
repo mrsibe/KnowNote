@@ -286,7 +286,7 @@ export default function ProcessPanel({
 
       {/* 底部渐变遮罩 - 独立于消息区域，避免堆叠上下文问题 */}
       <div
-        className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none rounded-b-xl z-10"
+        className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none rounded-b-lg z-10"
         style={{
           background:
             'linear-gradient(to bottom, transparent 0%, hsl(var(--card)) 40%, hsl(var(--card)) 100%)'

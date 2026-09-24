@@ -95,7 +95,7 @@ export default function AboutSettings(): ReactElement {
       case UpdateStatus.NOT_AVAILABLE:
         return {
           text: t('latestVersion'),
-          icon: <CheckCircle className="w-4 h-4 text-green-500" />,
+          icon: <CheckCircle className="w-4 h-4 text-muted-foreground" />,
           disabled: true,
           onClick: undefined
         }
@@ -121,9 +121,9 @@ export default function AboutSettings(): ReactElement {
   return (
     <div className="space-y-6">
       <div className="text-center py-8 flex flex-col items-center gap-4">
-        <img src={logoImg} alt="Logo" className="w-16 h-16 rounded-xl" />
+        <img src={logoImg} alt="Logo" className="w-16 h-16 rounded-lg" />
         <div className="flex flex-col gap-2">
-          <h2 className="text-h1 text-foreground">KnowNote</h2>
+          <h2 className="text-lg font-medium text-foreground">KnowNote</h2>
           <p className="text-sm text-muted-foreground">
             {t('version')} {appVersion}
           </p>
@@ -133,7 +133,7 @@ export default function AboutSettings(): ReactElement {
       <div className="flex flex-col gap-3">
         <button
           onClick={handleOpenWebsite}
-          className="flex justify-between p-3 bg-card rounded-lg hover:bg-accent transition-colors cursor-pointer"
+          className="flex justify-between p-3 bg-muted rounded-md hover:bg-surface-hover transition-colors cursor-pointer"
         >
           <span className="text-sm text-muted-foreground">{t('officialWebsite')}</span>
           <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -141,7 +141,7 @@ export default function AboutSettings(): ReactElement {
 
         <button
           onClick={handleFeedback}
-          className="flex justify-between p-3 bg-card rounded-lg hover:bg-accent transition-colors cursor-pointer"
+          className="flex justify-between p-3 bg-muted rounded-md hover:bg-surface-hover transition-colors cursor-pointer"
         >
           <span className="text-sm text-muted-foreground">{t('feedback')}</span>
           <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -150,10 +150,10 @@ export default function AboutSettings(): ReactElement {
         <button
           onClick={updateButton.onClick}
           disabled={updateButton.disabled}
-          className={`flex justify-between items-center p-3 bg-card rounded-lg transition-colors ${
+          className={`flex justify-between items-center p-3 bg-muted rounded-md transition-colors ${
             updateButton.disabled
-              ? 'cursor-not-allowed opacity-60'
-              : 'hover:bg-accent cursor-pointer'
+              ? 'cursor-not-allowed opacity-50'
+              : 'hover:bg-surface-hover cursor-pointer'
           }`}
         >
           <span className="text-sm text-muted-foreground">{updateButton.text}</span>

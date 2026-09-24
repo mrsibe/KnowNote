@@ -52,22 +52,22 @@ export default function QuizResultView() {
   }
 
   return (
-    <div className="h-full flex items-center justify-center p-8">
-      <div className="w-full space-y-8">
+    <div className="h-full flex items-center justify-center p-6">
+      <div className="w-full space-y-6">
         {/* 标题 */}
         <div className="text-center">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <Trophy className="w-8 h-8 text-primary" />
-            <h2 className="text-3xl font-bold text-foreground">{t('quizCompleted')}</h2>
+            <Trophy className="w-6 h-6 text-muted-foreground" />
+            <h2 className="text-lg font-medium text-foreground">{t('quizCompleted')}</h2>
           </div>
         </div>
 
         {/* 分数展示 */}
         <div className="text-center space-y-3">
-          <div className="text-7xl font-bold text-primary">
+          <div className="text-4xl font-semibold text-foreground">
             {correctCount}/{totalQuestions}
           </div>
-          <p className="text-xl text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t('accuracy')}: {percentage}%
           </p>
         </div>
@@ -75,18 +75,16 @@ export default function QuizResultView() {
         {/* 统计网格 */}
         <div className="grid grid-cols-3 gap-6 text-center py-6">
           <div className="space-y-2">
-            <p className="text-4xl font-semibold text-green-600 dark:text-green-400">
-              {correctCount}
-            </p>
-            <p className="text-base text-muted-foreground">{t('correctCount')}</p>
+            <p className="text-2xl font-medium text-success">{correctCount}</p>
+            <p className="text-sm text-muted-foreground">{t('correctCount')}</p>
           </div>
           <div className="space-y-2">
-            <p className="text-4xl font-semibold text-red-600 dark:text-red-400">{wrongCount}</p>
-            <p className="text-base text-muted-foreground">{t('wrongCount')}</p>
+            <p className="text-2xl font-medium text-destructive">{wrongCount}</p>
+            <p className="text-sm text-muted-foreground">{t('wrongCount')}</p>
           </div>
           <div className="space-y-2">
-            <p className="text-4xl font-semibold text-foreground">{totalQuestions}</p>
-            <p className="text-base text-muted-foreground">{t('totalQuestions')}</p>
+            <p className="text-2xl font-medium text-foreground">{totalQuestions}</p>
+            <p className="text-sm text-muted-foreground">{t('totalQuestions')}</p>
           </div>
         </div>
 

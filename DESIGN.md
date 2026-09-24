@@ -170,12 +170,14 @@ Sizes:
 | 14px | `text-sm`     | **Default UI size**: buttons, labels, list rows, inputs, prose in chat and the editor |
 | 16px | `text-base`   | Dialog titles, empty-state body (only where 14px reads cramped)                       |
 | 18px | `text-lg`     | Page titles, empty-state titles                                                       |
-| 20px | `text-xl`     | Home hero only                                                                        |
+| 20px | `text-xl`     | Focus content: home page title, flashcard face                                        |
+| 36px | `text-4xl`    | A single focus readout (quiz score). One per screen                                   |
 
 Weights: `font-normal` for body, `font-medium` for interactive labels, panel
-headers, section titles and the selected state of anything. `font-semibold` and
-above are reserved for page titles and the home hero. Never use weight alone to
-express selection — pair it with `bg-surface-selected`.
+headers, section titles, titles and the selected state of anything.
+`font-semibold` and above are reserved for the one focus readout per screen.
+Never use weight alone to express selection — pair it with
+`bg-surface-selected`.
 
 Line height: UI text uses Tailwind defaults. Long-form reading surfaces
 (`markdown.css`, `noteEditor.css`) use 14px / `line-height: 1.75`.
@@ -196,7 +198,12 @@ Line height: UI text uses Tailwind defaults. Long-form reading surfaces
 Everywhere else — toolbars, icon buttons, headers, cards, badges, tab labels,
 progress — the UI is neutral. A blue icon in a neutral toolbar is a violation.
 `--destructive` is allowed only on a destructive action and its confirmation
-dialog. `--chart-*` are for charts, graph nodes and mind-map topic colouring.
+dialog, and `--success` only on the outcome of a graded result (correct answer,
+passing check). Neither is decoration, and neither may be the only carrier of
+state: pair it with an icon or a label. `--chart-*` are for charts, graph nodes
+and mind-map topic colouring, and are used as small data dots rather than as
+text-bearing fills (they sit at one lightness in both themes, so no single text
+colour reads on them).
 
 State expressions (use these literal forms, they are the contract):
 

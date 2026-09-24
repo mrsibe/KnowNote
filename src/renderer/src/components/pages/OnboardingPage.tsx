@@ -29,12 +29,12 @@ export default function OnboardingPage() {
   const selectedLangName = languages.find((l) => l.code === selectedLanguage)?.name
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
+    <div className="flex items-center justify-center min-h-screen bg-surface-base">
       <div className="w-full max-w-md px-6 text-center">
         {/* Logo */}
         <div className="mb-8">
           <img src={logo} alt="KnowNote" className="w-24 h-24 mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-foreground mb-2">KnowNote</h1>
+          <h1 className="text-xl font-medium text-foreground mb-2">KnowNote</h1>
           <p className="text-sm text-muted-foreground">
             More convenient, more lightweight, and understands you better!
           </p>

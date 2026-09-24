@@ -37,10 +37,10 @@ export const I18nProvider = ({ children }: I18nProviderProps) => {
   // 如果还在加载中，显示加载界面
   if (!isReady || isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-background dark:bg-background-dark">
+      <div className="flex items-center justify-center min-h-screen bg-surface-base">
         <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="text-foreground dark:text-foreground-dark">Loading...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-muted-foreground"></div>
+          <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
     )

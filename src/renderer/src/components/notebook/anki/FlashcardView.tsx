@@ -97,10 +97,7 @@ export default function FlashcardView({ cards, onClose }: FlashcardViewProps) {
     <div className="flex flex-col h-full focus:outline-none" onKeyDown={handleKeyDown} tabIndex={0}>
       {/* 卡片区域 */}
       <div className="flex-1 flex items-center justify-center p-8">
-        <div
-          className="w-full max-w-2xl min-h-96 cursor-pointer transition-all duration-300"
-          onClick={handleFlip}
-        >
+        <div className="w-full max-w-2xl min-h-96 cursor-pointer" onClick={handleFlip}>
           <Card className="w-full h-96">
             <CardContent className="h-full flex items-center justify-center p-8">
               <div className="text-center space-y-4 max-w-lg">
@@ -109,14 +106,14 @@ export default function FlashcardView({ cards, onClose }: FlashcardViewProps) {
                     <Badge variant="secondary" className="mb-4">
                       {t('question')}
                     </Badge>
-                    <p className="text-2xl whitespace-pre-wrap">{getFrontContent(currentCard)}</p>
+                    <p className="text-xl whitespace-pre-wrap">{getFrontContent(currentCard)}</p>
                   </>
                 ) : (
                   <>
                     <Badge variant="secondary" className="mb-4">
                       {t('answer')}
                     </Badge>
-                    <p className="text-2xl whitespace-pre-wrap">{getBackContent(currentCard)}</p>
+                    <p className="text-xl whitespace-pre-wrap">{getBackContent(currentCard)}</p>
                   </>
                 )}
               </div>
@@ -128,7 +125,7 @@ export default function FlashcardView({ cards, onClose }: FlashcardViewProps) {
       {/* 进度条 */}
       <div className="h-1 bg-muted relative">
         <div
-          className="h-full bg-primary transition-all duration-300"
+          className="h-full bg-primary transition-[width] duration-300"
           style={{ width: `${progress}%` }}
         />
         <div className="absolute top-0 left-0 right-0 text-center text-xs text-muted-foreground -mt-5">

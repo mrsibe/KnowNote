@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import type { Quiz, QuizSession } from '../../../main/db/schema'
-import type { QuizQuestion } from '../../../shared/types/quiz'
 
 interface QuizStore {
   // 核心状态
@@ -80,7 +79,7 @@ export const useQuizStore = create<QuizStore>()((set, get) => ({
     const { currentQuiz, answers } = get()
     if (!currentQuiz) return 0
 
-    const questions = currentQuiz.questionsData as any as QuizQuestion[]
+    const questions = currentQuiz.questionsData
     let correctCount = 0
 
     questions.forEach((question) => {
@@ -96,7 +95,7 @@ export const useQuizStore = create<QuizStore>()((set, get) => ({
   getTotalQuestions: () => {
     const { currentQuiz } = get()
     if (!currentQuiz) return 0
-    const questions = currentQuiz.questionsData as any as QuizQuestion[]
+    const questions = currentQuiz.questionsData
     return questions.length
   },
 

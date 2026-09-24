@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
+import type { QuizQuestion } from '../../shared/types/quiz'
 
 /**
  * 笔记本表
@@ -63,7 +64,7 @@ export const chatMessages = sqliteTable(
     role: text('role', { enum: ['user', 'assistant', 'system'] }).notNull(),
     content: text('content').notNull(),
     reasoningContent: text('reasoning_content'), // DeepSeek Reasoner 推理过程内容
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, any>>(),
+    metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
@@ -131,7 +132,7 @@ export const documents = sqliteTable(
     contentHash: text('content_hash'), // 内容哈希，用于检测变更
     mimeType: text('mime_type'), // 文件类型
     fileSize: integer('file_size'), // 文件大小（字节）
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, any>>(),
+    metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
     status: text('status', { enum: ['pending', 'processing', 'indexed', 'failed'] })
       .notNull()
       .default('pending'),
@@ -167,7 +168,7 @@ export const chunks = sqliteTable(
     chunkIndex: integer('chunk_index').notNull(), // 在文档中的顺序
     startOffset: integer('start_offset'), // 原文起始位置
     endOffset: integer('end_offset'), // 原文结束位置
-    metadata: text('metadata', { mode: 'json' }).$type<Record<string, any>>(),
+    metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
     tokenCount: integer('token_count'), // token 估算值
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
   },
@@ -258,7 +259,7 @@ export const quizzes = sqliteTable(
       .references(() => notebooks.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     version: integer('version').notNull().default(1), // 版本号
-    questionsData: text('questions_data', { mode: 'json' }).notNull(), // 题目数组
+    questionsData: text('questions_data', { mode: 'json' }).$type<QuizQuestion[]>().notNull(), // 题目数组
     chunkMapping: text('chunk_mapping', { mode: 'json' }).notNull(), // questionId -> chunkIds映射
     metadata: text('metadata', { mode: 'json' }).$type<{
       model: string

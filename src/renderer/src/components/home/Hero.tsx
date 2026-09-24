@@ -10,10 +10,10 @@ export default function Hero({ notebookCount }: HeroProps): ReactElement {
   const { t } = useTranslation('ui')
 
   return (
-    <div className="px-12 pt-12 pb-6">
+    <div className="px-6 pt-6 pb-4">
       <div className="max-w-7xl mx-auto space-y-4">
-        <h1 className="text-5xl font-bold text-foreground tracking-tight">{t('myNotebooks')}</h1>
-        <p className="text-base text-muted-foreground font-medium">
+        <h1 className="text-xl font-medium text-foreground tracking-tight">{t('myNotebooks')}</h1>
+        <p className="text-sm text-muted-foreground">
           {t('totalNotebooks', { count: notebookCount })}
         </p>
         <Separator />
