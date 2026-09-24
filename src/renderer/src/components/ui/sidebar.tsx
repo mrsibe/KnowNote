@@ -240,7 +240,7 @@ const Sidebar = React.forwardRef<
         >
           <div
             data-sidebar="sidebar"
-            className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow"
+            className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow-elevation"
           >
             {children}
           </div>
@@ -500,10 +500,9 @@ const sidebarMenuButtonVariants = cva(
     variants: {
       variant: {
         default: 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-        // The old value was `shadow-[0_0_0_1px_hsl(var(--sidebar-border))]`,
-        // but --sidebar-border is an oklch() colour, so hsl() around it was
-        // invalid and the outline never rendered. A ring draws the same 1px
-        // outline without shifting layout.
+        // The old value wrapped the sidebar-border token in hsl(), which is
+        // invalid CSS for an oklch() colour, so the outline never rendered. A
+        // ring draws the same 1px outline without shifting layout.
         outline:
           'bg-surface-raised ring-1 ring-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
       },

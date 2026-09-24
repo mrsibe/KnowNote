@@ -338,12 +338,20 @@ the same PR.
 
 ## Enforcement
 
-`npm run check:design` (`scripts/check-design-tokens.mjs`) fails on:
+`npm run check:design` (`scripts/check-design-tokens.mjs`) reads the renderer
+sources — no build, no dependencies — and fails on:
 
-- a radius utility outside the three allowed values;
-- a shadow utility other than `shadow-elevation` / `shadow-control`;
-- a background colour that is not a surface, `muted`, `transparent` or a
-  `--chart-*` token.
+| Rule         | Fails when                                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `radius`     | a radius utility other than `rounded-md`, `rounded-lg`, `rounded-full` and their `t/b/l/r` forms                    |
+| `shadow`     | an elevation utility other than `shadow-elevation`, `shadow-control`, `shadow-none`                                 |
+| `palette`    | a colour utility from the raw Tailwind palette (`bg-slate-100`, `text-gray-500`) or an arbitrary colour (`bg-[#…]`) |
+| `text-level` | alpha stacked on a text level (`text-muted-foreground/70`)                                                          |
+| `css-radius` | a raw CSS `border-radius` outside `0.375rem` / `0.5rem` / `9999px`                                                  |
 
-The check runs as part of the `Verify` workflow. It reads source text, so it is
-also the fastest way to audit a branch: `npm run check:design -- --list`.
+`npm run check:design -- --list` prints the rules and the allowlists. The check
+runs in the `Verify` workflow, before the build matrix.
+
+What it does **not** enforce, and therefore relies on review: the surface ladder
+(which surface a panel uses), accent discipline, spacing and density, and the
+four interaction states. Those are the rules a reviewer must hold the line on.

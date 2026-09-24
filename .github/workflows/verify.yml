@@ -52,6 +52,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Cheap and platform-independent: enforces DESIGN.md's mechanically
+      # checkable rules (radius, elevation, colours, text levels) before the
+      # long packaging step below does any work.
+      - name: Design tokens
+        run: npm run check:design
+
       - name: Unit tests
         run: npm test
 

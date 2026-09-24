@@ -130,7 +130,7 @@ export default function TopNavigationBar({
                       handleCloseOpenedNotebook(notebook.id, e)
                     }
                   }}
-                  className="ml-1 inline-flex items-center justify-center h-4 w-4 p-0.5 rounded hover:bg-destructive/20 hover:text-destructive transition-colors"
+                  className="ml-1 inline-flex items-center justify-center h-4 w-4 p-0.5 rounded-md hover:bg-destructive/20 hover:text-destructive transition-colors"
                   title={t('closeTab')}
                 >
                   <X className="w-3 h-3" />
