@@ -45,21 +45,25 @@ export default defineConfig({
     plugins: [copyMigrationsPlugin()],
     build: {
       rollupOptions: {
-        // Only things rollup CANNOT inline may stay external.
+        // Only things rollup CANNOT inline may stay external. Every entry in
+        // package.json `dependencies` is already externalized automatically
+        // (electron-vite's build.externalizeDeps defaults to true); the two
+        // below are restated as documentation of why they can never be bundled.
         //
-        // Native addons: better-sqlite3 (binding) and sqlite-vec (loadable
-        // extension) are real binaries. They must be resolved from node_modules
-        // at runtime and must therefore also stay in package.json
-        // `dependencies` so electron-builder packages them, and in
-        // `asarUnpack` so they are not trapped inside the archive.
+        // better-sqlite3 (binding) and sqlite-vec (loadable extension) are real
+        // binaries: rollup cannot inline .node or .dylib, so they must resolve
+        // from node_modules at runtime. They therefore also have to stay in
+        // `dependencies` so electron-builder packages them, and in `asarUnpack`
+        // so they are not trapped inside the archive.
         //
-        // Optional native peers that jsdom and pdfjs-dist reach for lazily:
-        // listing them keeps rollup from failing on an unresolvable import.
-        // They are intentionally NOT in `dependencies`, so they are simply
-        // absent at runtime - both packages degrade gracefully (jsdom without
-        // node-canvas, pdfjs without @napi-rs/canvas, which is only used by
-        // page.render() and this app never renders).
-        external: ['better-sqlite3', 'sqlite-vec', 'canvas', '@napi-rs/canvas']
+        // jsdom, pdfjs-dist, anki-apkg-export and @mixmark-io/domino are also
+        // external, purely because they live in `dependencies` - it is required,
+        // not optional. See the `//dependencies` note in package.json for what
+        // breaks when rollup inlines each one. Note that pdfjs-dist in
+        // particular does NOT degrade gracefully without its optional peer
+        // @napi-rs/canvas: it polyfills DOMMatrix from it and then evaluates
+        // `new DOMMatrix()` at module scope, so the two have to ship together.
+        external: ['better-sqlite3', 'sqlite-vec']
       }
     }
   },
