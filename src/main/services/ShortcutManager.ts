@@ -5,6 +5,21 @@ import { defaultShortcuts } from '../config/defaults'
 import type { StoreSchema } from '../config/types'
 
 /**
+ * Accelerators that shipped as a default and must not survive an upgrade.
+ *
+ * The merge in `registerShortcuts` only adds actions a stored config has never
+ * seen, so *changing* a default never reaches anyone who has already run the app.
+ * Bare `Escape` was bound to closing the notebook, which the main process claims
+ * before the renderer sees it: it destroyed the workspace — unsaved note text
+ * included — and made Escape unusable for dismissing anything. Replacing it by
+ * value is the migration; there is no need for a version counter because a
+ * modifier-less accelerator is no longer accepted by the recorder either.
+ */
+const SUPERSEDED_ACCELERATORS: Partial<Record<ShortcutAction, string[]>> = {
+  [ShortcutAction.CLOSE_NOTEBOOK]: ['Escape']
+}
+
+/**
  * 快捷键管理器
  * 负责注册、注销和管理应用快捷键
  */
@@ -38,12 +53,23 @@ export class ShortcutManager {
       return
     }
 
-    // 合并新增的默认快捷键（向后兼容旧版本配置）
+    // 合并新增的默认快捷键（向后兼容旧版本配置），
+    // 并替换掉已废弃的默认加速键（见 SUPERSEDED_ACCELERATORS）。
     const mergedShortcuts = [...shortcuts]
     let hasNewShortcut = false
     for (const defaultShortcut of defaultShortcuts) {
-      if (!mergedShortcuts.some((s) => s.action === defaultShortcut.action)) {
+      const index = mergedShortcuts.findIndex((s) => s.action === defaultShortcut.action)
+      if (index === -1) {
         mergedShortcuts.push({ ...defaultShortcut })
+        hasNewShortcut = true
+        continue
+      }
+      const superseded = SUPERSEDED_ACCELERATORS[defaultShortcut.action]
+      if (superseded?.includes(mergedShortcuts[index].accelerator)) {
+        mergedShortcuts[index] = {
+          ...mergedShortcuts[index],
+          accelerator: defaultShortcut.accelerator
+        }
         hasNewShortcut = true
       }
     }

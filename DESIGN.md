@@ -197,6 +197,25 @@ while looking correct in review.
 is sized to the reserve, not to taste: a taller fade dims the last line of every
 answer, because the content scrolls under it.
 
+Two rules for the composer and for leaving the workspace:
+
+- **Enter sends; only the Stop button aborts.** Enter used to abort a running
+  generation while the composer was disabled during a stream, so the key you press
+  to send was the key that cancels — and the composer was unusable for composing
+  the next question while reading the current answer, which is the actual rhythm
+  of research. The textarea now stays enabled while a turn streams; `canSend` is
+  still false, so Enter is inert rather than destructive, and the Stop button is
+  the single abort affordance. Shift+Enter is still a newline.
+- **Sending always brings your own message into view.** `MessageList` exposes a
+  `pinToBottom` handle and `handleSend` calls it, so the follow state cannot hide
+  the message the user just wrote.
+- **Leaving the workspace asks first when the note editor is dirty.** Closing a
+  tab, switching tabs, the Home tab and `Cmd+W` all unmount it. `NotePanel`
+  publishes its dirty state to `uiStore` (only it knows), and `NotebookLayout`
+  owns the single `UnsavedChangesDialog` that every one of those paths goes
+  through. The in-panel Back button is not special-cased — it uses the same
+  state. A navigation path that skips this guard is a bug.
+
 ## Borders and elevation
 
 Two border weights exist, and only two:
@@ -401,7 +420,10 @@ Don't:
   `oklch(...)` in a component, `bg-card shadow-md` panels, `rounded-xl` cards,
   `shadow-sm` buttons or inputs, `rounded-sm` controls.
 - Gradients, glassmorphism (`backdrop-blur` except on a floating toolbar over
-  scrolling content), glow effects.
+  scrolling content), glow effects. **One sanctioned exception:** the scroll fade
+  between the transcript and the floating composer — a functional fade, sized to
+  the `pb-32` reserve it covers so it never dims the last line of an answer
+  (`ProcessPanel.tsx`).
 - Colour icons in neutral chrome; colour-coded sections chosen from `--chart-*`
   outside chart/graph surfaces.
 - Express hierarchy with `scale-*` transforms on chrome (allowed only inside
@@ -548,13 +570,28 @@ the same PR.
 `npm run check:design` (`scripts/check-design-tokens.mjs`) reads the renderer
 sources — no build, no dependencies — and fails on:
 
-| Rule         | Fails when                                                                                                          |
-| ------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `radius`     | a radius utility other than `rounded-md`, `rounded-lg`, `rounded-full` and their `t/b/l/r` forms                    |
-| `shadow`     | an elevation utility other than `shadow-elevation`, `shadow-control`, `shadow-none`                                 |
-| `palette`    | a colour utility from the raw Tailwind palette (`bg-slate-100`, `text-gray-500`) or an arbitrary colour (`bg-[#…]`) |
-| `text-level` | alpha stacked on a text level (`text-muted-foreground/70`)                                                          |
-| `css-radius` | a raw CSS `border-radius` outside `0.375rem` / `0.5rem` / `9999px`                                                  |
+| Rule                  | Fails when                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `radius`              | a radius utility other than `rounded-md`, `rounded-lg`, `rounded-full` and their `t/b/l/r` forms                    |
+| `shadow`              | an elevation utility other than `shadow-elevation`, `shadow-control`, `shadow-none`                                 |
+| `palette`             | a colour utility from the raw Tailwind palette (`bg-slate-100`, `text-gray-500`) or an arbitrary colour (`bg-[#…]`) |
+| `text-level`          | alpha stacked on a text level (`text-muted-foreground/70`)                                                          |
+| `chart-scope`         | `--chart-*` as a utility class or as `var(--chart-N)`, outside `CHART_SURFACES` in the script                       |
+| `raw-colour-in-style` | a colour function (`hsl(`, `rgb(`, `oklch(` …) inside an inline `style` object — including `hsl(var(--card))`       |
+| `css-radius`          | a raw CSS `border-radius` outside `0.375rem` / `0.5rem` / `9999px`                                                  |
+
+`chart-scope` and `raw-colour-in-style` were added after a rule-shaped defect
+reached `main` twice: chart colours on list rows and a `hsl(var(--card))` scroll
+fade. Neither was catchable before, because `--chart-*` is a semantic token rather
+than a raw palette colour, and this guard only looked at utility classes — not at
+inline style objects. `CHART_SURFACES` is the only allowlist, and it names one
+file: the mind-map node, which is a graph node.
+
+Known gap, stated rather than implied: a raw **hex** in an inline style
+(`style={{ background: '#fff' }}`) still passes. That is deliberate — the one
+current use is the mind-map PNG export, which needs a fixed background rather
+than a themed one (`MindMapPage.tsx`). Anything that wants a literal colour
+should be raised as a rule change, not smuggled through.
 
 `npm run check:design -- --list` prints the rules and the allowlists. The check
 runs in the `Verify` workflow, before the build matrix.

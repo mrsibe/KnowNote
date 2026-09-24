@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useParams } from 'react-router-dom'
 import { useItemStore } from '../../store/itemStore'
+import { useUIStore } from '../../store/uiStore'
 import { setupMindMapListeners } from '../../store/mindmapStore'
 import NoteEditor from './note/NoteEditor'
 import ItemList from './item/ItemList'
@@ -154,6 +155,17 @@ export default function NotePanel(): ReactElement {
 
   // 管理未保存状态
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+  // 同步到 uiStore：关闭标签页、切到别的标签页或返回首页会卸载本面板，
+  // 而只有编辑器知道它有未保存内容 —— 那几条路径都需要先问一句。
+  const setHasUnsavedNoteChanges = useUIStore((state) => state.setHasUnsavedNoteChanges)
+
+  useEffect(() => {
+    setHasUnsavedNoteChanges(hasUnsavedChanges)
+  }, [hasUnsavedChanges, setHasUnsavedNoteChanges])
+
+  // 卸载时清掉，避免陈旧标志拦住之后的关闭操作
+  useEffect(() => () => setHasUnsavedNoteChanges(false), [setHasUnsavedNoteChanges])
 
   // Dialog 状态管理
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false)
