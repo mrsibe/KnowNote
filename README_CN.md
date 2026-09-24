@@ -143,12 +143,37 @@ KnowNote 是一个早期阶段的项目。
 
 ## 快速开始
 
-### 下载
+### 安装
 
-从 GitHub Releases 获取最新版本：
+从 [GitHub Releases](https://github.com/MrSibe/KnowNote/releases/latest) 下载对应平台的安装包：
 
-- **Windows**: `KnowNote-Setup-{version}.exe`
-- **macOS**: `KnowNote-{version}.dmg` / `KnowNote-{version}-arm64.dmg`
+- **Windows**：`knownote-{version}-setup.exe`
+- **macOS（Apple 芯片）**：`knownote-{version}-arm64.dmg`
+
+> **安装包未签名。** 发布流程中没有 Apple Developer ID 证书，所以 macOS 首次打开会拒绝启动，Windows SmartScreen 也会拦截安装程序。这不代表下载损坏，两个提示都只需处理一次，按下面的步骤走即可。
+
+#### macOS
+
+1. 打开 `.dmg`，把 **KnowNote** 拖进 _Applications_（应用程序）。
+2. 清除一次隔离标记：
+
+   ```bash
+   sudo xattr -rd com.apple.quarantine /Applications/KnowNote.app
+   ```
+
+3. 之后正常启动即可。
+
+目前没有 Intel Mac 的构建产物，只提供 arm64 版本。
+
+不做第 2 步，macOS 会提示 _"KnowNote 已损坏，无法打开"_ 或 _"无法验证开发者"_。这条命令只对本仓库 Releases 页面下载的应用使用。
+
+#### Windows
+
+如果 SmartScreen 提示 _"Windows 已保护你的电脑"_，点 **更多信息** → **仍要运行**。
+
+#### 首次启动
+
+应用默认没有任何模型配置：先在 **设置** 的 **Models** 中添加至少一个连接（OpenAI / Anthropic / Google 兼容端点，或 Ollama 等本地服务），然后才能开始对话。笔记本、笔记和嵌入数据全部保存在本地。
 
 ### 开发
 

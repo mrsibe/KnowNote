@@ -10,7 +10,42 @@ permissions:
   contents: write
 
 jobs:
+  # Creates the release as a draft BEFORE the platform builds, so both matrix
+  # jobs upload into the same release. Without this, macos and windows run
+  # concurrently, each finds no release for the tag and each creates its own
+  # draft: the v1.2.2 attempt produced two releases both tagged v1.2.2, with the
+  # assets split between them (the .dmg in one, latest.yml in the other), so
+  # promoting either one would have published an incomplete release with a
+  # broken update feed.
+  #
+  # Drafts left over for this tag are deleted first: a draft is never visible to
+  # users and can only be the remains of an earlier failed attempt, so mixing
+  # its stale assets into a fresh run is worse than rebuilding the release
+  # empty. Re-running a failed release run therefore starts from a clean slate.
+  create-draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq ".[] | select(.draft and .tag_name == \"$TAG\") | .id" \
+          | while IFS= read -r id; do
+            echo "deleting stale draft release $id for $TAG"
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+          done
+
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "$TAG" \
+            --notes "Release notes are generated when this draft is promoted."
+
   release:
+    needs: create-draft
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -138,7 +173,7 @@ jobs:
           case "$TEAM" in
             ''|'not set')
               IS_ADHOC=1
-              echo "::warning title=Ad-hoc signed macOS build::No Developer ID TeamIdentifier. Users must run: sudo xattr -rd com.apple.quarantine /Applications/KnowNote.app"
+              echo "::warning title=Unsigned macOS build::No Developer ID TeamIdentifier. Users must run: sudo xattr -rd com.apple.quarantine /Applications/KnowNote.app (see the Install section of README.md)"
               ;;
             *)
               IS_ADHOC=0
@@ -150,7 +185,17 @@ jobs:
           ENT=$(mktemp)
           codesign -d --entitlements :- "$APP" > "$ENT" 2>/dev/null || true
           cat "$ENT"
-          if ! grep -q 'disable-library-validation' "$ENT"; then
+          # An unsigned bundle embeds no entitlements, and that is the expected
+          # state while the pipeline has no Developer ID certificate: see the
+          # Install section of README.md for the user-side workaround. It is only
+          # tolerable without an identity though - once a certificate is present,
+          # missing entitlements mean the v1.2.0 crash is back and the release
+          # must not go out.
+          if grep -q 'disable-library-validation' "$ENT"; then
+            echo "entitlements: disable-library-validation is present"
+          elif [ "$IS_ADHOC" -eq 1 ]; then
+            echo "::warning title=Unsigned macOS build::No identity was available, so the bundle carries no entitlements. This build is not notarized and cannot be launched on Apple Silicon until the user clears the quarantine flag; README.md documents the command."
+          else
             echo "::error::shipped app is missing com.apple.security.cs.disable-library-validation."
             echo "::error::It will crash on launch when the main process loads better_sqlite3.node."
             exit 1
@@ -186,12 +231,16 @@ jobs:
               echo "::error::This build would be rejected on user machines."
               exit 1
             fi
-            echo "::warning title=Ad-hoc signature verify failed::codesign --verify --strict reported an inconsistency. The app may still launch; inspect the log above before publishing."
+            echo "::warning title=Unsigned macOS build::codesign --verify --strict failed, which is expected without an identity. The app launches only after the user clears the quarantine flag; inspect the log above before publishing."
           else
             echo "signature verify: OK"
           fi
 
-          echo "::notice title=macOS artifact verified::entitlements present, $(echo "$NATIVES" | wc -l | tr -d ' ') native module(s) unpacked and signed."
+          if [ "$IS_ADHOC" -eq 1 ]; then
+            echo "::notice title=macOS artifact verified::$(echo "$NATIVES" | wc -l | tr -d ' ') native module(s) unpacked; bundle is unsigned."
+          else
+            echo "::notice title=macOS artifact verified::entitlements present, $(echo "$NATIVES" | wc -l | tr -d ' ') native module(s) unpacked and signed."
+          fi
 
       - name: Build & Release (Windows)
         if: matrix.os == 'windows-latest'
@@ -200,10 +249,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run build:win -- --publish always
 
-  # electron-builder only creates a DRAFT release (see publish.releaseType in
-  # electron-builder.yml). It is promoted to public here, which happens only if
-  # every platform built and the macOS artifact verification passed. A broken
-  # package therefore never reaches users - it stays a draft.
+  # electron-builder uploads into the draft created by `create-draft` (see
+  # publish.releaseType in electron-builder.yml, and the note on that job for
+  # why the draft is created up front). It is promoted to public here, which
+  # happens only if every platform built and the macOS artifact verification
+  # passed. A broken package therefore never reaches users - it stays a draft.
   publish:
     needs: release
     runs-on: ubuntu-latest

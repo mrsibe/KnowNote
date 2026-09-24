@@ -143,12 +143,46 @@ More ideas are in the pipeline — feel free to suggest features in Issues.
 
 ## Quick Start
 
-### Download
+### Install
 
-Get the latest version from GitHub Releases:
+Download the build for your platform from [GitHub Releases](https://github.com/MrSibe/KnowNote/releases/latest):
 
-- **Windows**: `KnowNote-Setup-{version}.exe`
-- **macOS**: `KnowNote-{version}.dmg` / `KnowNote-{version}-arm64.dmg`
+- **Windows**: `knownote-{version}-setup.exe`
+- **macOS (Apple Silicon)**: `knownote-{version}-arm64.dmg`
+
+> **The builds are unsigned.** There is no Apple Developer ID certificate in the
+> release pipeline, so macOS refuses to launch the app on first run and Windows
+> SmartScreen flags the installer. Neither means the download is broken — both
+> are one-time prompts, and the steps below clear them.
+
+#### macOS
+
+1. Open the `.dmg` and drag **KnowNote** into _Applications_.
+2. Clear the quarantine flag once:
+
+   ```bash
+   sudo xattr -rd com.apple.quarantine /Applications/KnowNote.app
+   ```
+
+3. Launch it as usual.
+
+Intel Macs are not built at the moment — the release ships an arm64 build only.
+
+Without step 2, macOS reports _"KnowNote is damaged and can't be opened"_ or
+_"Apple cannot check it for malicious software"_. Only run this command on an app
+taken from this repository's Releases page.
+
+#### Windows
+
+If SmartScreen shows _"Windows protected your PC"_, choose **More info** →
+**Run anyway**.
+
+#### First run
+
+Nothing is configured out of the box: open **Settings**, add at least one model
+connection under **Models** (any OpenAI-, Anthropic- or Google-compatible
+endpoint, or a local server such as Ollama), then start chatting. Notebooks,
+notes and embeddings all stay on your machine.
 
 ### Development
 
