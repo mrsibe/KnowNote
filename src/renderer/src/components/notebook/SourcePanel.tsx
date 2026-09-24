@@ -253,20 +253,32 @@ export default function SourcePanel(): ReactElement {
 
   const { openSettings } = useUIStore()
 
-  // 检查是否配置了 embedding connection
+  // Embedding 是基础设施：没有远程 connection 时由内置本地模型承担（首次 RAG 使用按需下载）。
+  // 因此可用性取决于真实后端状态，而不是 connections.embedding 是否存在——内置模式不会写入 connection。
   useEffect(() => {
-    const loadEmbeddingConnection = async () => {
-      const connections = await window.api.connections.getAll()
-      setHasEmbeddingModel(Boolean(connections.embedding))
+    const loadEmbeddingAvailability = async (): Promise<void> => {
+      try {
+        const status = await window.api.embedding.getStatus()
+        setHasEmbeddingModel(status.activeBackend === 'local' || status.remoteConfigured)
+      } catch (error) {
+        console.error('[SourcePanel] Failed to load embedding status:', error)
+        setHasEmbeddingModel(false)
+      }
     }
-    void loadEmbeddingConnection()
+    void loadEmbeddingAvailability()
 
-    // 监听连接配置变化
-    const unsubscribe = window.api.connections.onChanged(() => {
-      void loadEmbeddingConnection()
+    // 远程/内置切换、模型安装状态变化都会影响可用性
+    const unsubscribeConnections = window.api.connections.onChanged(() => {
+      void loadEmbeddingAvailability()
+    })
+    const unsubscribeProgress = window.api.embedding.onDownloadProgress(() => {
+      void loadEmbeddingAvailability()
     })
 
-    return unsubscribe
+    return () => {
+      unsubscribeConnections()
+      unsubscribeProgress()
+    }
   }, [])
 
   // 设置监听器
