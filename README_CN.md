@@ -46,7 +46,7 @@
 
 - 📚 从文档和笔记构建本地知识库
 - 💬 使用 LLM 对内容进行聊天、总结和推理
-- 🔌 基于提供商的 LLM 设计（OpenAI、DeepSeek、Ollama 等）
+- 🔌 自带 API：任何兼容 OpenAI、Anthropic 或 Google 协议的端点，或本地部署
 - 🔍 基于 RAG 的检索，具有精确的来源追溯能力
 - 🖥️ 使用 Electron 构建的桌面应用——无需 Docker，无需服务器设置
 
@@ -83,7 +83,7 @@
 ### 🤖 AI 驱动的问答
 
 - 检索增强生成（RAG）
-- 多种 LLM 提供商
+- 任何兼容 OpenAI / Anthropic / Google 协议的端点，或本地模型
 - 带有精确来源引用的答案
 
 ### 🔒 本地优先设计
@@ -123,7 +123,7 @@ KnowNote 是一个早期阶段的项目。
 
 ### ✅ 已完成
 
-- 支持多个提供商的 AI LLM 对话
+- 支持任意兼容端点的 AI LLM 对话（本地或远程）
 - 结构化笔记生成
 - 一键生成思维导图
 - 基于 RAG 的文档检索
@@ -177,7 +177,7 @@ KnowNote/
 │   ├── main/              # Electron 主进程
 │   │   ├── db/            # 数据库配置和架构
 │   │   ├── services/      # 核心逻辑（文档解析、RAG 等）
-│   │   └── providers/     # LLM 提供商抽象
+│   │   └── models/        # 模型连接解析与 API 协议适配器
 │   ├── renderer/          # React 渲染进程
 │   ├── preload/           # Electron 预加载脚本
 │   └── shared/            # 共享类型和工具
@@ -196,7 +196,7 @@ KnowNote/
 
 - 学习工作流程
 - 知识可视化
-- 模型/提供商抽象
+- 模型连接 / API 协议抽象
 
 我很乐意听取。
 

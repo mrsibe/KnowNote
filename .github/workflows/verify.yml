@@ -51,6 +51,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Unit tests
+        run: npm test
+
       # Runs `npm run build` first, then electron-builder --dir, so the bundle and
       # the package are both covered by this one step.
       - name: Build and package (unpacked)
