@@ -32,6 +32,9 @@
   "about": "About",
   "version": "Version",
   "error": "Error",
+  "errorTitle": "Something went wrong",
+  "errorDescription": "An unexpected error occurred. Reload to continue.",
+  "reload": "Reload",
   "warning": "Warning",
   "info": "Info",
   "success": "Success"
