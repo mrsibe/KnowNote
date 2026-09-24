@@ -133,7 +133,7 @@ live only in component constants. These are the values; change them here first.
 | Initial side widths  | golden ratio of the free space         | `1 / (2 + 1.618)` each; the centre takes `1.618 / 3.618`   |
 | Minimum side panel   | `260px` (`MIN_SIDE_WIDTH`)             | A drag and a keyboard step both clamp here                 |
 | Minimum centre panel | `420px` (`MIN_CENTER_WIDTH`)           | Never traded away; the sides give up width first           |
-| Seam                 | `w-px` (`HANDLE_WIDTH`)                | 1px hairline, 12px invisible hit area, `z-10`              |
+| Seam                 | `w-3` (`HANDLE_WIDTH`)                 | 12px canvas gutter; the gutter itself is the drag target   |
 | Keyboard step        | `10px` / `50px`                        | `Shift` for the larger step; `Home` / `End` for the limits |
 | Persistence          | `localStorage` `knownote:panel-widths` | Survives navigation, unlike the component's own lifetime   |
 
@@ -153,8 +153,16 @@ Rules:
   (`lib/dragLock.ts`: `user-select: none` + a forced cursor, ref-counted, Escape
   cancels). Without the lock, dragging past a panel's limit leaves the browser's
   native selection drag running and selects the text underneath.
+- **The seam is a gutter, and its width is layout.** The panels are separate
+  cards floating on `surface-base`; the canvas between them _is_ the handle.
+  That is why `HANDLE_WIDTH` is subtracted from the width the panels may occupy,
+  and why the handle paints nothing at rest. Painting it (`bg-border`) or
+  shrinking it toward `w-px` closes the gutter and makes the cards read as
+  adjacent surfaces sharing a divider. This is the one place a hairline is wrong —
+  do not "tidy" it.
 - **The seam is a real `separator`**: `role`, `aria-orientation`, `aria-valuenow`,
-  `tabIndex={0}`, arrow keys. Panel resizing is not mouse-only.
+  `tabIndex={0}`, arrow keys. Panel resizing is not mouse-only. `bg-surface-hover`
+  on hover and while dragging, plus the standard focus ring.
 - A collapsed panel keeps its previous width in the session so expanding restores
   it; `0` is never persisted as a width.
 

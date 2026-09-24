@@ -22,11 +22,11 @@ export interface DragHandleProps {
 /**
  * The seam between two workspace panels.
  *
- * It draws a 1px hairline and carries a 12px invisible hit area, rather than
- * being a 12px invisible strip: the seam is chrome (DESIGN.md keeps panel
- * separation to a hairline) while the target stays comfortable. `z-10` puts the
- * hit area above the neighbouring panel so the target is not clipped on the
- * side the panel is painted over.
+ * Its width is **layout, not decoration**: the canvas gutter between two panels
+ * *is* the handle, which is why `HANDLE_WIDTH` is subtracted from the space the
+ * panels may occupy. Painting it, or shrinking it toward a hairline, closes the
+ * gutter between the panels — the panels are separate cards floating on
+ * `surface-base`, not adjacent surfaces sharing a divider.
  *
  * It is a real `separator`: focusable, arrow-resizable, and it reports its
  * value, so the layout is not mouse-only.
@@ -53,11 +53,9 @@ export default function DragHandle({
       data-handle={side}
       data-dragging={dragging || undefined}
       className={cn(
-        'group relative z-10 w-px shrink-0 cursor-col-resize bg-border transition-colors',
-        // 12px hit area centred on the 1px seam
-        'after:absolute after:inset-y-0 after:left-1/2 after:w-3 after:-translate-x-1/2 after:content-[""]',
-        'hover:bg-ring focus-visible:bg-ring focus-visible:outline-none',
-        'data-[dragging]:bg-ring'
+        'w-3 shrink-0 cursor-col-resize bg-transparent transition-colors',
+        'hover:bg-surface-hover data-[dragging]:bg-surface-hover',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
       )}
       style={
         {

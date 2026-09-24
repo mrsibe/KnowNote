@@ -16,8 +16,8 @@ export interface ResizableLayoutProps {
 const MIN_SIDE_WIDTH = 260
 /** Minimum width of the centre panel, in CSS pixels. */
 const MIN_CENTER_WIDTH = 420
-/** The seam is `w-px`; its 12px hit area is a pseudo-element, so it costs no layout. */
-const HANDLE_WIDTH = 1
+/** The seam is `w-3`. The canvas gutter between two panels is the handle, so it costs layout. */
+const HANDLE_WIDTH = 12
 /** `p-2` on the container, both sides. */
 const CONTAINER_PADDING_X = 16
 const DEFAULT_LEFT_WIDTH = 320
