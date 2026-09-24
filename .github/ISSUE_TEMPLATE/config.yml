@@ -1,0 +1,4 @@
+# Blank issues stay enabled while the project is small: plenty of feedback does
+# not fit cleanly into "bug" or "feature". Revisit once issue volume is high
+# enough that unfilled reports start costing triage time.
+blank_issues_enabled: true

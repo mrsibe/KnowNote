@@ -1,0 +1,82 @@
+name: Feature Request
+description: Suggest an improvement or new capability for KnowNote
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve KnowNote!
+
+        Please describe the problem or workflow first, then your proposed solution.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: I have searched existing issues and did not find the same request.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem or limitation are you trying to solve?
+      placeholder: |
+        I'm trying to ...
+        Currently I have to ...
+        This becomes difficult because ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like KnowNote to do?
+      placeholder: Describe the behavior or workflow you would like to see.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Knowledge base
+        - Document import / parsing
+        - RAG / retrieval
+        - AI / model connection
+        - Notes / editor
+        - Mind map
+        - UI / UX
+        - Integrations
+        - Desktop
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Example use case
+      description: Give a concrete example of how you would use this feature.
+      placeholder: |
+        For example:
+        I import several AI papers and want to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Are there existing workarounds or alternative approaches?
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Mockups, screenshots, references to other products, links, or related issues.
