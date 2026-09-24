@@ -6,6 +6,7 @@
   "author": "MrSibe",
   "homepage": "https://github.com/MrSibe/KnowNote",
   "license": "GPL-3.0",
+  "packageManager": "pnpm@10.34.5",
   "repository": {
     "type": "git",
     "url": "https://github.com/MrSibe/KnowNote.git"

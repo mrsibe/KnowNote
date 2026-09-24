@@ -28,11 +28,18 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
+        # No `version` input on purpose: the action then uses the exact version
+        # from the `packageManager` field in package.json, which corepack also
+        # honours for local development. One source of truth.
+        #
+        # Why exact and why 10.x: the contents of app.asar depend on how the
+        # installed pnpm resolves and reports modules. A floating major already
+        # produced two different app.asar contents from one identical lockfile.
+        # pnpm 11+ also stops reading `pnpm.onlyBuiltDependencies` from
+        # package.json, which would silently skip the better-sqlite3 build.
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       # Fail BEFORE anything is published if the entitlement that lets us load
       # third-party native modules is missing from the plist.
