@@ -284,6 +284,20 @@ async function runChecks(): Promise<string[]> {
   await import('pdfjs-dist/legacy/build/pdf.mjs')
   pass('pdfjs-dist loads and polyfilled DOMMatrix from @napi-rs/canvas')
 
+  // @huggingface/transformers is loaded dynamically by LocalEmbeddingBackend and
+  // brings native onnxruntime-node (plus sharp, which its Node bundle imports at
+  // module scope). Loading it here is the packaged assertion: the module graph
+  // resolves and the native bindings are unpacked. Weights are downloaded on
+  // demand, so real inference is not run in the smoke test.
+  const { pipeline: featureExtractionPipeline, env: transformersEnv } =
+    await import('@huggingface/transformers')
+  assert(
+    typeof featureExtractionPipeline === 'function' && typeof transformersEnv === 'object',
+    '@huggingface/transformers did not expose pipeline()/env'
+  )
+  await import('onnxruntime-node')
+  pass('@huggingface/transformers and onnxruntime-node load')
+
   // --- document import: the real loaders, against real files ----------------
   // The fixtures live in test/fixtures and are handed over by
   // scripts/smoke-packaged.mjs. A missing directory is a failure rather than a

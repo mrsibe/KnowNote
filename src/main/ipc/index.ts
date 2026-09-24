@@ -1,6 +1,7 @@
 import { ConnectionManager } from '../models/ConnectionManager'
 import { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
 import { KnowledgeService } from '../services/KnowledgeService'
+import { EmbeddingService } from '../services/EmbeddingService'
 import { UpdateService } from '../services/UpdateService'
 import { MindMapService } from '../services/MindMapService'
 import { QuizService } from '../services/QuizService'
@@ -10,6 +11,7 @@ import type Store from 'electron-store'
 import type { StoreSchema } from '../config/types'
 import { registerChatHandlers } from './chatHandlers'
 import { registerConnectionHandlers } from './connectionHandlers'
+import { registerEmbeddingHandlers } from './embeddingHandlers'
 import { registerSettingsHandlers } from './settingsHandlers'
 import { registerNotebookHandlers } from './notebookHandlers'
 import { registerNoteHandlers } from './noteHandlers'
@@ -29,6 +31,7 @@ export function registerAllHandlers(
   connectionManager: ConnectionManager,
   sessionAutoSwitchService: SessionAutoSwitchService,
   knowledgeService: KnowledgeService,
+  embeddingService: EmbeddingService,
   updateService: UpdateService,
   shortcutManager: ShortcutManager,
   store: Store<StoreSchema>
@@ -42,6 +45,7 @@ export function registerAllHandlers(
 
   registerChatHandlers(connectionManager, sessionAutoSwitchService, knowledgeService)
   registerConnectionHandlers(connectionManager)
+  registerEmbeddingHandlers(embeddingService)
   registerSettingsHandlers()
   registerDialogHandlers()
   registerNotebookHandlers()
@@ -59,6 +63,7 @@ export function registerAllHandlers(
 export {
   registerChatHandlers,
   registerConnectionHandlers,
+  registerEmbeddingHandlers,
   registerSettingsHandlers,
   registerNotebookHandlers,
   registerNoteHandlers,

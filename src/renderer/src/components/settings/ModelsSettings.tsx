@@ -1,6 +1,7 @@
 import { ReactElement, useEffect, useState } from 'react'
 import type { ConnectionMap, ModelCapability } from '../../../../shared/types'
 import ModelConnectionForm, { type ProtocolInfo } from './ModelConnectionForm'
+import EmbeddingSettings from './EmbeddingSettings'
 
 interface ModelsSettingsProps {
   connections: ConnectionMap
@@ -44,8 +45,7 @@ export default function ModelsSettings({
         onClear={() => clearConnection('chat')}
       />
       <div className="border-t border-border" />
-      <ModelConnectionForm
-        capability="embedding"
+      <EmbeddingSettings
         connection={connections.embedding}
         protocols={protocols}
         onChange={(connection) => setConnection('embedding', connection)}

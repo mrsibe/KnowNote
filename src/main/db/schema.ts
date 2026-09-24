@@ -210,6 +210,28 @@ export type Embedding = typeof embeddings.$inferSelect
 export type NewEmbedding = typeof embeddings.$inferInsert
 
 /**
+ * 笔记本的 embedding space 身份
+ *
+ * 向量只有在同一个 space 内才可比。仅凭维度判断不够：换了模型但维度恰好相同
+ * （例如 768 → 768）时，旧向量与新查询向量已经不可比却检测不到。这里持久化
+ * spaceId 作为索引身份，搜索前校验，不一致就提示重新索引。
+ */
+export const notebookEmbeddingSpaces = sqliteTable('notebook_embedding_spaces', {
+  notebookId: text('notebook_id')
+    .primaryKey()
+    .references(() => notebooks.id, { onDelete: 'cascade' }),
+  spaceId: text('space_id').notNull(),
+  backend: text('backend', { enum: ['local', 'remote'] }).notNull(),
+  model: text('model').notNull(),
+  revision: text('revision').notNull().default(''),
+  dimensions: integer('dimensions').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
+})
+
+export type NotebookEmbeddingSpace = typeof notebookEmbeddingSpaces.$inferSelect
+export type NewNotebookEmbeddingSpace = typeof notebookEmbeddingSpaces.$inferInsert
+
+/**
  * 思维导图表
  * 存储笔记本的派生知识结构
  */

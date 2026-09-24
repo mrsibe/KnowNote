@@ -13,15 +13,15 @@ import {
   getNotebookVectorTable,
   rebuildNotebookVectorTable
 } from '../db'
-import { documents, chunks, embeddings, notes } from '../db/schema'
+import { documents, chunks, embeddings, notes, notebookEmbeddingSpaces } from '../db/schema'
 import type { Document, Chunk, NewDocument, NewChunk, NewEmbedding } from '../db/schema'
 import { eq, desc, inArray, sql } from 'drizzle-orm'
 import { EmbeddingService } from './EmbeddingService'
+import type { EmbeddingSpace } from '../../shared/types'
 import { ChunkingService, type ChunkOptions } from './ChunkingService'
 import { FileParserService } from './FileParserService'
 import { WebFetchService } from './WebFetchService'
 import { vectorStoreManager } from '../vectorstore'
-import { ConnectionManager } from '../models/ConnectionManager'
 import Logger from '../../shared/utils/logger'
 
 /**
@@ -78,8 +78,8 @@ export class KnowledgeService {
   private webFetchService: WebFetchService
   private knowledgeFilesDir: string
 
-  constructor(connectionManager: ConnectionManager) {
-    this.embeddingService = new EmbeddingService(connectionManager)
+  constructor(embeddingService: EmbeddingService) {
+    this.embeddingService = embeddingService
     this.chunkingService = new ChunkingService()
     this.fileParserService = new FileParserService()
     this.webFetchService = new WebFetchService()
@@ -218,23 +218,19 @@ export class KnowledgeService {
       // 4. 生成嵌入向量
       // 不指定维度:维度由 embedding 模型决定,写死维度会让用别的模型的笔记本直接
       // 索引失败(vec0 表的宽度在创建时固定,见 #33)。测出真实维度之后再用它建表。
-      onProgress?.('generating_embeddings', 30)
-      const embeddingResults = await this.embeddingService.embedBatch(
-        chunkContents,
-        {},
-        (completed, total) => {
-          const progress = 30 + (completed / total) * 50
-          onProgress?.('generating_embeddings', Math.round(progress))
-        }
-      )
+      const embeddingResults = await this.embedDocumentChunks(notebookId, chunkContents, onProgress)
 
       if (embeddingResults.length === 0) {
         throw new Error('Embedding 服务没有返回任何向量')
       }
 
-      // 维度由模型决定;与既有向量表不一致时重建表并把文档标回待索引
+      // space 由模型决定;与既有 space 不一致时重建向量表并把文档标回待索引
       const detectedDimensions = embeddingResults[0].dimensions
-      await this.reconcileVectorDimensions(notebookId, detectedDimensions)
+      await this.reconcileEmbeddingSpace(
+        notebookId,
+        await this.embeddingService.getSpace(),
+        detectedDimensions
+      )
       Logger.info('KnowledgeService', `Embedding dimensions: ${detectedDimensions}`)
 
       // 5. 保存嵌入元数据并添加到向量存储
@@ -406,23 +402,19 @@ export class KnowledgeService {
       // 4. 生成嵌入向量
       // 不指定维度:维度由 embedding 模型决定,写死维度会让用别的模型的笔记本直接
       // 索引失败(vec0 表的宽度在创建时固定,见 #33)。测出真实维度之后再用它建表。
-      onProgress?.('generating_embeddings', 30)
-      const embeddingResults = await this.embeddingService.embedBatch(
-        chunkContents,
-        {},
-        (completed, total) => {
-          const progress = 30 + (completed / total) * 50
-          onProgress?.('generating_embeddings', Math.round(progress))
-        }
-      )
+      const embeddingResults = await this.embedDocumentChunks(notebookId, chunkContents, onProgress)
 
       if (embeddingResults.length === 0) {
         throw new Error('Embedding 服务没有返回任何向量')
       }
 
-      // 维度由模型决定;与既有向量表不一致时重建表并把文档标回待索引
+      // space 由模型决定;与既有 space 不一致时重建向量表并把文档标回待索引
       const detectedDimensions = embeddingResults[0].dimensions
-      await this.reconcileVectorDimensions(notebookId, detectedDimensions)
+      await this.reconcileEmbeddingSpace(
+        notebookId,
+        await this.embeddingService.getSpace(),
+        detectedDimensions
+      )
       Logger.info('KnowledgeService', `Embedding dimensions: ${detectedDimensions}`)
 
       // 5. 保存嵌入元数据并添加到向量存储
@@ -570,31 +562,101 @@ export class KnowledgeService {
   }
 
   /**
-   * 向量维度由 embedding 模型决定,而 vec0 表的宽度在创建时就固定了。模型换掉之后
-   * 旧向量和新查询向量已经不可比,所以这里显式重建该 notebook 的向量表,并把它的文档
-   * 标回待索引。
+   * 索引前把 chunk 转成向量。
    *
-   * 只有索引链路(刚刚量到真实维度)能走到这里:搜索、删除、重建单篇文档这些路径不会
-   * 传维度,也就不会因为一次误判把别人的向量删掉。
+   * 内置本地模型未安装时会触发按需下载（第一次使用 RAG 的动作），下载进度映射到
+   * 0-30%，之后的推理映射到 30-80%。索引文本走 document 前缀。
    */
-  private async reconcileVectorDimensions(notebookId: string, dimensions: number): Promise<void> {
-    const existingTable = getNotebookVectorTable(notebookId)
-    if (!existingTable || existingTable.dimensions === dimensions) {
-      return
-    }
-
-    Logger.warn(
+  private async embedDocumentChunks(
+    notebookId: string,
+    chunkContents: string[],
+    onProgress?: IndexProgressCallback
+  ): Promise<Array<{ embedding: Float32Array; model: string; dimensions: number }>> {
+    Logger.debug(
       'KnowledgeService',
-      `Embedding dimensions for ${notebookId} changed from ${existingTable.dimensions} to ${dimensions}, rebuilding its vector table`
+      `Embedding ${chunkContents.length} chunks for notebook ${notebookId}`
     )
 
-    rebuildNotebookVectorTable(notebookId, dimensions)
+    await this.embeddingService.ensureReady((progress) => {
+      onProgress?.('preparing_embedding_model', Math.round(progress.progress * 30))
+    })
 
+    onProgress?.('generating_embeddings', 30)
+    return await this.embeddingService.embedBatch(chunkContents, 'document', (completed, total) => {
+      const progress = 30 + (completed / total) * 50
+      onProgress?.('generating_embeddings', Math.round(progress))
+    })
+  }
+
+  /**
+   * embedding space 是索引身份：向量只有在同一个 space 内才可比。仅比维度不够 —— 换了
+   * 模型但维度恰好相同时（例如 768 → 768），旧向量与新查询向量已经不可比却检测不到。
+   *
+   * space 变化时，维度不同就重建向量表，维度相同就清空向量，并把该 notebook 的文档标回
+   * 待索引。只有索引链路（刚量到真实 space/维度）能走到这里，搜索与删除不会误删向量。
+   */
+  private async reconcileEmbeddingSpace(
+    notebookId: string,
+    space: EmbeddingSpace,
+    dimensions: number
+  ): Promise<void> {
     const db = getDatabase()
-    db.delete(embeddings).where(eq(embeddings.notebookId, notebookId)).run()
-    db.update(documents)
-      .set({ status: 'pending', updatedAt: new Date() })
-      .where(eq(documents.notebookId, notebookId))
+    const stored = db
+      .select()
+      .from(notebookEmbeddingSpaces)
+      .where(eq(notebookEmbeddingSpaces.notebookId, notebookId))
+      .get()
+    const existingTable = getNotebookVectorTable(notebookId)
+
+    const spaceChanged = Boolean(stored) && stored!.spaceId !== space.id
+    const dimensionsChanged = Boolean(existingTable) && existingTable!.dimensions !== dimensions
+
+    if (spaceChanged || dimensionsChanged) {
+      if (dimensionsChanged && existingTable) {
+        Logger.warn(
+          'KnowledgeService',
+          `Embedding dimensions for ${notebookId} changed from ${existingTable.dimensions} to ${dimensions}, rebuilding its vector table`
+        )
+        rebuildNotebookVectorTable(notebookId, dimensions)
+      } else if (existingTable) {
+        Logger.warn(
+          'KnowledgeService',
+          `Embedding space for ${notebookId} changed (${stored?.spaceId ?? 'unknown'} -> ${space.id}); clearing incomparable vectors`
+        )
+        const store = await vectorStoreManager.getStore(notebookId)
+        await store.clear()
+      }
+
+      // 向量已不可用（重建或清空），该 notebook 的所有文档都需要重新索引
+      db.delete(embeddings).where(eq(embeddings.notebookId, notebookId)).run()
+      db.update(documents)
+        .set({ status: 'pending', updatedAt: new Date() })
+        .where(eq(documents.notebookId, notebookId))
+        .run()
+    }
+
+    const now = new Date()
+    db.insert(notebookEmbeddingSpaces)
+      .values({
+        notebookId,
+        spaceId: space.id,
+        backend: space.backend,
+        model: space.model,
+        revision: space.revision,
+        dimensions,
+        updatedAt: now
+      })
+      .onConflictDoUpdate({
+        target: notebookEmbeddingSpaces.notebookId,
+        set: {
+          spaceId: space.id,
+          backend: space.backend,
+          model: space.model,
+          revision: space.revision,
+          dimensions,
+          updatedAt: now
+        }
+      })
       .run()
   }
 
@@ -607,9 +669,24 @@ export class KnowledgeService {
     options: SearchOptions = {}
   ): Promise<SearchResult[]> {
     const { topK = 5, threshold = 0.5, includeContent = true } = options
+    const db = getDatabase()
 
-    // 1. 生成查询向量
-    const queryEmbedding = await this.embeddingService.embed(query)
+    // 0. 索引身份校验：当前模型与建索引时不一致，向量不可比，明确要求重新索引
+    const space = await this.embeddingService.getSpace()
+    const storedSpace = db
+      .select()
+      .from(notebookEmbeddingSpaces)
+      .where(eq(notebookEmbeddingSpaces.notebookId, notebookId))
+      .get()
+    if (storedSpace && storedSpace.spaceId !== space.id) {
+      throw new Error(
+        'The search model has changed since this notebook was indexed. Re-index the notebook before searching.'
+      )
+    }
+
+    // 1. 生成查询向量（E5 要求 query 前缀，与索引时的 document 前缀区分）
+    await this.embeddingService.ensureReady()
+    const queryEmbedding = await this.embeddingService.embed(query, 'query')
 
     // 2. 向量检索
     const vectorStore = await vectorStoreManager.getStore(notebookId)
@@ -623,7 +700,6 @@ export class KnowledgeService {
     }
 
     // 3. 获取 chunk 详情
-    const db = getDatabase()
     const chunkIds = vectorResults.map((r) => r.chunkId)
 
     const chunkDetails = db.select().from(chunks).where(inArray(chunks.id, chunkIds)).all()

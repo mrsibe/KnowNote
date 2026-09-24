@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { EmbeddingDownloadProgress } from '../shared/types'
 
 /**
  * IPC 调用超时包装函数
@@ -137,6 +138,21 @@ const api = {
       const listener = () => callback()
       ipcRenderer.on('connections-changed', listener)
       return () => ipcRenderer.removeListener('connections-changed', listener)
+    }
+  },
+
+  // Embedding 内置本地模型相关
+  embedding: {
+    getStatus: () => ipcRenderer.invoke('embedding:get-status'),
+    download: () => ipcRenderer.invoke('embedding:download'),
+    cancelDownload: () => ipcRenderer.invoke('embedding:cancel-download'),
+    deleteLocal: () => ipcRenderer.invoke('embedding:delete-local'),
+    probeSources: () => ipcRenderer.invoke('embedding:probe-sources'),
+    importLocal: () => ipcRenderer.invoke('embedding:import-local'),
+    onDownloadProgress: (callback: (progress: EmbeddingDownloadProgress) => void) => {
+      const listener = (_event: any, progress: EmbeddingDownloadProgress) => callback(progress)
+      ipcRenderer.on('embedding:download-progress', listener)
+      return () => ipcRenderer.removeListener('embedding:download-progress', listener)
     }
   },
 

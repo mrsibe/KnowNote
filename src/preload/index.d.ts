@@ -7,7 +7,10 @@ import type {
   ConnectionMap,
   ConnectionTestResult,
   ModelCapability,
-  ModelConnection
+  ModelConnection,
+  LocalEmbeddingModelInfo,
+  EmbeddingDownloadProgress,
+  EmbeddingSourceInfo
 } from '../shared/types'
 import type {
   KnowledgeDocument,
@@ -32,6 +35,9 @@ export type {
   ConnectionTestResult,
   ModelCapability,
   ModelConnection,
+  LocalEmbeddingModelInfo,
+  EmbeddingDownloadProgress,
+  EmbeddingSourceInfo,
   MindMap,
   Quiz,
   QuizSession,
@@ -222,6 +228,27 @@ declare global {
         test: (connection: ModelConnection) => Promise<ConnectionTestResult>
         fetchModels: (connection: ModelConnection) => Promise<string[]>
         onChanged: (callback: () => void) => () => void
+      }
+
+      // 内置本地 embedding 模型相关
+      embedding: {
+        getStatus: () => Promise<{
+          activeBackend: 'local' | 'remote'
+          remoteConfigured: boolean
+          downloading: boolean
+          localModel: LocalEmbeddingModelInfo
+        }>
+        download: () => Promise<{ success: boolean; error?: string }>
+        cancelDownload: () => Promise<{ success: boolean }>
+        deleteLocal: () => Promise<{ success: boolean; error?: string }>
+        probeSources: () => Promise<EmbeddingSourceInfo[]>
+        importLocal: () => Promise<{
+          success: boolean
+          canceled?: boolean
+          missingFiles?: string[]
+          error?: string
+        }>
+        onDownloadProgress: (callback: (progress: EmbeddingDownloadProgress) => void) => () => void
       }
 
       // 知识库相关
