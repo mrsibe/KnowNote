@@ -1,6 +1,6 @@
 {
   "name": "knownote",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A local-first knowledge note-taking tool that transforms your PDFs, documents, and web pages into a queryable, citable, and traceable personal knowledge base using RAG technology",
   "main": "./out/main/index.js",
   "author": "MrSibe",
