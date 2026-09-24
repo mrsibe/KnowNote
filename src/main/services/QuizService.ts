@@ -93,7 +93,7 @@ const QuizQuestionSchema: z.ZodType<QuizQuestion> = z.object({
   hints: z.array(z.string().max(100)).min(1).max(2).describe('1-2个提示'),
   metadata: z
     .object({
-      chunkIds: z.array(z.string()).describe('关联的chunk ID列表')
+      chunkIds: z.array(z.string()).default([]).describe('关联的chunk ID列表')
     })
     .optional()
 })

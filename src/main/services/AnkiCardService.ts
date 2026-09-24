@@ -51,12 +51,14 @@ async function getAnkiPrompt(customPrompt?: string): Promise<string> {
 const BasicCardSchema = z.object({
   id: z.string().describe('卡片唯一ID'),
   type: z.literal('basic'),
-  front: z.string().max(300).describe('正面:问题文本'),
-  back: z.string().max(500).describe('背面:答案文本'),
+  front: z.string().describe('正面:问题文本'),
+  back: z.string().describe('背面:答案文本'),
   tags: z.array(z.string()).optional().describe('标签数组'),
   metadata: z
     .object({
-      chunkIds: z.array(z.string()).describe('关联的chunk ID列表'),
+      // chunk ID 不会出现在聚合给模型的正文里，提示词也只要求"尽可能"关联，
+      // 因此缺失时回退为空数组，而不是让整次生成失败。
+      chunkIds: z.array(z.string()).default([]).describe('关联的chunk ID列表'),
       difficulty: z.enum(['easy', 'medium', 'hard']).optional()
     })
     .optional()
@@ -65,12 +67,12 @@ const BasicCardSchema = z.object({
 const ClozeCardSchema = z.object({
   id: z.string().describe('卡片唯一ID'),
   type: z.literal('cloze'),
-  text: z.string().max(500).describe('带有{{c1::答案}}格式的文本'),
-  backExtra: z.string().max(300).optional().describe('背面额外信息'),
+  text: z.string().describe('带有{{c1::答案}}格式的文本'),
+  backExtra: z.string().optional().describe('背面额外信息'),
   tags: z.array(z.string()).optional().describe('标签数组'),
   metadata: z
     .object({
-      chunkIds: z.array(z.string()).describe('关联的chunk ID列表'),
+      chunkIds: z.array(z.string()).default([]).describe('关联的chunk ID列表'),
       difficulty: z.enum(['easy', 'medium', 'hard']).optional()
     })
     .optional()
@@ -79,13 +81,13 @@ const ClozeCardSchema = z.object({
 const FillBlankCardSchema = z.object({
   id: z.string().describe('卡片唯一ID'),
   type: z.literal('fill-blank'),
-  sentence: z.string().max(300).describe('带有_____的句子'),
-  answer: z.string().max(100).describe('填空答案'),
-  hint: z.string().max(100).optional().describe('可选提示'),
+  sentence: z.string().describe('带有_____的句子'),
+  answer: z.string().describe('填空答案'),
+  hint: z.string().optional().describe('可选提示'),
   tags: z.array(z.string()).optional().describe('标签数组'),
   metadata: z
     .object({
-      chunkIds: z.array(z.string()).describe('关联的chunk ID列表'),
+      chunkIds: z.array(z.string()).default([]).describe('关联的chunk ID列表'),
       difficulty: z.enum(['easy', 'medium', 'hard']).optional()
     })
     .optional()
@@ -103,10 +105,14 @@ const AnkiCardItemSchema: z.ZodType<AnkiCardItem> = z.discriminatedUnion('type',
 function createAnkiSchema(cardCount: number) {
   return z.object({
     cards: z.array(AnkiCardItemSchema).min(1).describe(`${cardCount}张卡片（允许可变数量）`),
-    metadata: z.object({
-      totalCards: z.number().describe('总卡片数'),
-      cardTypes: z.array(z.string()).describe('卡片类型列表')
-    })
+    // 提示词只要求模型返回 metadata.totalCards，并未要求 cardTypes；
+    // 两者都由实际生成的卡片推导，避免模型漏字段导致整次生成失败。
+    metadata: z
+      .object({
+        totalCards: z.number().optional().describe('总卡片数'),
+        cardTypes: z.array(z.string()).optional().describe('卡片类型列表')
+      })
+      .optional()
   })
 }
 
@@ -228,16 +234,22 @@ export class AnkiCardService {
 
       // 等待完整对象
       const result = await object
-      Logger.info('AnkiCardService', `Generated cards: ${result.metadata.totalCards}`)
 
       // 基础验证
       if (!result.cards || result.cards.length < 1) {
         throw new Error('生成的卡片数量不正确')
       }
 
+      // 以实际生成的卡片为准推导元数据，模型漏报也不影响保存
+      const cardTypes = [...new Set(result.cards.map((card) => card.type))]
+      Logger.info('AnkiCardService', `Generated cards: ${result.cards.length}`)
+
       return {
         cards: result.cards,
-        metadata: result.metadata
+        metadata: {
+          totalCards: result.cards.length,
+          cardTypes
+        }
       }
     } catch (error) {
       Logger.error('AnkiCardService', 'Error calling LLM:', error)

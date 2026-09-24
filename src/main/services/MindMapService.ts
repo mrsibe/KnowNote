@@ -31,7 +31,7 @@ const MindMapNodeSchema: z.ZodType<MindMapTreeNode> = z.lazy(() =>
     metadata: z
       .object({
         level: z.number().min(0).max(3).describe('层级深度 0-3'),
-        chunkIds: z.array(z.string()).describe('关联的chunk ID列表'),
+        chunkIds: z.array(z.string()).default([]).describe('关联的chunk ID列表'),
         keywords: z.array(z.string()).optional().describe('关键词')
       })
       .optional()
