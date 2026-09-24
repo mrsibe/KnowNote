@@ -12,6 +12,7 @@ import type {
   ModelConnection
 } from '../../shared/types'
 import { protocolSupportsEmbedding } from '../../shared/types'
+import { API_PROTOCOLS } from '../../shared/types'
 import { connectionConfigManager } from '../config'
 import { getProtocolAdapter } from './protocols'
 import { ModelClient } from './ModelClient'
@@ -123,14 +124,7 @@ export class ConnectionManager {
    * 协议元数据
    */
   listProtocolInfos(): ProtocolInfo[] {
-    return (
-      [
-        'openai-completions',
-        'openai-responses',
-        'anthropic-messages',
-        'google-generative-ai'
-      ] as const
-    ).map((protocol) => {
+    return API_PROTOCOLS.map((protocol) => {
       const adapter = getProtocolAdapter(protocol)
       return {
         protocol,
