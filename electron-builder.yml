@@ -7,8 +7,10 @@ files:
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{.env,.env.*,.npmrc,package-lock.json}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # Dev-only: test fixtures and build scripts are not part of the shipped app.
+  - '!{test,scripts}/*'
 # Native modules must live outside the asar so they can be loaded by dlopen()
 # AND so electron-builder signs them individually. Keep these patterns explicit:
 # if a native module stays inside app.asar it cannot be signed or loaded.
@@ -62,7 +64,19 @@ linux:
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
-npmRebuild: false
+# Fail the build when the dependency collector cannot resolve a production
+# dependency, instead of only logging a warning (which is the v26 default).
+# A missed dependency is invisible at build time and only surfaces as
+# MODULE_NOT_FOUND on a user's machine - exactly how v1.2.1 broke. Requires
+# electron-builder >= 26.16.0. Missing *optional* dependencies (e.g. fsevents on
+# Linux/Windows) are still allowed and never fail the build.
+allowMissingDependencies: false
+# `npmRebuild` is intentionally left at its default (true) so electron-builder
+# rebuilds better-sqlite3 against the target Electron ABI and target
+# architecture while packaging. Turning it off, as this project previously did,
+# makes the shipped binary depend on whatever ABI `postinstall` happened to
+# produce on the build host, which breaks cross-arch builds such as
+# `build:mac --arm64`. The postinstall hook is kept for `dev`/`preview`.
 # Published as a DRAFT: electron-builder uploads the artifacts, but the release
 # only becomes public after every platform built and the macOS artifact passed
 # the verification step in .github/workflows/release.yml.

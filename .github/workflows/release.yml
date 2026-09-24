@@ -25,21 +25,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+          # Caches the npm download cache (not node_modules). Requires the
+          # committed package-lock.json, which `npm ci` verifies against.
+          cache: 'npm'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        # No `version` input on purpose: the action then uses the exact version
-        # from the `packageManager` field in package.json, which corepack also
-        # honours for local development. One source of truth.
-        #
-        # Why exact and why 10.x: the contents of app.asar depend on how the
-        # installed pnpm resolves and reports modules. A floating major already
-        # produced two different app.asar contents from one identical lockfile.
-        # pnpm 11+ also stops reading `pnpm.onlyBuiltDependencies` from
-        # package.json, which would silently skip the better-sqlite3 build.
-
+      # npm, not pnpm, is deliberate: electron-builder's node-module collector is
+      # built around npm's node_modules layout and silently dropped transitive
+      # production dependencies under pnpm's virtual store. When the collector
+      # does miss something, `allowMissingDependencies: false` in
+      # electron-builder.yml now fails the build rather than shipping a broken
+      # app. See .npmrc and the `//dependencies` note in package.json.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       # Fail BEFORE anything is published if the entitlement that lets us load
       # third-party native modules is missing from the plist.
@@ -75,7 +72,7 @@ jobs:
           PY
 
       - name: Build application
-        run: pnpm build
+        run: npm run build
 
       # macOS 代码签名（可选）
       - name: Import Code Signing Certificate (macOS)
@@ -117,7 +114,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm build:mac --arm64 --publish always
+        run: npm run build:mac -- --arm64 --publish always
 
       # Inspect the artifact we just shipped. This is the check that was missing
       # when v1.2.0 went out ad-hoc signed, hardened-runtime, and unable to load
@@ -201,7 +198,7 @@ jobs:
         timeout-minutes: 30
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm build:win --publish always
+        run: npm run build:win -- --publish always
 
   # electron-builder only creates a DRAFT release (see publish.releaseType in
   # electron-builder.yml). It is promoted to public here, which happens only if

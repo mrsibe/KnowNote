@@ -15,6 +15,7 @@ import { ShortcutManager } from './services/ShortcutManager'
 import { createMainWindow } from './windows'
 import { registerAllHandlers } from './ipc'
 import { getStore } from './config/store'
+import { isSmokeTestRequested, runSmokeTest } from './smokeTest'
 import Logger from '../shared/utils/logger'
 
 let providerManager: ProviderManager | null = null
@@ -28,6 +29,16 @@ let isQuitting = false // Flag to indicate if app is quitting
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
+  // Packaged-app smoke test (see src/main/smokeTest.ts). Runs before any window
+  // is created and exits with the result, so CI can gate on it.
+  if (isSmokeTestRequested()) {
+    const code = await runSmokeTest()
+    // app.exit() does not wait for stdout to drain, and CI reads this output.
+    await new Promise<void>((resolve) => process.stdout.write('', () => resolve()))
+    app.exit(code)
+    return
+  }
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.knownote.app')
 

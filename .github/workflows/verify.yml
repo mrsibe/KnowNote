@@ -1,0 +1,70 @@
+name: Verify
+
+# Pull-request gate. `release.yml` is tag-triggered and only proves that
+# installers can be produced, which is not the same as proving the app can start:
+# three separate startup crashes in this repo (a hoisted `script-loader!sql.js`
+# require, a module-scope `new DOMMatrix()` in bundled pdfjs, and
+# `AnkiExport is not a constructor` from a lost CJS interop) all packaged cleanly.
+#
+# `npm run smoke:packaged` launches the real packaged executable and self-checks
+# it, so it is the step that actually catches those. It runs on all three
+# platforms because the native addons are arch-specific:
+#
+#   better_sqlite3.node, vec0.so/.dylib/.dll, skia.*.node
+#
+# `lint` is deliberately not part of this gate: the repository currently has 6
+# pre-existing renderer react-hooks errors, unrelated to build correctness.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+# Verification only needs to read the repository.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      # Report every platform's result instead of stopping at the first failure.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Runs `npm run build` first, then electron-builder --dir, so the bundle and
+      # the package are both covered by this one step.
+      - name: Build and package (unpacked)
+        run: npm run build:unpack
+        env:
+          # No signing material in CI; don't let electron-builder go looking for
+          # an identity on macOS or a certificate on Windows.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # The packaged app needs a display; GitHub's Linux runners are headless.
+      - name: Smoke test the packaged app (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run smoke:packaged
+
+      - name: Smoke test the packaged app (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: npm run smoke:packaged
