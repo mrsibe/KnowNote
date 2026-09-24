@@ -219,7 +219,7 @@ export default function ProcessPanel({
               size="icon"
               className="w-8 h-8 shrink-0"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              title={isLeftCollapsed ? '展开知识库' : '折叠知识库'}
+              title={isLeftCollapsed ? t('expandKnowledgeBase') : t('collapseKnowledgeBase')}
             >
               {isLeftCollapsed ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -267,7 +267,7 @@ export default function ProcessPanel({
               size="icon"
               className="w-8 h-8 shrink-0"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              title={isRightCollapsed ? '展开笔记' : '折叠笔记'}
+              title={isRightCollapsed ? t('expandCreativeSpace') : t('collapseCreativeSpace')}
             >
               {isRightCollapsed ? (
                 <PanelRightOpen className="w-4 h-4" />
@@ -320,7 +320,7 @@ export default function ProcessPanel({
             <Button
               onClick={handleStop}
               disabled={!canStop}
-              title="停止生成"
+              title={t('stopGenerating', { ns: 'chat' })}
               variant="destructive"
               size="icon"
               className="absolute right-2 bottom-3 w-8 h-8 rounded-full"

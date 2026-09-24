@@ -69,7 +69,9 @@ export default function NoteEditor({ content, onChange, onSave }: NoteEditorProp
 
   if (!editor) {
     return (
-      <div className="h-full flex items-center justify-center text-muted-foreground">加载中...</div>
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        {t('loading', { ns: 'common' })}
+      </div>
     )
   }
 
