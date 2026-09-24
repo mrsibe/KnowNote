@@ -1,4 +1,4 @@
-import { ReactElement, useEffect, useState } from 'react'
+import { ReactElement, useEffect, useRef, useState } from 'react'
 import { Save, Trash2, ArrowLeft, Network, FileText, ClipboardCheck, Layers } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -39,6 +39,7 @@ function NoteEditorPanel({
   const { t } = useTranslation('notebook')
   const [editTitle, setEditTitle] = useState(note.title)
   const [editContent, setEditContent] = useState(note.content)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   // 检测是否有未保存的修改
   useEffect(() => {
@@ -56,8 +57,27 @@ function NoteEditorPanel({
     onSave(finalTitle, editContent)
   }
 
+  // 快捷键保存：主进程拦截 Ctrl/Cmd+S 后只发送事件，焦点可能落在标题输入框或正文编辑器上，
+  // 因此只要焦点还在这个面板内就保存（见 issue #25）。
+  const handleSaveRef = useRef(handleSave)
+  useEffect(() => {
+    handleSaveRef.current = handleSave
+  }, [handleSave])
+
+  useEffect(() => {
+    const handleSaveShortcut = (): void => {
+      const active = document.activeElement
+      if (active instanceof Node && panelRef.current?.contains(active)) {
+        handleSaveRef.current()
+      }
+    }
+
+    window.addEventListener('shortcut:save-note', handleSaveShortcut)
+    return () => window.removeEventListener('shortcut:save-note', handleSaveShortcut)
+  }, [])
+
   return (
-    <>
+    <div ref={panelRef} className="flex h-full flex-col overflow-hidden">
       <PanelHeader
         draggable
         left={
@@ -111,9 +131,9 @@ function NoteEditorPanel({
 
       {/* 编辑器内容 */}
       <div className="flex-1 overflow-hidden">
-        <NoteEditor content={editContent} onChange={setEditContent} onSave={handleSave} />
+        <NoteEditor content={editContent} onChange={setEditContent} />
       </div>
-    </>
+    </div>
   )
 }
 

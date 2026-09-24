@@ -17,6 +17,7 @@ import {
 } from '@dnd-kit/sortable'
 import type { Note } from '../../../../../shared/types'
 import type { ItemDetail } from '../../../store/itemStore'
+import { useItemStore } from '../../../store/itemStore'
 import { Button } from '../../ui/button'
 import {
   ContextMenu,
@@ -120,7 +121,8 @@ function SortableItemRow({
 
     try {
       if (isNote && note) {
-        await window.api.updateNote(note.id, { title: newTitle.trim() })
+        // 走 store，这样列表立即反映新标题，而不是只依赖 onRefresh 重新拉取。
+        await useItemStore.getState().updateNote(note.id, { title: newTitle.trim() })
       } else if (isMindMap && mindMap) {
         await window.api.mindmap.update(mindMap.id, { title: newTitle.trim() })
       } else if (isQuiz && quiz) {

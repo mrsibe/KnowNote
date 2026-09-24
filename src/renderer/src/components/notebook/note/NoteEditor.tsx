@@ -11,10 +11,9 @@ import './noteEditor.css'
 interface NoteEditorProps {
   content: string
   onChange: (content: string) => void
-  onSave?: () => void
 }
 
-export default function NoteEditor({ content, onChange, onSave }: NoteEditorProps): ReactElement {
+export default function NoteEditor({ content, onChange }: NoteEditorProps): ReactElement {
   const { t } = useTranslation('notebook')
 
   const editor = useEditor({
@@ -53,19 +52,7 @@ export default function NoteEditor({ content, onChange, onSave }: NoteEditorProp
     }
   }, [content, editor])
 
-  // 快捷键系统触发保存（仅编辑器聚焦时）
-  useEffect(() => {
-    if (!editor || !onSave) return
-
-    const handleSaveShortcut = () => {
-      if (editor.isFocused) {
-        onSave()
-      }
-    }
-
-    window.addEventListener('shortcut:save-note', handleSaveShortcut)
-    return () => window.removeEventListener('shortcut:save-note', handleSaveShortcut)
-  }, [editor, onSave])
+  // 快捷键保存由 NoteEditorPanel 统一处理，因为它同时管理标题输入框。
 
   if (!editor) {
     return (
