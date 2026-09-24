@@ -37,14 +37,14 @@ The app is a stack of opaque surfaces plus two translucent state fills. Higher
 in the stack means further from the window background, and **lighter** in both
 colour schemes.
 
-| Token | Tailwind | Light | Dark | Use for |
-| --- | --- | --- | --- | --- |
-| `--surface-sunken` | `bg-surface-sunken` | `oklch(0.9551 0 0)` | `oklch(0.24 0.0127 258.3724)` | Window chrome that sits *behind* content: sidebar, left rail, title bar |
-| `--surface-base` | `bg-surface-base` | `oklch(0.9851 0 0)` | `oklch(0.2925 0.0157 264.2965)` | App canvas, page background, the gap between panels |
-| `--surface-raised` | `bg-surface-raised` | `oklch(1 0 0)` | `oklch(0.325 0.011 260)` | Content panels: document list, reader, chat, editor, cards |
-| `--surface-overlay` | `bg-surface-overlay` | `oklch(1 0 0)` | `oklch(0.365 0.011 260)` | Floating layers: dialog, sheet, popover, menu, select, tooltip, toast |
-| `--surface-hover` | `bg-surface-hover` | `foreground @ 5%` | `neutral 0.9 @ 6%` | Translucent hover fill for rows, menu items, ghost buttons |
-| `--surface-selected` | `bg-surface-selected` | `foreground @ 9%` | `neutral 0.9 @ 10%` | Translucent selected/active fill for rows and toggles |
+| Token                | Tailwind              | Light               | Dark                            | Use for                                                                 |
+| -------------------- | --------------------- | ------------------- | ------------------------------- | ----------------------------------------------------------------------- |
+| `--surface-sunken`   | `bg-surface-sunken`   | `oklch(0.9551 0 0)` | `oklch(0.24 0.0127 258.3724)`   | Window chrome that sits _behind_ content: sidebar, left rail, title bar |
+| `--surface-base`     | `bg-surface-base`     | `oklch(0.9851 0 0)` | `oklch(0.2925 0.0157 264.2965)` | App canvas, page background, the gap between panels                     |
+| `--surface-raised`   | `bg-surface-raised`   | `oklch(1 0 0)`      | `oklch(0.325 0.011 260)`        | Content panels: document list, reader, chat, editor, cards              |
+| `--surface-overlay`  | `bg-surface-overlay`  | `oklch(1 0 0)`      | `oklch(0.365 0.011 260)`        | Floating layers: dialog, sheet, popover, menu, select, tooltip, toast   |
+| `--surface-hover`    | `bg-surface-hover`    | `foreground @ 5%`   | `neutral 0.9 @ 6%`              | Translucent hover fill for rows, menu items, ghost buttons              |
+| `--surface-selected` | `bg-surface-selected` | `foreground @ 9%`   | `neutral 0.9 @ 10%`             | Translucent selected/active fill for rows and toggles                   |
 
 Rules:
 
@@ -80,13 +80,13 @@ Two border weights exist, and only two:
 
 An element gets **both** a border and a shadow only when it floats. Rules:
 
-| Layer | Border | Shadow |
-| --- | --- | --- |
-| Panel (`surface-raised`) | hairline dividers only, `rounded-lg` | **none** |
-| Card (`surface-raised`) | optional `border border-border` | **none** |
-| Overlay (`surface-overlay`) | `border border-border` | `shadow-elevation` |
-| Small controls (switch knob, slider thumb, drag handle) | — | `shadow-control` |
-| Buttons, inputs, badges, tabs, list rows | — | **none** |
+| Layer                                                   | Border                               | Shadow             |
+| ------------------------------------------------------- | ------------------------------------ | ------------------ |
+| Panel (`surface-raised`)                                | hairline dividers only, `rounded-lg` | **none**           |
+| Card (`surface-raised`)                                 | optional `border border-border`      | **none**           |
+| Overlay (`surface-overlay`)                             | `border border-border`               | `shadow-elevation` |
+| Small controls (switch knob, slider thumb, drag handle) | —                                    | `shadow-control`   |
+| Buttons, inputs, badges, tabs, list rows                | —                                    | **none**           |
 
 `shadow-elevation` and `shadow-control` are the only shadow tokens permitted in
 component code. The legacy `shadow-sm/md/lg/xl/2xl` utilities are aliases of
@@ -101,11 +101,11 @@ elevation, and are always allowed.
 
 Three values, no exceptions:
 
-| Value | Class | Use for |
-| --- | --- | --- |
-| 6px | `rounded-md` | Controls: buttons, inputs, selects, menu items, list rows, tabs, badges with a label |
-| 8px | `rounded-lg` | Containers: panels, cards, dialogs, popovers, empty states, icon tiles, avatars-in-box |
-| 9999px | `rounded-full` | Pills, avatars, knobs, progress bars, counters |
+| Value  | Class          | Use for                                                                                |
+| ------ | -------------- | -------------------------------------------------------------------------------------- |
+| 6px    | `rounded-md`   | Controls: buttons, inputs, selects, menu items, list rows, tabs, badges with a label   |
+| 8px    | `rounded-lg`   | Containers: panels, cards, dialogs, popovers, empty states, icon tiles, avatars-in-box |
+| 9999px | `rounded-full` | Pills, avatars, knobs, progress bars, counters                                         |
 
 `--radius: 0.5rem` in `theme.css` derives both scale values, so this is a single
 knob for the whole app. **Forbidden:** `rounded-sm`, `rounded-xl`,
@@ -122,21 +122,21 @@ Base rhythm is 4 / 8 / 12 / 16 (`gap-1,2,3,4`; `p-2,3,4,6`). Half steps
 (`px-2.5`, `py-1.5`, `gap-1.5`) are tolerated only when aligning text against a
 16/20px icon; do not introduce them anywhere else.
 
-| Element | Height | Padding |
-| --- | --- | --- |
-| Panel header | `h-11` | `px-3`, content `gap-2` |
-| Toolbar icon button | `size-7` / `size-8` | — |
-| Button (`default`) | `h-9` | `px-3.5` |
-| Button (`sm`) | `h-8` | `px-3` |
-| Button (`lg`) | `h-10` | `px-5` |
-| Input / Select trigger | `h-8` (`h-9` in dialogs) | `px-3` |
-| List row, compact | `h-8` | `px-2` |
-| List row, comfortable | `h-9` | `px-3` |
-| Sidebar nav item | `h-8` | `px-2` |
-| Card / panel body padding | — | `p-4` |
-| Dialog padding | — | `p-5` |
-| Section gap inside a panel | — | `space-y-3` / `divide-y divide-border` |
-| Page gutter | — | `px-6 py-4` |
+| Element                                    | Height   | Padding                                |
+| ------------------------------------------ | -------- | -------------------------------------- |
+| Panel header                               | `h-11`   | `px-3`, content `gap-2`                |
+| Toolbar icon button (`Button size="icon"`) | `size-8` | —                                      |
+| Button (`default`)                         | `h-9`    | `px-4`                                 |
+| Button (`sm`)                              | `h-8`    | `px-3`                                 |
+| Button (`lg`)                              | `h-10`   | `px-5`                                 |
+| Input / Select trigger                     | `h-9`    | `px-3`                                 |
+| List row, compact                          | `h-8`    | `px-2`                                 |
+| List row, comfortable                      | `h-9`    | `px-3`                                 |
+| Sidebar nav item                           | `h-8`    | `px-2`                                 |
+| Card / panel body padding                  | —        | `p-4`                                  |
+| Dialog padding                             | —        | `p-5`                                  |
+| Section gap inside a panel                 | —        | `space-y-3` / `divide-y divide-border` |
+| Page gutter                                | —        | `px-6 py-4`                            |
 
 Rows are separated with `divide-y divide-border` or a `border-b` hairline, never
 with margin gaps.
@@ -150,25 +150,25 @@ not currently used and must not be introduced without a stated reason.
 
 Three text levels, and only three:
 
-| Level | Class | Use for |
-| --- | --- | --- |
-| T1 — primary | `text-foreground` | Titles, panel headers, list primary line, body of documents and answers, form values |
-| T2 — secondary | `text-muted-foreground` | Descriptions, list secondary line, help text, placeholders, inactive icons |
-| T3 — tertiary | `text-subtle-foreground` | Timestamps, counters, keyboard hints, disabled labels — anything that must be readable but must not attract the eye |
+| Level          | Class                    | Use for                                                                                                             |
+| -------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| T1 — primary   | `text-foreground`        | Titles, panel headers, list primary line, body of documents and answers, form values                                |
+| T2 — secondary | `text-muted-foreground`  | Descriptions, list secondary line, help text, placeholders, inactive icons                                          |
+| T3 — tertiary  | `text-subtle-foreground` | Timestamps, counters, keyboard hints, disabled labels — anything that must be readable but must not attract the eye |
 
 Do not express hierarchy by inventing a new grey (`text-gray-500`), and do not
 use opacity on top of a level (`text-muted-foreground/70`).
 
 Sizes:
 
-| Size | Class | Use for |
-| --- | --- | --- |
-| 11px | `text-[11px]` | Keycaps, tiny counters (rare; prefer `text-xs`) |
-| 12px | `text-xs` | Meta line, timestamps, badges, table headers, code |
-| 14px | `text-sm` | **Default UI size**: buttons, labels, list rows, inputs, prose in chat and the editor |
-| 16px | `text-base` | Dialog titles, empty-state body (only where 14px reads cramped) |
-| 18px | `text-lg` | Page titles, empty-state titles |
-| 20px | `text-xl` | Home hero only |
+| Size | Class         | Use for                                                                               |
+| ---- | ------------- | ------------------------------------------------------------------------------------- |
+| 11px | `text-[11px]` | Keycaps, tiny counters (rare; prefer `text-xs`)                                       |
+| 12px | `text-xs`     | Meta line, timestamps, badges, table headers, code                                    |
+| 14px | `text-sm`     | **Default UI size**: buttons, labels, list rows, inputs, prose in chat and the editor |
+| 16px | `text-base`   | Dialog titles, empty-state body (only where 14px reads cramped)                       |
+| 18px | `text-lg`     | Page titles, empty-state titles                                                       |
+| 20px | `text-xl`     | Home hero only                                                                        |
 
 Weights: `font-normal` for body, `font-medium` for interactive labels, panel
 headers, section titles and the selected state of anything. `font-semibold` and
@@ -180,14 +180,16 @@ Line height: UI text uses Tailwind defaults. Long-form reading surfaces
 
 ## Accent and states
 
-`--primary` is the only accent. It is allowed in exactly four places:
+`--primary` is the only accent. It is allowed in exactly five places:
 
 1. The primary action of a view (`Button` variant `default`).
 2. Focus indication (`focus-visible:ring-2 focus-visible:ring-ring`).
 3. The selected indicator of a nav/list row: a 2px bar
    (`before:` / `absolute inset-y-1 left-0 w-0.5 rounded-full bg-primary`) or a
    filled `bg-primary text-primary-foreground` icon chip.
-4. Inline links inside long-form prose (`.markdown-body`, `.note-editor`).
+4. Inline links: the `Button` variant `link`, and prose links inside long-form
+   content (`.markdown-body`, `.note-editor`).
+5. Progress and slider fill (`bg-primary`), where the colour _is_ the data.
 
 Everywhere else — toolbars, icon buttons, headers, cards, badges, tab labels,
 progress — the UI is neutral. A blue icon in a neutral toolbar is a violation.
@@ -196,16 +198,24 @@ dialog. `--chart-*` are for charts, graph nodes and mind-map topic colouring.
 
 State expressions (use these literal forms, they are the contract):
 
-| State | Expression |
-| --- | --- |
-| hover | `hover:bg-surface-hover` (rows, menu items, ghost/outline buttons) |
-| selected | `bg-surface-selected` + `text-foreground` + `font-medium`; optional 2px primary indicator |
+| State         | Expression                                                                                                                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| hover         | `hover:bg-surface-hover` (rows, menu items, ghost/outline buttons)                                                                                                                  |
+| selected      | `bg-surface-selected` + `text-foreground` + `font-medium`; optional 2px primary indicator                                                                                           |
 | focus-visible | `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background` (inputs use `ring-1` with `border-ring`) |
-| disabled | `disabled:pointer-events-none disabled:opacity-50` |
-| transition | `transition-colors` for fills; `transition-[transform,opacity]` for popovers. No bouncy or long animations on chrome. |
+| disabled      | `disabled:pointer-events-none disabled:opacity-50`                                                                                                                                  |
+| transition    | `transition-colors` for fills; `transition-[transform,opacity]` for popovers. No bouncy or long animations on chrome.                                                               |
 
 A row that is both hovered and selected keeps the selected fill; do not stack
 `hover:bg-surface-hover` on `bg-surface-selected` elements.
+
+A **segmented control** (`Tabs`) is the one place where selection is expressed as
+a surface step rather than a translucent fill, because the thumb must cover the
+track: track `bg-surface-sunken`, selected segment `bg-surface-raised`, no shadow.
+Both steps are monotonic in dark mode, which `bg-muted` + `bg-background` was not.
+
+Small atoms keep the control radius even though it is proportionally rounder:
+a 16px checkbox is `rounded-md`, not a new radius value.
 
 ## Dark mode
 

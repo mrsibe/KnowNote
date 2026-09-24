@@ -14,7 +14,7 @@ const PanelHeader = React.forwardRef<HTMLDivElement, PanelHeaderProps>(
       <div
         ref={ref}
         className={cn(
-          'h-12 flex items-center justify-between px-4 border-b border-border shrink-0',
+          'h-11 flex items-center justify-between gap-2 px-3 border-b border-border shrink-0',
           className
         )}
         style={draggable ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
