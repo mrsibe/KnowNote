@@ -283,6 +283,37 @@
   }
 }
 
+/*
+ * Reduced motion is a preference, not a nicety. The app pulses rows and cursors
+ * while work is in flight and animates every popover and dialog, and none of that
+ * was conditional on the user's setting.
+ *
+ * Spinners keep turning. A spinner is a status indicator, not decoration — it is
+ * the only thing telling the user that something is happening, so collapsing it
+ * would remove information rather than motion. Slowed rather than removed for the
+ * same reason.
+ *
+ * `!important` is deliberate and load-bearing here. These declarations have to
+ * beat Tailwind's utility classes (`animate-pulse`, `transition-colors`) applied
+ * to individual elements, and a `*` selector has no specificity to do that with.
+ * Collapsing the cascade is the point of a global preference override.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
 @layer utilities {
   .themed-scrollbar {
     scrollbar-width: thin;

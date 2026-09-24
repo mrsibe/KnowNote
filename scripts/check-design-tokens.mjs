@@ -19,6 +19,7 @@
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const SCAN_ROOT = join(process.cwd(), 'src', 'renderer', 'src')
 const EXTENSIONS = ['.ts', '.tsx', '.css']
@@ -49,6 +50,19 @@ const PALETTE =
  * normalises separators before matching.
  */
 const CHART_SURFACES = ['/components/notebook/mindmap/CustomNode.tsx']
+
+/**
+ * Whether a file is allowed to use `--chart-*`.
+ *
+ * Exported so it can be tested: the first version compared a forward-slash
+ * allowlist against a platform path, so on Windows it never matched and the only
+ * file it was meant to exempt was the only file it flagged. Linux and macOS CI
+ * both passed; the Windows job failed.
+ */
+export const isChartSurfaceAllowed = (file) => {
+  const normalized = file ? file.replace(/\\/g, '/') : ''
+  return CHART_SURFACES.some((allowed) => normalized.endsWith(allowed))
+}
 
 const RULES = [
   {
@@ -104,11 +118,7 @@ const RULES = [
     describe: 'chart colours stay on chart and graph surfaces',
     applies: ['.ts', '.tsx'],
     scan(line, check, file) {
-      // Separators are normalised first: `file` is a platform path, so the
-      // allowlist below never matched on Windows and every legitimately allowed
-      // use was reported. CI caught it, not the local run.
-      const normalized = file ? file.replace(/\\/g, '/') : ''
-      if (CHART_SURFACES.some((allowed) => normalized.endsWith(allowed))) return
+      if (isChartSurfaceAllowed(file)) return
       const patterns = [
         /\b(bg|text|border|ring|fill|stroke|from|to|via)-chart-[1-5](?:\/\d+)?\b/g,
         /var\(--chart-[1-5]\)/g
@@ -237,4 +247,9 @@ function main() {
   process.exitCode = 1
 }
 
-main()
+// Only run when invoked directly (`npm run check:design`), so tests can import
+// the allowlist predicate without executing the scan.
+const isDirectRun =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
+
+if (isDirectRun) main()

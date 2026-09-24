@@ -63,5 +63,6 @@
   "onboardingTagline": "读你的文档。信每一个回答。",
   "onboardingGetStarted": "开始使用",
   "onboardingStarting": "正在启动...",
-  "selectLanguage": "选择语言"
+  "selectLanguage": "选择语言",
+  "answerComplete": "回答完成"
 }

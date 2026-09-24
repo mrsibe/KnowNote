@@ -216,6 +216,38 @@ Two rules for the composer and for leaving the workspace:
   through. The in-panel Back button is not special-cased — it uses the same
   state. A navigation path that skips this guard is a bug.
 
+### Geometry lives in a module, and it is tested
+
+The arithmetic above — `availableFrom`, `maxSideWidth`, the golden-ratio split, the
+stored-layout parser, and the key-to-width mapping — lives in
+`components/layouts/panelGeometry.ts`, not inside the component. It used to be
+inline, where the only way to exercise it was to drag a mouse, and it was wrong:
+`ArrowLeft` grew the left panel and shrank the right one. That passed typecheck and
+lint, and only a second reviewer found it.
+
+`test/panelGeometry.test.ts` covers the constraint math, the stored-layout parser
+(absent, corrupt, `NaN`, `Infinity`, zero) and the arrow-key direction on **both**
+seams. Note what does _not_ catch the inversion: an invariant like "the two seams
+move oppositely" stays true when both are flipped together. Only assertions on the
+absolute direction do.
+
+### Motion and announcement
+
+- **`prefers-reduced-motion` is honoured** in `theme.css`: transitions and
+  decorative animation collapse, scroll behaviour goes instant. Spinners keep
+  turning, slowed rather than stopped — a spinner is a status indicator, and
+  removing it removes information, not motion. The `!important` there is
+  load-bearing: a `*` selector cannot outrank Tailwind's utility classes.
+- **The transcript announces completion, never tokens.** A `role="status"` region
+  inside `MessageList` reports when a turn ends, with the node keyed so an
+  identical message still re-announces. Putting the live region on the transcript
+  itself would chatter on every token, which is worse than the silence it replaces.
+- **The tab close control is a sibling of its tab, not a child.** A real
+  `<button>` with an accessible name, next to the `role="tab"` rather than nested
+  inside it as a `role="button"` span. The tablist uses a roving tabindex, so the
+  old inner `tabIndex={0}` added a second focus stop per open notebook and
+  duplicated the Enter/Space handling the trigger already had.
+
 ## Borders and elevation
 
 Two border weights exist, and only two:
@@ -586,6 +618,13 @@ fade. Neither was catchable before, because `--chart-*` is a semantic token rath
 than a raw palette colour, and this guard only looked at utility classes — not at
 inline style objects. `CHART_SURFACES` is the only allowlist, and it names one
 file: the mind-map node, which is a graph node.
+
+`test/designGuard.test.ts` covers the allowlist predicate and the rule list. It
+exists because the first version of that predicate compared a forward-slash
+pattern against a platform path: on Windows it never matched, so the one file it
+was written to exempt was the one file it flagged. Linux and macOS CI passed;
+the Windows job failed. A test asserts both separator styles now, so the same bug
+is caught locally on any platform.
 
 Known gap, stated rather than implied: a raw **hex** in an inline style
 (`style={{ background: '#fff' }}`) still passes. That is deliberate — the one
