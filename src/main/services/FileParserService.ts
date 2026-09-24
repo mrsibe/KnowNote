@@ -16,15 +16,7 @@ import type { IDocumentLoader, DocumentLoadResult, LoadOptions } from './loaders
  * 支持的文件类型
  */
 export type SupportedFileType =
-  | 'pdf'
-  | 'docx'
-  | 'doc'
-  | 'pptx'
-  | 'ppt'
-  | 'txt'
-  | 'md'
-  | 'markdown'
-  | 'text'
+  'pdf' | 'docx' | 'doc' | 'pptx' | 'ppt' | 'txt' | 'md' | 'markdown' | 'text'
 
 /**
  * 文件解析服务

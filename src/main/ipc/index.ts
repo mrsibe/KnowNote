@@ -1,4 +1,4 @@
-import { ProviderManager } from '../providers/ProviderManager'
+import { ConnectionManager } from '../models/ConnectionManager'
 import { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
 import { KnowledgeService } from '../services/KnowledgeService'
 import { UpdateService } from '../services/UpdateService'
@@ -9,7 +9,7 @@ import { ShortcutManager } from '../services/ShortcutManager'
 import type Store from 'electron-store'
 import type { StoreSchema } from '../config/types'
 import { registerChatHandlers } from './chatHandlers'
-import { registerProviderHandlers } from './providerHandlers'
+import { registerConnectionHandlers } from './connectionHandlers'
 import { registerSettingsHandlers } from './settingsHandlers'
 import { registerNotebookHandlers } from './notebookHandlers'
 import { registerNoteHandlers } from './noteHandlers'
@@ -26,7 +26,7 @@ import { registerDialogHandlers } from './dialogHandlers'
  * 注册所有 IPC Handlers
  */
 export function registerAllHandlers(
-  providerManager: ProviderManager,
+  connectionManager: ConnectionManager,
   sessionAutoSwitchService: SessionAutoSwitchService,
   knowledgeService: KnowledgeService,
   updateService: UpdateService,
@@ -34,18 +34,18 @@ export function registerAllHandlers(
   store: Store<StoreSchema>
 ) {
   // 实例化 MindMapService
-  const mindMapService = new MindMapService(providerManager)
+  const mindMapService = new MindMapService(connectionManager)
   // 实例化 QuizService
-  const quizService = new QuizService(providerManager)
+  const quizService = new QuizService(connectionManager)
   // 实例化 AnkiCardService
-  const ankiCardService = new AnkiCardService(providerManager)
+  const ankiCardService = new AnkiCardService(connectionManager)
 
-  registerChatHandlers(providerManager, sessionAutoSwitchService, knowledgeService)
-  registerProviderHandlers(providerManager)
+  registerChatHandlers(connectionManager, sessionAutoSwitchService, knowledgeService)
+  registerConnectionHandlers(connectionManager)
   registerSettingsHandlers()
   registerDialogHandlers()
   registerNotebookHandlers()
-  registerNoteHandlers(providerManager)
+  registerNoteHandlers(connectionManager)
   registerKnowledgeHandlers(knowledgeService)
   registerMindMapHandlers(mindMapService)
   registerQuizHandlers(quizService)
@@ -58,7 +58,7 @@ export function registerAllHandlers(
 
 export {
   registerChatHandlers,
-  registerProviderHandlers,
+  registerConnectionHandlers,
   registerSettingsHandlers,
   registerNotebookHandlers,
   registerNoteHandlers,

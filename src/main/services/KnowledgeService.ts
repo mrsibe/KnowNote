@@ -16,7 +16,7 @@ import { ChunkingService, type ChunkOptions } from './ChunkingService'
 import { FileParserService } from './FileParserService'
 import { WebFetchService } from './WebFetchService'
 import { vectorStoreManager } from '../vectorstore'
-import { ProviderManager } from '../providers/ProviderManager'
+import { ConnectionManager } from '../models/ConnectionManager'
 import Logger from '../../shared/utils/logger'
 
 /**
@@ -73,8 +73,8 @@ export class KnowledgeService {
   private webFetchService: WebFetchService
   private knowledgeFilesDir: string
 
-  constructor(providerManager: ProviderManager) {
-    this.embeddingService = new EmbeddingService(providerManager)
+  constructor(connectionManager: ConnectionManager) {
+    this.embeddingService = new EmbeddingService(connectionManager)
     this.chunkingService = new ChunkingService()
     this.fileParserService = new FileParserService()
     this.webFetchService = new WebFetchService()

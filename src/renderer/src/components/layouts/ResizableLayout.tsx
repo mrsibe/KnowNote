@@ -194,7 +194,6 @@ export default function ResizableLayout({
             : undefined
         }
       >
-        {/* eslint-disable-next-line react-hooks/refs */}
         {React.cloneElement(centerPanel as ReactElement, centerPanelProps as any)}
       </div>
 

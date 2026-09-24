@@ -1,6 +1,14 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { ChatSession, ChatMessage } from '../shared/types/chat'
-import type { Notebook, Note, ProviderConfig, AppSettings } from '../shared/types'
+import type {
+  Notebook,
+  Note,
+  AppSettings,
+  ConnectionMap,
+  ConnectionTestResult,
+  ModelCapability,
+  ModelConnection
+} from '../shared/types'
 import type {
   KnowledgeDocument,
   KnowledgeChunk,
@@ -19,8 +27,11 @@ export type {
   ChatMessage,
   Notebook,
   Note,
-  ProviderConfig,
   AppSettings,
+  ConnectionMap,
+  ConnectionTestResult,
+  ModelCapability,
+  ModelConnection,
   MindMap,
   Quiz,
   QuizSession,
@@ -200,35 +211,18 @@ declare global {
         callback: (data: { oldSessionId: string; newSessionId: string }) => void
       ) => () => void
 
-      // Provider 配置相关
-      saveProviderConfig: (config: ProviderConfig) => Promise<void>
-      getProviderConfig: (providerName: string) => Promise<ProviderConfig | null>
-      getAllProviderConfigs: () => Promise<ProviderConfig[]>
-      deleteProviderConfig: (providerName: string) => Promise<void>
-      validateProviderConfig: (providerName: string, config: any) => Promise<boolean>
-      fetchModels: (
-        providerName: string,
-        apiKey: string
-      ) => Promise<
-        | {
-            models: {
-              id: string
-              object: string
-              owned_by?: string
-              created?: number
-              type?: string
-            }[]
-            source: 'merged' | 'builtin'
-            builtinCount?: number
-            remoteCount?: number
-            error?: string
-          }
-        | { id: string; object: string; owned_by?: string; created?: number }[]
-      >
-      getProviderModels: (
-        providerName: string
-      ) => Promise<{ id: string; object: string; owned_by?: string; created?: number }[]>
-      onProviderConfigChanged: (callback: () => void) => () => void
+      // Model Connection 相关
+      connections: {
+        getAll: () => Promise<ConnectionMap>
+        getProtocols: () => Promise<
+          { protocol: string; supportsModelListing: boolean; supportsEmbedding: boolean }[]
+        >
+        save: (capability: ModelCapability, connection: ModelConnection) => Promise<void>
+        remove: (capability: ModelCapability) => Promise<void>
+        test: (connection: ModelConnection) => Promise<ConnectionTestResult>
+        fetchModels: (connection: ModelConnection) => Promise<string[]>
+        onChanged: (callback: () => void) => () => void
+      }
 
       // 知识库相关
       knowledge: {

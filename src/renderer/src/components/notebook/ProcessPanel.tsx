@@ -32,8 +32,7 @@ export default function ProcessPanel({
 }: ProcessPanelProps = {}): ReactElement {
   const { t } = useTranslation('ui')
   const [input, setInput] = useState('')
-  const [hasProvider, setHasProvider] = useState(true)
-  const [defaultChatModel, setDefaultChatModel] = useState<string | null>(null)
+  const [hasChatModel, setHasChatModel] = useState(false)
   const { currentSession, messages, isNotebookStreaming, sendMessage, abortMessage } =
     useChatStore()
   const { currentNotebook, updateNotebook } = useNotebookStore()
@@ -46,24 +45,17 @@ export default function ProcessPanel({
   const isCurrentNotebookStreaming = currentNotebookId
     ? isNotebookStreaming(currentNotebookId)
     : false
-  const canSend =
-    currentSession && !isCurrentNotebookStreaming && input.trim() && hasProvider && defaultChatModel
+  const canSend = currentSession && !isCurrentNotebookStreaming && input.trim() && hasChatModel
   const canStop = currentSession && isCurrentNotebookStreaming
 
-  // Check if there are available providers and get default model
-  const checkProvider = async (): Promise<void> => {
+  // Check whether a chat model connection is configured
+  const checkChatModel = async (): Promise<void> => {
     try {
-      const providers = await window.api.getAllProviderConfigs()
-      const hasEnabledProvider = providers.some((p) => p.enabled)
-      setHasProvider(hasEnabledProvider)
-
-      // Get default chat model
-      const defaultModel = await window.api.settings.get('defaultChatModel')
-      setDefaultChatModel(defaultModel || null)
+      const connections = await window.api.connections.getAll()
+      setHasChatModel(Boolean(connections.chat))
     } catch (error) {
-      console.error('Failed to check Provider configuration:', error)
-      setHasProvider(false)
-      setDefaultChatModel(null)
+      console.error('Failed to check model connection:', error)
+      setHasChatModel(false)
     }
   }
 
@@ -71,22 +63,14 @@ export default function ProcessPanel({
   useEffect(() => {
     // 1. Check on page load
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void checkProvider()
+    void checkChatModel()
 
-    // 2. Listen for Provider configuration change events
-    const cleanup = window.api.onProviderConfigChanged(() => {
-      void checkProvider()
+    // 2. Listen for connection configuration change events
+    const cleanup = window.api.connections.onChanged(() => {
+      void checkChatModel()
     })
 
-    // 3. Listen for settings change events
-    const cleanupSettings = window.api.settings.onSettingsChange((newSettings) => {
-      setDefaultChatModel(newSettings.defaultChatModel || null)
-    })
-
-    return () => {
-      cleanup()
-      cleanupSettings()
-    }
+    return cleanup
   }, [])
 
   const handleSend = (): void => {
@@ -321,15 +305,11 @@ export default function ProcessPanel({
             placeholder={
               !currentSession
                 ? t('selectSession')
-                : !hasProvider
+                : !hasChatModel
                   ? t('noProviderConfigured')
-                  : !defaultChatModel
-                    ? t('noDefaultModel')
-                    : t('inputMessage')
+                  : t('inputMessage')
             }
-            disabled={
-              !currentSession || isCurrentNotebookStreaming || !hasProvider || !defaultChatModel
-            }
+            disabled={!currentSession || isCurrentNotebookStreaming || !hasChatModel}
             rows={1}
             className="w-full bg-transparent border-0 pl-4 pr-14 py-3 text-sm text-foreground placeholder-muted-foreground resize-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto min-h-[84px] max-h-[280px] themed-scrollbar select-text"
           />
@@ -353,7 +333,11 @@ export default function ProcessPanel({
               onClick={handleSend}
               disabled={!canSend}
               title={
-                !hasProvider ? t('noProviderConfigured') : !currentSession ? t('selectSession') : ''
+                !hasChatModel
+                  ? t('noProviderConfigured')
+                  : !currentSession
+                    ? t('selectSession')
+                    : ''
               }
               size="icon"
               className="absolute right-2 bottom-3 w-8 h-8 rounded-full"

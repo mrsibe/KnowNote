@@ -232,7 +232,7 @@ export default function SourcePanel(): ReactElement {
   const { id: notebookId } = useParams()
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [modalType, setModalType] = useState<AddSourceType | null>(null)
-  const [defaultEmbeddingModel, setDefaultEmbeddingModel] = useState<string | undefined>(undefined)
+  const [hasEmbeddingModel, setHasEmbeddingModel] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<KnowledgeDocument | null>(null)
 
   const {
@@ -253,17 +253,17 @@ export default function SourcePanel(): ReactElement {
 
   const { openSettings } = useUIStore()
 
-  // 加载默认嵌入模型设置
+  // 检查是否配置了 embedding connection
   useEffect(() => {
-    const loadEmbeddingModel = async () => {
-      const model = await window.api.settings.get('defaultEmbeddingModel')
-      setDefaultEmbeddingModel(model)
+    const loadEmbeddingConnection = async () => {
+      const connections = await window.api.connections.getAll()
+      setHasEmbeddingModel(Boolean(connections.embedding))
     }
-    loadEmbeddingModel()
+    void loadEmbeddingConnection()
 
-    // 监听设置变化
-    const unsubscribe = window.api.settings.onSettingsChange((newSettings) => {
-      setDefaultEmbeddingModel(newSettings.defaultEmbeddingModel)
+    // 监听连接配置变化
+    const unsubscribe = window.api.connections.onChanged(() => {
+      void loadEmbeddingConnection()
     })
 
     return unsubscribe
@@ -285,17 +285,19 @@ export default function SourcePanel(): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notebookId])
 
-  // 当 notebook 切换时清空选中的文档
-  useEffect(() => {
+  // 当 notebook 切换时清空选中的文档（render 期间调整，避免 effect 级联渲染）
+  const [selectionNotebookId, setSelectionNotebookId] = useState(notebookId)
+  if (selectionNotebookId !== notebookId) {
+    setSelectionNotebookId(notebookId)
     setSelectedDocument(null)
-  }, [notebookId])
+  }
 
   // 处理文件上传
   const handleFileUpload = useCallback(async () => {
     if (!notebookId) return
 
     // 检查是否配置了默认嵌入模型
-    if (!defaultEmbeddingModel) {
+    if (!hasEmbeddingModel) {
       alert(t('noEmbeddingModelConfigured'))
       return
     }
@@ -305,7 +307,7 @@ export default function SourcePanel(): ReactElement {
       await addDocumentFromFile(notebookId, filePath)
     }
     setShowAddMenu(false)
-  }, [notebookId, defaultEmbeddingModel, selectFiles, addDocumentFromFile, t])
+  }, [notebookId, hasEmbeddingModel, selectFiles, addDocumentFromFile, t])
 
   // 处理 URL 导入
   const handleUrlImport = useCallback(
@@ -313,7 +315,7 @@ export default function SourcePanel(): ReactElement {
       if (!notebookId || !data.url) return
 
       // 检查是否配置了默认嵌入模型
-      if (!defaultEmbeddingModel) {
+      if (!hasEmbeddingModel) {
         alert(t('noEmbeddingModelConfigured'))
         setModalType(null)
         return
@@ -322,7 +324,7 @@ export default function SourcePanel(): ReactElement {
       await addDocumentFromUrl(notebookId, data.url)
       setModalType(null)
     },
-    [notebookId, defaultEmbeddingModel, addDocumentFromUrl, t]
+    [notebookId, hasEmbeddingModel, addDocumentFromUrl, t]
   )
 
   // 处理文本粘贴
@@ -331,7 +333,7 @@ export default function SourcePanel(): ReactElement {
       if (!notebookId || !data.title || !data.content) return
 
       // 检查是否配置了默认嵌入模型
-      if (!defaultEmbeddingModel) {
+      if (!hasEmbeddingModel) {
         alert(t('noEmbeddingModelConfigured'))
         setModalType(null)
         return
@@ -344,7 +346,7 @@ export default function SourcePanel(): ReactElement {
       })
       setModalType(null)
     },
-    [notebookId, defaultEmbeddingModel, addDocument, t]
+    [notebookId, hasEmbeddingModel, addDocument, t]
   )
 
   // 处理笔记导入
@@ -353,7 +355,7 @@ export default function SourcePanel(): ReactElement {
       if (!notebookId || !data.noteId) return
 
       // 检查是否配置了默认嵌入模型
-      if (!defaultEmbeddingModel) {
+      if (!hasEmbeddingModel) {
         alert(t('noEmbeddingModelConfigured'))
         setModalType(null)
         return
@@ -373,7 +375,7 @@ export default function SourcePanel(): ReactElement {
         setModalType(null)
       }
     },
-    [notebookId, defaultEmbeddingModel, addNoteToKnowledge, t]
+    [notebookId, hasEmbeddingModel, addNoteToKnowledge, t]
   )
 
   // 处理删除文档
@@ -458,11 +460,11 @@ export default function SourcePanel(): ReactElement {
               >
                 <Button
                   onClick={() => setShowAddMenu(!showAddMenu)}
-                  disabled={!defaultEmbeddingModel}
+                  disabled={!hasEmbeddingModel}
                   variant="ghost"
                   size="icon"
                   className="w-8 h-8"
-                  title={!defaultEmbeddingModel ? t('noEmbeddingModelConfigured') : t('addSource')}
+                  title={!hasEmbeddingModel ? t('noEmbeddingModelConfigured') : t('addSource')}
                 >
                   <Plus className="w-4 h-4" />
                 </Button>
@@ -529,7 +531,7 @@ export default function SourcePanel(): ReactElement {
             <ScrollArea className="flex-1">
               <DocumentList
                 documents={documents}
-                hasEmbeddingModel={!!defaultEmbeddingModel}
+                hasEmbeddingModel={!!hasEmbeddingModel}
                 onDeleteDocument={handleDelete}
                 onSelectDocument={handleSelectDocument}
                 onOpenSettings={handleOpenSettings}

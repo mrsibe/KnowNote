@@ -12,8 +12,9 @@ name: Verify
 #
 #   better_sqlite3.node, vec0.so/.dylib/.dll, skia.*.node
 #
-# `lint` is deliberately not part of this gate: the repository currently has 6
-# pre-existing renderer react-hooks errors, unrelated to build correctness.
+# `lint` is deliberately not part of this gate: it reports no errors but still
+# carries a large pre-existing `@typescript-eslint/no-explicit-any` baseline,
+# unrelated to build correctness.
 
 on:
   pull_request:
@@ -50,6 +51,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
 
       # Runs `npm run build` first, then electron-builder --dir, so the bundle and
       # the package are both covered by this one step.

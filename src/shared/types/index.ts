@@ -18,6 +18,9 @@ export * from './quiz'
 // 导出 Anki 类型
 export * from './anki'
 
+// 导出 Model Connection 类型
+export * from './connection'
+
 /**
  * 笔记本接口
  * 与 Drizzle schema 推导的类型兼容
@@ -44,52 +47,6 @@ export interface Note {
 }
 
 /**
- * Provider 配置接口
- */
-export interface ProviderConfig {
-  providerName: string
-  config: any
-  enabled: boolean
-  updatedAt: number
-}
-
-/**
- * 模型类型枚举
- */
-export enum ModelType {
-  CHAT = 'chat',
-  EMBEDDING = 'embedding',
-  RERANKER = 'reranker',
-  IMAGE = 'image',
-  AUDIO = 'audio',
-  VIDEO = 'video',
-  UNKNOWN = 'unknown'
-}
-
-/**
- * 模型接口
- */
-export interface Model {
-  id: string
-  object: string
-  owned_by?: string
-  created?: number
-  type?: ModelType
-  max_context?: number // 最大上下文长度 (来自内置配置)
-  description?: string // 模型描述 (来自内置配置)
-}
-
-/**
- * 分类后的模型列表接口
- */
-export interface CategorizedModels {
-  chat: Model[]
-  embedding: Model[]
-  reranker: Model[]
-  other: Model[]
-}
-
-/**
  * 应用设置接口
  */
 export interface AppSettings {
@@ -97,8 +54,6 @@ export interface AppSettings {
   language: 'zh-CN' | 'en-US'
   autoLaunch: boolean
   hasCompletedOnboarding: boolean
-  defaultChatModel?: string // 默认对话模型
-  defaultEmbeddingModel?: string // 默认嵌入模型
   prompts?: {
     mindMap?: {
       'zh-CN'?: string // 中文思维导图生成提示词

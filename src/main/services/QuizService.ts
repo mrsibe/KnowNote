@@ -8,8 +8,7 @@ import { quizzes, documents, chunks, notebooks, items, quizSessions } from '../d
 import type { Quiz, NewQuiz, QuizSession, NewQuizSession } from '../db/schema'
 import type { QuizQuestion, QuizGenerationResult } from '../../shared/types/quiz'
 import { eq, desc, and, inArray } from 'drizzle-orm'
-import { ProviderManager } from '../providers/ProviderManager'
-import { AISDKProvider } from '../providers/base/AISDKProvider'
+import { ConnectionManager } from '../models/ConnectionManager'
 import { streamObject } from 'ai'
 import { z } from 'zod'
 import Logger from '../../shared/utils/logger'
@@ -115,7 +114,7 @@ function createQuizSchema(questionCount: number) {
  * 答题服务
  */
 export class QuizService {
-  constructor(private providerManager: ProviderManager) {}
+  constructor(private connectionManager: ConnectionManager) {}
 
   /**
    * 聚合笔记本内容
@@ -177,17 +176,12 @@ export class QuizService {
     options?: QuizGenerationOptions,
     onProgress?: QuizProgressCallback
   ): Promise<QuizGenerationResult> {
-    const provider = await this.providerManager.getActiveChatProvider()
-    if (!provider) {
-      throw new Error('没有可用的对话模型,请先配置LLM提供商')
+    const client = await this.connectionManager.getChatClient()
+    if (!client) {
+      throw new Error('没有可用的对话模型,请先在设置中配置模型连接')
     }
 
-    // 确保 provider 是 AISDKProvider 实例
-    if (!(provider instanceof AISDKProvider)) {
-      throw new Error('当前 provider 不支持结构化输出')
-    }
-
-    Logger.info('QuizService', `Using provider: ${provider.name}`)
+    Logger.info('QuizService', `Using model: ${client.label}`)
 
     // 获取基础提示词
     const promptTemplate = await getQuizPrompt(options?.customPrompt)
@@ -214,7 +208,7 @@ export class QuizService {
       onProgress?.('generating_quiz', 30)
 
       // 获取 AI SDK 模型实例
-      const model = provider.getAIModel()
+      const model = client.getAIModel()
 
       // 创建动态Schema
       const QuizSchema = createQuizSchema(questionCount)
@@ -416,7 +410,7 @@ export class QuizService {
           questionsData: validatedResult.questions as any,
           chunkMapping: chunkMapping as any,
           metadata: {
-            model: (await this.providerManager.getActiveChatProvider())?.name || 'unknown',
+            model: (await this.connectionManager.getChatClient())?.modelId || 'unknown',
             totalQuestions: validatedResult.metadata.totalQuestions,
             generationTime
           } as any,
@@ -485,7 +479,7 @@ export class QuizService {
       throw new Error('题库不存在')
     }
 
-    const questions = quiz.questionsData as any as QuizQuestion[]
+    const questions = quiz.questionsData as QuizQuestion[]
 
     // 计算分数
     let correctCount = 0

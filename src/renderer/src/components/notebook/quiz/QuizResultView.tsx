@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuizStore } from '../../../store/quizStore'
 import { Button } from '../../ui/button'
@@ -17,16 +17,14 @@ export default function QuizResultView() {
   } = useQuizStore()
 
   // 提交答题会话（保存到数据库）
-  const handleSubmit = async () => {
-    await submitQuiz()
-  }
-
-  // 首次进入结果页自动提交
+  // 首次进入结果页自动提交，且只提交一次
+  const hasSubmittedRef = useRef(false)
   useEffect(() => {
-    if (currentQuiz) {
-      handleSubmit()
+    if (currentQuiz && !hasSubmittedRef.current) {
+      hasSubmittedRef.current = true
+      void submitQuiz()
     }
-  }, [])
+  }, [currentQuiz, submitQuiz])
 
   if (!currentQuiz) return null
 

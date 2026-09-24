@@ -46,7 +46,7 @@ It’s still early, but the core idea works — and I’m excited to share it an
 
 - 📚 Build a local knowledge base from documents and notes
 - 💬 Chat, summarize, and reason with your content using LLMs
-- 🔌 Provider-based LLM design (OpenAI, DeepSeek, Ollama, and more)
+- 🔌 Bring your own API: any OpenAI-, Anthropic- or Google-compatible endpoint, or a local server
 - 🔍 RAG-powered retrieval with precise source traceability
 - 🖥️ Desktop app built with Electron — no Docker, no server setup
 
@@ -83,7 +83,7 @@ KnowNote is for you if:
 ### 🤖 AI-Powered Q&A
 
 - Retrieval-Augmented Generation (RAG)
-- Multiple LLM providers
+- Any OpenAI / Anthropic / Google-compatible endpoint, or local models
 - Answers with precise source references
 
 ### 🔒 Local-First by Design
@@ -123,7 +123,7 @@ Feedback and suggestions are very welcome.
 
 ### ✅ Completed
 
-- AI LLM conversation with multiple providers
+- AI LLM conversation with any compatible endpoint, local or remote
 - Structured note generation
 - One-click mind map generation
 - RAG-based document retrieval
@@ -177,7 +177,7 @@ KnowNote/
 │   ├── main/              # Electron main process
 │   │   ├── db/            # Database configuration and schema
 │   │   ├── services/      # Core logic (document parsing, RAG, etc.)
-│   │   └── providers/     # LLM provider abstraction
+│   │   └── models/        # Model connection resolution and API protocol adapters
 │   ├── renderer/          # React renderer process
 │   ├── preload/           # Electron preload scripts
 │   └── shared/            # Shared types and utilities
@@ -196,7 +196,7 @@ If you have ideas about:
 
 - learning workflows
 - knowledge visualization
-- model/provider abstraction
+- model connection / API protocol abstraction
 
 I’d love to hear them.
 

@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod'
+import { API_PROTOCOLS, MODEL_CAPABILITIES } from '../../shared/types'
 import { Result, Err, Ok } from '../../shared/types/result'
 import Logger from '../../shared/utils/logger'
 
@@ -83,35 +84,39 @@ export const NoteSchemas = {
 }
 
 /**
- * Provider 相关的验证 schemas
+ * Model Connection 相关的验证 schemas
  */
-export const ProviderSchemas = {
-  saveProviderConfig: z.object({
-    providerName: z.string().min(1, { message: 'Provider 名称不能为空' }),
-    config: z.record(z.string(), z.any()),
-    enabled: z.boolean()
+export const ConnectionSchemas = {
+  saveConnection: z.object({
+    capability: z.enum(MODEL_CAPABILITIES),
+    connection: z.object({
+      protocol: z.enum(API_PROTOCOLS),
+      baseUrl: z.string().min(1, 'Base URL 不能为空'),
+      apiKey: z.string(),
+      modelId: z.string().min(1, 'Model ID 不能为空')
+    })
   }),
 
-  getProviderConfig: z.object({
-    providerName: z.string().min(1, 'Provider 名称不能为空')
+  deleteConnection: z.object({
+    capability: z.enum(MODEL_CAPABILITIES)
   }),
 
-  deleteProviderConfig: z.object({
-    providerName: z.string().min(1, 'Provider 名称不能为空')
-  }),
-
-  validateProviderConfig: z.object({
-    providerName: z.string().min(1, 'Provider 名称不能为空'),
-    config: z.record(z.string(), z.any())
+  testConnection: z.object({
+    connection: z.object({
+      protocol: z.enum(API_PROTOCOLS),
+      baseUrl: z.string().min(1, 'Base URL 不能为空'),
+      apiKey: z.string(),
+      modelId: z.string()
+    })
   }),
 
   fetchModels: z.object({
-    providerName: z.string().min(1, 'Provider 名称不能为空'),
-    apiKey: z.string().min(1, 'API Key 不能为空')
-  }),
-
-  getProviderModels: z.object({
-    providerName: z.string().min(1, 'Provider 名称不能为空')
+    connection: z.object({
+      protocol: z.enum(API_PROTOCOLS),
+      baseUrl: z.string().min(1, 'Base URL 不能为空'),
+      apiKey: z.string(),
+      modelId: z.string()
+    })
   })
 }
 

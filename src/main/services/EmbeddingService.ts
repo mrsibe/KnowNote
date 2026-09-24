@@ -3,8 +3,8 @@
  * 封装向量生成逻辑，支持批处理和错误重试
  */
 
-import { ProviderManager } from '../providers/ProviderManager'
-import type { EmbeddingResult, EmbeddingConfig } from '../providers/types'
+import { ConnectionManager } from '../models/ConnectionManager'
+import type { EmbeddingResult, EmbeddingConfig } from '../models/types'
 import Logger from '../../shared/utils/logger'
 
 /**
@@ -22,11 +22,11 @@ export interface EmbeddingServiceConfig {
  * 封装向量生成逻辑，支持批处理、错误重试、速率控制
  */
 export class EmbeddingService {
-  private providerManager: ProviderManager
+  private connectionManager: ConnectionManager
   private config: Required<EmbeddingServiceConfig>
 
-  constructor(providerManager: ProviderManager, config?: EmbeddingServiceConfig) {
-    this.providerManager = providerManager
+  constructor(connectionManager: ConnectionManager, config?: EmbeddingServiceConfig) {
+    this.connectionManager = connectionManager
     this.config = {
       batchSize: config?.batchSize ?? 20,
       maxRetries: config?.maxRetries ?? 3,
@@ -39,13 +39,13 @@ export class EmbeddingService {
    * 生成单个文本的嵌入向量
    */
   async embed(text: string, config?: EmbeddingConfig): Promise<EmbeddingResult> {
-    const provider = await this.providerManager.getActiveEmbeddingProvider()
+    const client = await this.connectionManager.getEmbeddingClient()
 
-    if (!provider) {
-      throw new Error('No embedding provider available')
+    if (!client) {
+      throw new Error('No embedding model configured')
     }
 
-    return await this.withRetry(() => provider.createEmbedding(text, config))
+    return await this.withRetry(() => client.createEmbedding(text, config))
   }
 
   /**
@@ -61,10 +61,10 @@ export class EmbeddingService {
       return []
     }
 
-    const provider = await this.providerManager.getActiveEmbeddingProvider()
+    const client = await this.connectionManager.getEmbeddingClient()
 
-    if (!provider) {
-      throw new Error('No embedding provider available')
+    if (!client) {
+      throw new Error('No embedding model configured')
     }
 
     const results: EmbeddingResult[] = []
@@ -76,7 +76,7 @@ export class EmbeddingService {
       const batch = batches[i]
 
       try {
-        const batchResults = await this.withRetry(() => provider.createEmbeddings(batch, config))
+        const batchResults = await this.withRetry(() => client.createEmbeddings(batch, config))
         results.push(...batchResults)
 
         if (onProgress) {
@@ -99,19 +99,19 @@ export class EmbeddingService {
   }
 
   /**
-   * 获取当前 Embedding Provider 的默认 Embedding 模型
+   * 获取当前 Embedding Connection 的模型 ID
    */
   async getDefaultModel(): Promise<string | undefined> {
-    const provider = await this.providerManager.getActiveEmbeddingProvider()
-    return provider?.getDefaultEmbeddingModel()
+    const client = await this.connectionManager.getEmbeddingClient()
+    return client?.modelId
   }
 
   /**
-   * 检查当前 Embedding Provider 是否支持 Embedding
+   * 检查是否配置了 Embedding Connection
    */
   async isAvailable(): Promise<boolean> {
-    const provider = await this.providerManager.getActiveEmbeddingProvider()
-    return provider !== null
+    const client = await this.connectionManager.getEmbeddingClient()
+    return client !== null
   }
 
   /**

@@ -13,7 +13,7 @@ export async function getStore(): Promise<Store<StoreSchema>> {
     store = new Store<StoreSchema>({
       defaults: {
         settings: defaultSettings,
-        providers: {},
+        connections: {},
         shortcuts: defaultShortcuts
       },
       name: 'knownote-config',

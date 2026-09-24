@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import GeneralSettings from './GeneralSettings'
 import { useUIStore } from '../../store/uiStore'
-import ProvidersSettings from './ProvidersSettings'
+import ModelsSettings from './ModelsSettings'
 import PromptsSettings from './PromptsSettings'
 import ShortcutSettings from './ShortcutSettings'
 import AboutSettings from './AboutSettings'
@@ -17,14 +17,8 @@ import {
   SidebarMenuButton,
   SidebarProvider
 } from '../ui/sidebar'
-import type { AppSettings } from '../../../../shared/types'
-
-interface ProviderConfig {
-  providerName: string
-  config: Record<string, any>
-  enabled: boolean
-  updatedAt: number
-}
+import type { AppSettings, ConnectionMap } from '../../../../shared/types'
+import { MODEL_CAPABILITIES } from '../../../../shared/types'
 
 export default function SettingsDialog(): ReactElement {
   const { t } = useTranslation('settings')
@@ -32,8 +26,8 @@ export default function SettingsDialog(): ReactElement {
   const [activeSection, setActiveSection] = useState<string>('general')
   const [originalSettings, setOriginalSettings] = useState<AppSettings | null>(null)
   const [pendingSettings, setPendingSettings] = useState<AppSettings | null>(null)
-  const [originalProviders, setOriginalProviders] = useState<ProviderConfig[]>([])
-  const [pendingProviders, setPendingProviders] = useState<ProviderConfig[]>([])
+  const [originalConnections, setOriginalConnections] = useState<ConnectionMap>({})
+  const [pendingConnections, setPendingConnections] = useState<ConnectionMap>({})
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -48,23 +42,23 @@ export default function SettingsDialog(): ReactElement {
       setOriginalSettings(settings)
       setPendingSettings(settings)
 
-      const providers = await window.api.getAllProviderConfigs()
-      setOriginalProviders(providers)
-      setPendingProviders(providers)
+      const connections = await window.api.connections.getAll()
+      setOriginalConnections(connections)
+      setPendingConnections(connections)
     }
     loadSettings()
   }, [])
 
   // 使用 useMemo 计算是否有变化
   const hasChanges = useMemo(() => {
-    if (originalSettings && pendingSettings && originalProviders && pendingProviders) {
-      const settingsChanged = JSON.stringify(originalSettings) !== JSON.stringify(pendingSettings)
-      const providersChanged =
-        JSON.stringify(originalProviders) !== JSON.stringify(pendingProviders)
-      return settingsChanged || providersChanged
+    if (!originalSettings || !pendingSettings) {
+      return false
     }
-    return false
-  }, [originalSettings, pendingSettings, originalProviders, pendingProviders])
+    const settingsChanged = JSON.stringify(originalSettings) !== JSON.stringify(pendingSettings)
+    const connectionsChanged =
+      JSON.stringify(originalConnections) !== JSON.stringify(pendingConnections)
+    return settingsChanged || connectionsChanged
+  }, [originalSettings, pendingSettings, originalConnections, pendingConnections])
 
   const menuItems = [
     {
@@ -75,11 +69,11 @@ export default function SettingsDialog(): ReactElement {
       description: t('generalSettingsDesc')
     },
     {
-      id: 'provider',
+      id: 'models',
       icon: Database,
-      label: t('aiProviders'),
-      title: t('aiProviders'),
-      description: t('aiProvidersDesc')
+      label: t('modelConnections'),
+      title: t('modelConnections'),
+      description: t('modelConnectionsDesc')
     },
     {
       id: 'prompts',
@@ -111,31 +105,29 @@ export default function SettingsDialog(): ReactElement {
     }
   }
 
-  // 更新临时提供商配置
-  const updatePendingProviders = (updatedProviders: ProviderConfig[]) => {
-    setPendingProviders(updatedProviders)
-  }
-
-  // 刷新提供商配置（用于新增/删除后同步状态）
-  const refreshProviders = async () => {
-    const providers = await window.api.getAllProviderConfigs()
-    setOriginalProviders(providers)
-    setPendingProviders(providers)
-  }
-
   // 确认保存
   const handleConfirm = async () => {
-    // 保存通用设置
     if (pendingSettings) {
       await window.api.settings.update(pendingSettings)
       setOriginalSettings(pendingSettings)
     }
 
-    // 保存提供商配置（新增/删除已经立即保存，这里只保存修改）
-    for (const provider of pendingProviders) {
-      await window.api.saveProviderConfig(provider)
+    // 保存或删除每个能力的连接
+    for (const capability of MODEL_CAPABILITIES) {
+      const connection = pendingConnections[capability]
+      if (connection && connection.baseUrl && connection.modelId) {
+        await window.api.connections.save(capability, connection)
+      } else {
+        const wasConfigured = Boolean(originalConnections[capability])
+        if (wasConfigured) {
+          await window.api.connections.remove(capability)
+        }
+      }
     }
-    setOriginalProviders(pendingProviders)
+
+    const saved = await window.api.connections.getAll()
+    setOriginalConnections(saved)
+    setPendingConnections(saved)
   }
 
   // 取消变更
@@ -143,9 +135,7 @@ export default function SettingsDialog(): ReactElement {
     if (originalSettings) {
       setPendingSettings(originalSettings)
     }
-    if (originalProviders) {
-      setPendingProviders(originalProviders)
-    }
+    setPendingConnections(originalConnections)
   }
 
   return (
@@ -202,14 +192,12 @@ export default function SettingsDialog(): ReactElement {
                     <GeneralSettings
                       settings={pendingSettings}
                       onSettingsChange={updatePendingSettings}
-                      providers={pendingProviders}
                     />
                   )}
-                  {activeSection === 'provider' && (
-                    <ProvidersSettings
-                      providers={pendingProviders}
-                      onProvidersChange={updatePendingProviders}
-                      onRefresh={refreshProviders}
+                  {activeSection === 'models' && (
+                    <ModelsSettings
+                      connections={pendingConnections}
+                      onConnectionsChange={setPendingConnections}
                     />
                   )}
                   {pendingSettings && activeSection === 'prompts' && (

@@ -1,5 +1,5 @@
 import * as queries from '../db/queries'
-import { ProviderManager } from '../providers/ProviderManager'
+import { ConnectionManager } from '../models/ConnectionManager'
 import Logger from '../../shared/utils/logger'
 
 /**
@@ -10,10 +10,10 @@ export class SessionAutoSwitchService {
   // Token threshold: 80% of GPT-4 context window (128k tokens)
   private static readonly TOKEN_THRESHOLD = 100000
 
-  private providerManager: ProviderManager
+  private connectionManager: ConnectionManager
 
-  constructor(providerManager: ProviderManager) {
-    this.providerManager = providerManager
+  constructor(connectionManager: ConnectionManager) {
+    this.connectionManager = connectionManager
   }
 
   /**
@@ -99,16 +99,16 @@ ${conversationText}
 Please provide summary:`
 
     // Call AI to generate summary
-    const provider = await this.providerManager.getActiveChatProvider()
-    if (!provider) {
-      // If no provider configured, return a basic summary
+    const client = await this.connectionManager.getChatClient()
+    if (!client) {
+      // If no model connection configured, return a basic summary
       return `This conversation contains ${messages.length} messages.`
     }
 
     return new Promise<string>((resolve) => {
       let summaryContent = ''
 
-      provider.sendMessageStream(
+      client.sendMessageStream(
         [
           {
             role: 'user',

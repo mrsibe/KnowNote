@@ -71,8 +71,7 @@
   "clickToEditTitle": "Click to edit title",
   "selectOrCreateNotebook": "Select or create a notebook",
   "selectSession": "Please select a session first",
-  "noProviderConfigured": "AI Provider not configured, please configure in settings",
-  "noDefaultModel": "Please select a default chat model in settings",
+  "noProviderConfigured": "No chat model configured, please configure one in settings",
   "inputMessage": "Type a message... (Shift+Enter for new line)",
   "knowledgeBase": "Knowledge Base",
   "knowledgeBaseDesc": "Add documents to provide context for conversations",
@@ -104,6 +103,5 @@
   "emptyNoteCannotImport": "Note content is empty and cannot be imported to knowledge base",
   "backToList": "Back to List",
   "openUrl": "Open URL",
-  "openFile": "Open File",
   "cannotPreview": "Cannot preview this file type"
 }

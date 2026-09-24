@@ -42,7 +42,8 @@ npm run dev
 | Command                  | What it does                                                  |
 | ------------------------ | ------------------------------------------------------------- |
 | `npm run dev`            | Start the app in development with HMR.                        |
-| `npm run typecheck`      | Typecheck the main/preload and renderer projects.             |
+| `npm run typecheck`      | Typecheck the main/preload, renderer and test projects.       |
+| `npm test`               | Run the Node test suite (`test/**/*.test.ts`).                |
 | `npm run lint`           | ESLint (see the note on the current baseline below).          |
 | `npm run format`         | Prettier over the whole repository.                           |
 | `npm run build`          | Typecheck, then bundle with electron-vite.                    |
@@ -55,6 +56,7 @@ npm run dev
 
 ```bash
 npm run typecheck   # required — this is a CI gate
+npm test            # required — this is a CI gate
 npm run build
 ```
 
@@ -75,21 +77,22 @@ against the real `app.asar`, so it is the step that actually catches these.
 
 Two caveats:
 
-- **`lint` is not a gate.** `main` currently reports 6 pre-existing
-  `react-hooks` errors and 156 warnings. Don't fix them in an unrelated PR, and
-  don't add new ones.
+- **`lint` is not a gate.** `npm run lint` has no errors, but `main` still
+  reports ~118 pre-existing `@typescript-eslint/no-explicit-any` warnings.
+  Don't add new ones, and don't mass-refactor them in an unrelated PR.
 - **Don't run `npm run format` on the whole repository.** It rewrites every
-  file, and one pre-existing file (`src/main/services/FileParserService.ts`) is
-  not prettier-clean, so a repo-wide format pulls unrelated changes into your
-  diff. Format only what you touched:
+  file, and a repo-wide format pulls unrelated changes into your diff. Format
+  only what you touched:
 
   ```bash
   npx prettier --write <files>
   ```
 
-There is **no automated test suite yet**. `test/fixtures/` contains sample
-documents for manual parser checks. Describe your manual verification in the PR
-instead — which platform, which workflow, what you observed.
+Tests live in `test/**/*.test.ts` and run on Node's built-in test runner via
+`npm test` (no test framework dependency). `test/fixtures/` additionally
+contains sample documents for manual parser checks. For anything not covered by
+a test, describe your manual verification in the PR instead — which platform,
+which workflow, what you observed.
 
 ## Conventions
 
@@ -109,7 +112,7 @@ welcome when it is meaningful: `fix(mac): ...`.
 src/main/       Electron main process
   db/           Drizzle schema, migrations, queries
   services/     Document parsing, RAG, item and note storage
-  providers/    LLM provider abstraction and registry
+  models/       Model Connection resolution and API protocol adapters
 src/preload/    IPC bridge
 src/renderer/   React UI
 src/shared/     Types and utilities used by more than one process

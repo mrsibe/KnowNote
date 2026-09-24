@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { createNote, getNotesByNotebook, getNoteById, updateNote, deleteNote } from '../db/queries'
-import { ProviderManager } from '../providers/ProviderManager'
+import { ConnectionManager } from '../models/ConnectionManager'
 import Logger from '../../shared/utils/logger'
 import { NoteSchemas, validate } from './validation'
 
@@ -8,18 +8,18 @@ import { NoteSchemas, validate } from './validation'
  * Generate note title using AI
  */
 async function generateNoteTitle(
-  providerManager: ProviderManager,
+  connectionManager: ConnectionManager,
   content: string
 ): Promise<string> {
   try {
-    const provider = await providerManager.getActiveChatProvider()
-    if (!provider) {
+    const client = await connectionManager.getChatClient()
+    if (!client) {
       return 'Untitled Note'
     }
 
     let generatedTitle = ''
 
-    await provider.sendMessageStream(
+    await client.sendMessageStream(
       [
         {
           role: 'system',
@@ -52,7 +52,7 @@ async function generateNoteTitle(
 /**
  * Register note-related IPC handlers
  */
-export function registerNoteHandlers(providerManager: ProviderManager) {
+export function registerNoteHandlers(connectionManager: ConnectionManager) {
   // Create note（带参数验证）
   ipcMain.handle(
     'create-note',
@@ -64,7 +64,7 @@ export function registerNoteHandlers(providerManager: ProviderManager) {
 
       try {
         // If no title provided (empty string), use AI to generate
-        const title = args.title || (await generateNoteTitle(providerManager, args.content))
+        const title = args.title || (await generateNoteTitle(connectionManager, args.content))
         const note = createNote(args.notebookId, title, args.content)
         Logger.debug('NoteHandlers', 'Note created successfully:', note.id)
         return note

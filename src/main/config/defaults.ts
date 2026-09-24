@@ -10,8 +10,6 @@ export const defaultSettings: AppSettings = {
   language: 'en-US',
   autoLaunch: false,
   hasCompletedOnboarding: false,
-  defaultChatModel: undefined,
-  defaultEmbeddingModel: undefined,
   prompts: {
     mindMap: {
       'zh-CN': `你是知识结构分析专家,负责从笔记本内容中提炼核心知识结构。

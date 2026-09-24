@@ -1,4 +1,4 @@
-import { ReactElement, useState, useEffect } from 'react'
+import { ReactElement, useState } from 'react'
 import { FileText, Network, Trash2, Loader2, Edit2, ClipboardList, Layers } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -433,10 +433,12 @@ export default function ItemList({
     }
   }
 
-  // 当外部 items 改变时，更新本地状态
-  useEffect(() => {
+  // 当外部 items 改变时，更新本地状态（render 期间调整，避免 effect 级联渲染）
+  const [syncedItems, setSyncedItems] = useState(items)
+  if (syncedItems !== items) {
+    setSyncedItems(items)
     setLocalItems(items)
-  }, [items])
+  }
 
   if (items.length === 0) {
     return (
