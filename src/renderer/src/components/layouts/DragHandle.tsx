@@ -1,12 +1,11 @@
 import * as React from 'react'
 import { ReactElement } from 'react'
 import { cn } from '@/lib/utils'
-
-export type DragHandleSide = 'left' | 'right'
+import type { PanelSide } from './panelGeometry'
 
 export interface DragHandleProps {
   /** Which panel this handle resizes. */
-  side: DragHandleSide
+  side: PanelSide
   /** Current width of that panel, in CSS pixels. */
   value: number
   min: number

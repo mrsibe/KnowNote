@@ -128,29 +128,30 @@ export default function TopNavigationBar({
               <span>{t('home')}</span>
             </TabsTrigger>
 
-            {/* 打开的笔记本标签 */}
+            {/* 打开的笔记本标签。
+                关闭控件是 trigger 的**兄弟**节点而不是子节点：原先它是一个
+                `role="button" tabIndex={0}` 的 span 嵌在 `role="tab"`（本身
+                是 <button>）里 —— 交互角色套交互角色，而且 tablist 用 roving
+                tabindex，内层恒为 0 的 tabIndex 会给每个打开的笔记本多造一个
+                焦点停留点。现在它是一个真的 <button>，有自己的可访问名称。 */}
             {openedNotebooks.map((notebook) => (
-              <TabsTrigger
-                key={notebook.id}
-                value={notebook.id}
-                className="h-7 gap-1 pr-2 pl-3 rounded-md border border-transparent text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-surface-selected data-[state=active]:text-foreground data-[state=active]:font-medium max-w-[200px]"
-              >
-                <span className="truncate">{notebook.title}</span>
-                <span
+              <div key={notebook.id} className="relative flex items-center">
+                <TabsTrigger
+                  value={notebook.id}
+                  className="h-7 pr-7 pl-3 rounded-md border border-transparent text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-surface-selected data-[state=active]:text-foreground data-[state=active]:font-medium max-w-[200px]"
+                >
+                  <span className="truncate">{notebook.title}</span>
+                </TabsTrigger>
+                <button
+                  type="button"
                   onClick={(e) => handleCloseOpenedNotebook(notebook.id, e)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      handleCloseOpenedNotebook(notebook.id, e)
-                    }
-                  }}
-                  className="ml-1 inline-flex items-center justify-center h-4 w-4 p-0.5 rounded-md hover:bg-destructive/20 hover:text-destructive transition-colors"
+                  className="absolute right-1 inline-flex h-4 w-4 items-center justify-center rounded-md transition-colors hover:bg-destructive/20 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   title={t('closeTab')}
+                  aria-label={t('closeTab')}
                 >
                   <X className="w-3 h-3" />
-                </span>
-              </TabsTrigger>
+                </button>
+              </div>
             ))}
 
             {/* 新建按钮 */}
