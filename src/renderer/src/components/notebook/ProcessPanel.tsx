@@ -312,14 +312,8 @@ function ProcessPanel({
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={
-              !currentSession
-                ? t('selectSession')
-                : !hasChatModel
-                  ? t('noProviderConfigured')
-                  : t('inputMessage')
-            }
-            disabled={!currentSession || !hasChatModel}
+            placeholder={!hasChatModel ? t('noProviderConfigured') : t('inputMessage')}
+            disabled={!hasChatModel}
             rows={1}
             className="w-full bg-transparent border-0 pl-4 pr-14 py-3 text-sm text-foreground placeholder-muted-foreground resize-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto min-h-[84px] max-h-[280px] themed-scrollbar select-text"
           />

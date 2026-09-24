@@ -6,5 +6,10 @@
   "thinkingShort": "思考中",
   "addToNote": "添加到笔记",
   "addedToNote": "已添加到笔记",
-  "added": "已添加"
+  "added": "已添加",
+  "sourcesUsed": "基于 {{count}} 段来源原文",
+  "hideSources": "隐藏来源",
+  "showDocument": "在知识库中查看",
+  "answerNotGrounded": "这条回答没有使用你来源中的任何段落。",
+  "answerRetrievalFailed": "检索来源失败，这条回答没有依据你的来源。"
 }

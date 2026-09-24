@@ -113,6 +113,24 @@ Confirmed by the README and the code:
   `Verify` workflow is the gate; `en-US` and `zh-CN` locales move together
   (CONTRIBUTING.md).
 
+- **A notebook holds one growing conversation.** Confirmed by the maintainer. There
+  is no conversation picker and no "new chat": opening a notebook lands you in its
+  ongoing thread, and the store already creates the session on demand. When that
+  thread approaches the model's context budget, `SessionAutoSwitchService`
+  summarises it, archives the old row and continues in a new one — a rollover, not
+  a second conversation the user has to manage. Because the user experiences one
+  thread, a rollover must never be silent.
+- **Every answer records the passages it was built from.** Retrieval already knows
+  the `documentId`, `chunkId` and passage text; these are now persisted on the
+  assistant message and rendered as quotable evidence, with the retrieval outcome
+  recorded too (`used` / `none` / `failed`). What this does **not** yet provide is a
+  page or character span: the indexing path computes chunk offsets against a
+  preprocessed string rather than `documents.content`, and `parseResult.structure`
+  is still discarded, so a span-accurate citation would be a false claim until #82
+  lands. Inline per-sentence markers (the `[cite:id]` contract Cherry Studio and
+  Open Notebook both use) also need a system-prompt change and real model testing,
+  so they are deliberately not in place yet.
+
 Undecided, recorded rather than resolved:
 
 - The README says quiz generation, audio transcription and slide generation are
@@ -160,6 +178,9 @@ needed, ask for it.
 
 1. **Provenance before fluency.** An answer without a resolvable source location
    is an unverified claim. The citation is the product, not the chat bubble.
+   Today the answer carries the passages it used, and that is the first half of
+   this principle. It becomes the whole of it when a citation resolves to a page
+   and a span rather than to a passage's text (#82).
 2. **Local is the default, not a mode.** Retrieval has to work with the network
    off, and the only outbound request is the endpoint the user configured.
 3. **Say what is not there.** A claim ahead of the code is a bug, and the README

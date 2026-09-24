@@ -8,8 +8,11 @@ import { BookPlus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ChatMessage } from '../../../types/notebook'
 import ReasoningContent from './ReasoningContent'
+import AnswerSources from './AnswerSources'
 import { useItemStore } from '../../../store/itemStore'
 import { useNotebookStore } from '../../../store/notebookStore'
+import { useUIStore } from '../../../store/uiStore'
+import { parseRetrievalStatus, sourcesForDisplay } from '../../../../../shared/utils/answerSources'
 import { Button } from '../../ui/button'
 import { ScrollArea, ScrollBar } from '../../ui/scroll-area'
 import 'highlight.js/styles/github-dark.css'
@@ -30,6 +33,12 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
 
   const { createNote } = useItemStore()
   const { currentNotebook } = useNotebookStore()
+  const focusSourceDocument = useUIStore((state) => state.focusSourceDocument)
+
+  // What this answer was built from. Read defensively: the metadata comes from the
+  // database and may predate the shape (see shared/utils/answerSources.ts).
+  const answerSources = sourcesForDisplay(message.metadata)
+  const retrieval = parseRetrievalStatus(message.metadata)
 
   // Copy message content
   const handleCopy = async () => {
@@ -185,6 +194,16 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
               <span className="inline-block w-2 h-4 bg-muted-foreground animate-pulse" />
             </div>
           )
+        )}
+        {/* What the answer was built from. Only after the turn ends: during
+            streaming there is nothing to show yet, and an empty evidence list
+            mid-answer would read as "nothing was used". */}
+        {message.content && !isStreaming && (
+          <AnswerSources
+            sources={answerSources}
+            retrieval={retrieval}
+            onShowDocument={focusSourceDocument}
+          />
         )}
         {/* Action buttons - only shown when reply is complete and has content */}
         {message.content && !isStreaming && (
