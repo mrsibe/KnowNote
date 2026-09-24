@@ -16,19 +16,45 @@
  *
  * Running the packaged executable with `--smoke-test` exercises the things that
  * actually broke - loading every external package the main process needs, the
- * native addons, and the app's own vector-store code path - and then exits
+ * native addons, the app's own vector-store code path and the document importers
+ * (PDF, DOCX, HTML) against the fixtures in test/fixtures - and then exits
  * without creating a window, so CI can gate on the exit code. It is driven by
- * `scripts/smoke-packaged.mjs`.
+ * `scripts/smoke-packaged.mjs`, which passes `--smoke-fixtures=<dir>`.
  */
 
 import Logger from '../shared/utils/logger'
+import { readFile } from 'fs/promises'
+import { join } from 'path'
 import { closeDatabase, getSqlite, initDatabase, initVectorStore, runMigrations } from './db'
+import { FileParserService } from './services/FileParserService'
+import { WebLoader } from './services/loaders/WebLoader'
 import { SQLiteVectorStore } from './vectorstore/SQLiteVectorStore'
 
 export const SMOKE_TEST_FLAG = '--smoke-test'
 
+/** Directory holding the test/fixtures documents, passed by the launcher. */
+const SMOKE_FIXTURES_PREFIX = '--smoke-fixtures='
+
+/** Text every test/fixtures document contains; see test/fixtures/. */
+const IMPORT_MARKER = 'KnowNote Import Test'
+
 export function isSmokeTestRequested(argv: readonly string[] = process.argv): boolean {
   return argv.includes(SMOKE_TEST_FLAG)
+}
+
+function readFixtureDir(argv: readonly string[]): string {
+  const arg = argv.find((value) => value.startsWith(SMOKE_FIXTURES_PREFIX))
+  if (!arg) {
+    throw new Error(
+      `missing ${SMOKE_FIXTURES_PREFIX}<dir>; run this through \`npm run smoke:packaged\``
+    )
+  }
+  return arg.slice(SMOKE_FIXTURES_PREFIX.length)
+}
+
+function excerpt(text: string, max = 80): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return flat.length > max ? `${flat.slice(0, max)}...` : flat
 }
 
 /** Must match the FLOAT[...] width of vec_embeddings in initVectorStore(). */
@@ -118,6 +144,39 @@ async function runChecks(): Promise<string[]> {
   // @napi-rs/canvas peer.
   await import('pdfjs-dist/legacy/build/pdf.mjs')
   pass('pdfjs-dist loads and polyfilled DOMMatrix from @napi-rs/canvas')
+
+  // --- document import: the real loaders, against real files ----------------
+  // The fixtures live in test/fixtures and are handed over by
+  // scripts/smoke-packaged.mjs. A missing directory is a failure rather than a
+  // skip: quietly dropping these checks would make the gate look greener than
+  // it is, and the PDF path is exactly where the DOMMatrix crash surfaced.
+  const fixtures = readFixtureDir(process.argv)
+  const parser = new FileParserService()
+
+  const pdf = await parser.parseFile(join(fixtures, 'sample.pdf'))
+  assert(
+    pdf.content.includes(IMPORT_MARKER),
+    `PDF import lost the fixture text (got "${excerpt(pdf.content)}")`
+  )
+  pass('PDF import extracts text (pdfjs-dist)')
+
+  const docx = await parser.parseFile(join(fixtures, 'sample.docx'))
+  assert(
+    docx.content.includes(IMPORT_MARKER),
+    `DOCX import lost the fixture text (got "${excerpt(docx.content)}")`
+  )
+  pass('DOCX import extracts text (mammoth)')
+
+  // WebLoader is called directly on purpose: FileParserService dispatches by
+  // extension, and a local .html path reaches loadFromPath(), which is
+  // unimplemented by design because WebLoader consumes fetched HTML through
+  // loadFromBuffer. This is the jsdom + Readability path that actually runs.
+  const html = await new WebLoader().loadFromBuffer(await readFile(join(fixtures, 'sample.html')))
+  assert(
+    html.content.includes(IMPORT_MARKER),
+    `HTML import lost the fixture text (got "${excerpt(html.content)}")`
+  )
+  pass('HTML import extracts body text (jsdom + Readability)')
 
   const { ApkgExporter } = await import('./services/exporters/ApkgExporter')
   const { buffer, summary } = await new ApkgExporter().export(

@@ -96,10 +96,20 @@ console.log(`[smoke:packaged] launching ${executable}`)
 // ~/.config/knownote.
 const dataDir = mkdtempSync(join(tmpdir(), 'knownote-smoke-'))
 
-const args = ['--smoke-test', `--user-data-dir=${dataDir}`]
-// Electron's setuid sandbox cannot start as root, which is the norm inside CI
-// containers. Only disable it when we actually are root.
-if (typeof process.getuid === 'function' && process.getuid() === 0) {
+const args = [
+  '--smoke-test',
+  `--user-data-dir=${dataDir}`,
+  // The document-import checks read these. They live in the repo rather than in
+  // the package, so point the packaged app at them explicitly.
+  `--smoke-fixtures=${resolve('test/fixtures')}`
+]
+
+// The Chromium sandbox needs either a setuid helper or user namespaces, and
+// neither is dependable on CI runners: containers run as root, and the unpacked
+// chrome-sandbox is not setuid. The smoke test only loads our own code, so this
+// is safe there - and it keeps `smoke:packaged` working on plain `ubuntu-latest`.
+const isRoot = typeof process.getuid === 'function' && process.getuid() === 0
+if (isRoot || process.env.CI) {
   args.push('--no-sandbox')
 }
 

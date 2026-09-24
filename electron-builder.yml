@@ -9,6 +9,8 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,package-lock.json}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # Dev-only: test fixtures and build scripts are not part of the shipped app.
+  - '!{test,scripts}/*'
 # Native modules must live outside the asar so they can be loaded by dlopen()
 # AND so electron-builder signs them individually. Keep these patterns explicit:
 # if a native module stays inside app.asar it cannot be signed or loaded.
