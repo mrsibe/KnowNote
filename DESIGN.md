@@ -65,10 +65,16 @@ Rules:
   `surface-raised` in both colour schemes. Do not nest `surface-raised` inside
   `surface-raised`.
 
-Legacy aliases kept for compatibility while pages migrate:
-`--background`, `--card`, `--popover`, `--sidebar`, `--accent`,
-`--sidebar-accent` are defined in terms of the tokens above. New code uses
-`surface-*`.
+Legacy aliases kept for compatibility while pages migrate: `--background`,
+`--card`, `--popover`, `--sidebar` and `--accent` — with their `-foreground`
+siblings and the remaining `--sidebar-*` tokens — are defined in terms of the
+tokens above. New code uses `surface-*`.
+
+`--secondary` / `--secondary-foreground` are not aliases: they hold their own
+literal values, and nothing renders them — `Button` and `Badge` `variant="secondary"`
+both use `bg-muted`. They are dead tokens, and the light value is the only
+blue-tinted neutral in the palette. Do not adopt them; delete them from
+`theme.css` instead.
 
 ## Window chrome
 
@@ -152,25 +158,34 @@ Base rhythm is 4 / 8 / 12 / 16 (`gap-1,2,3,4`; `p-2,3,4,6`). Half steps
 (`px-2.5`, `py-1.5`, `gap-1.5`) are tolerated only when aligning text against a
 16/20px icon; do not introduce them anywhere else.
 
-| Element                                    | Height   | Padding                                |
-| ------------------------------------------ | -------- | -------------------------------------- |
-| Panel header                               | `h-11`   | `px-3`, content `gap-2`                |
-| Toolbar icon button (`Button size="icon"`) | `size-8` | —                                      |
-| Button (`default`)                         | `h-9`    | `px-4`                                 |
-| Button (`sm`)                              | `h-8`    | `px-3`                                 |
-| Button (`lg`)                              | `h-10`   | `px-5`                                 |
-| Input / Select trigger                     | `h-9`    | `px-3`                                 |
-| List row, compact                          | `h-8`    | `px-2`                                 |
-| List row, comfortable                      | `h-9`    | `px-3`                                 |
-| List row, multi-line (title + meta)        | —        | `px-2 py-2`, `rounded-md`              |
-| Sidebar nav item                           | `h-8`    | `px-2`                                 |
-| Card / panel body padding                  | —        | `p-4`                                  |
-| Dialog padding                             | —        | `p-5`                                  |
-| Section gap inside a panel                 | —        | `space-y-3` / `divide-y divide-border` |
-| Page gutter                                | —        | `px-6 py-4`                            |
+| Element                                    | Height    | Padding                                |
+| ------------------------------------------ | --------- | -------------------------------------- |
+| Panel header                               | `h-11`    | `px-3`, content `gap-2`                |
+| Title bar (`TopNavigationBar`)             | `h-11`    | `px-2`                                 |
+| Title-bar icon button                      | `w-7 h-7` | —                                      |
+| Title-bar tab                              | `h-7`     | `px-3`                                 |
+| Toolbar icon button (`Button size="icon"`) | `size-8`  | —                                      |
+| Button (`default`)                         | `h-9`     | `px-4`                                 |
+| Button (`sm`)                              | `h-8`     | `px-3`                                 |
+| Button (`lg`)                              | `h-10`    | `px-5`                                 |
+| Input / Select trigger                     | `h-9`     | `px-3`                                 |
+| List row, compact                          | `h-8`     | `px-2`                                 |
+| List row, comfortable                      | `h-9`     | `px-3`                                 |
+| List row, multi-line (title + meta)        | —         | `px-2 py-2`, `rounded-md`              |
+| Sidebar nav item                           | `h-8`     | `px-2`                                 |
+| Card / panel body padding                  | —         | `p-4`                                  |
+| Dialog padding                             | —         | `p-5`                                  |
+| Section gap inside a panel                 | —         | `space-y-3` / `divide-y divide-border` |
+| Page gutter                                | —         | `px-6 py-4`                            |
 
 Rows are separated with `divide-y divide-border` or a `border-b` hairline, never
 with margin gaps.
+
+The title bar is its own density tier: it is the only place allowed to step
+below `size-8` / `h-8`. `TopNavigationBar` runs 28px tabs and 28px icon buttons
+so the strip reads as window chrome rather than as content, and it keeps the
+window controls comfortable in the 44px bar. That tier stops at the title bar —
+a 28px control inside a panel is a violation, not a precedent.
 
 ## Type scale and text hierarchy
 
@@ -249,10 +264,17 @@ A row that is both hovered and selected keeps the selected fill; do not stack
 the hover form above is an opaque `surface-raised` card, where the token has to
 be composited rather than swapped — see [Raised card](#raised-card).
 
-A **segmented control** (`Tabs`) is the one place where selection is expressed as
-a surface step rather than a translucent fill, because the thumb must cover the
-track: track `bg-surface-sunken`, selected segment `bg-surface-raised`, no shadow.
-Both steps are monotonic in dark mode, which `bg-muted` + `bg-background` was not.
+`Tabs` has exactly two documented forms, and they express selection differently:
+
+- **Segmented control** — settings, filters, mode switches. Track
+  `bg-surface-sunken`, selected segment `bg-surface-raised`, no shadow. The thumb
+  has to cover the track, so selection is a surface step. Both steps are monotonic
+  in dark mode, which `bg-muted` + `bg-background` was not.
+- **Tab strip** — `TopNavigationBar`'s open notebooks are document tabs, not a
+  mode switch. No track (`bg-transparent border-0 p-0 h-auto`), and selection is
+  the ordinary translucent fill: `bg-surface-selected` + `text-foreground` +
+  `font-medium`, with a resting `border-transparent` becoming `border-border` when
+  active so the label does not shift by a pixel.
 
 Small atoms keep the control radius even though it is proportionally rounder:
 a 16px checkbox is `rounded-md`, not a new radius value.
@@ -370,10 +392,26 @@ Implementation: `components/ui/empty.tsx`. `EmptyMedia variant="icon"` uses
 `rounded-lg` dashed hairline, no shadow. Empty state copy is chrome, not
 content: mark the container `select-none` so a mouse drag cannot select it.
 
+In a narrow panel the dashed outline is visual noise around an already empty
+area, so a panel-level empty state opts out with `border-none`
+(`DocumentList`). The primitive keeps its dashed hairline — that opt-out is the
+exception, and it belongs to the panel that asked for it, not to `Empty`.
+
 ### Form field
 
-Label is T2 `text-xs font-medium`, control is `h-8 rounded-md border
-border-border bg-surface-base px-3 text-sm`, error text `text-xs text-destructive`.
+Implementation: `components/ui/field.tsx` — `Field`, `FieldSet`, `FieldLegend`,
+`FieldGroup`, `FieldContent`, `FieldLabel`, `FieldTitle`, `FieldDescription`,
+`FieldError`, `FieldSeparator`. Prefer these over hand-rolled label/input/error
+stacks: `FieldError` already carries the `text-destructive text-sm` treatment and
+the `role="alert"` wiring.
+
+- Label: T1 `text-sm font-medium` (`Label` and `FieldLabel` both default to it).
+  The label is not a T2 meta line — it names the value below it.
+- Control: `h-9 rounded-md border border-border bg-surface-base px-3 text-sm`,
+  matching `Input` and the `Select` trigger. (`h-8` is the `sm` button height and
+  the compact row height, not an input height.)
+- Error: `text-sm text-destructive`, from `FieldError`.
+
 Never signal an error with a red border alone.
 
 ## Adding a page: order of decisions
