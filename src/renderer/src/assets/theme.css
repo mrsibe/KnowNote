@@ -21,6 +21,14 @@
  *   T3 subtle-foreground     2.7:1  (meta only, never essential information)
  */
 :root {
+  /*
+   * Tell the engine which scheme the page is in. Without this the UA keeps
+   * rendering native surfaces — scrollbars, the caret, text selection, form
+   * controls, `<select>` popups, autofill — in light mode even when the app is
+   * dark, which is the one part of the theme CSS cannot reach otherwise.
+   */
+  color-scheme: light;
+
   /* Surface ladder: sunken < base < raised < overlay, monotonic in both modes. */
   --surface-sunken: oklch(0.9551 0 0);
   --surface-base: oklch(0.9851 0 0);
@@ -122,6 +130,8 @@
  * the shadow aliases, which is why they are not repeated below.
  */
 .dark {
+  color-scheme: dark;
+
   --surface-sunken: oklch(0.24 0.0127 258.3724);
   --surface-base: oklch(0.2925 0.0157 264.2965);
   --surface-raised: oklch(0.325 0.011 260);

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { I18nextProvider } from 'react-i18next'
+import { I18nextProvider, useTranslation } from 'react-i18next'
+import { Loader2 } from 'lucide-react'
 import NotebookLayout from './components/notebook/NotebookLayout'
 import NotebookListPage from './components/pages/NotebookListPage'
 import OnboardingPage from './components/pages/OnboardingPage'
@@ -18,6 +19,7 @@ import { initPlatform } from './lib/platform'
 import i18n from './i18n'
 
 function App(): React.JSX.Element {
+  const { t } = useTranslation('common')
   const initTheme = useThemeStore((state) => state.initTheme)
   const loadNotebooks = useNotebookStore((state) => state.loadNotebooks)
   const { language, initLanguage } = useI18nStore()
@@ -76,8 +78,9 @@ function App(): React.JSX.Element {
   // 如果正在加载引导状态，显示加载中
   if (onboardingLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-surface-base">
-        <div className="text-foreground">Loading...</div>
+      <div className="flex min-h-screen items-center justify-center gap-2 bg-surface-base text-sm text-muted-foreground">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span>{t('loading')}</span>
       </div>
     )
   }

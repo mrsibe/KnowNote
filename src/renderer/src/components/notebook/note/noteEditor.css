@@ -111,7 +111,7 @@
 }
 
 .ProseMirror blockquote {
-  border-left: 3px solid var(--border);
+  border-left: 2px solid var(--border);
   padding-left: 1rem;
   margin: 0.75rem 0;
   color: var(--muted-foreground);

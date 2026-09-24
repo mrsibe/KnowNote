@@ -6,7 +6,8 @@ import { useUIStore } from '../../store/uiStore'
 import { ReactElement, useState } from 'react'
 import { Button } from '../ui/button'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
-import { isMac, isLinux, isWindows } from '../../lib/platform'
+import { isMac, isLinux } from '../../lib/platform'
+import { WINDOW_CONTROLS_WIDTH } from '../../../../shared/utils/windowChrome'
 
 interface TopNavigationBarProps {
   onCreateClick: () => void
@@ -78,6 +79,10 @@ export default function TopNavigationBar({
       className="h-11 shrink-0 flex items-center justify-between px-2 gap-0.5"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
+      {/*
+        `h-11` is 44px and must stay equal to TITLE_BAR_HEIGHT in windowChrome.ts,
+        which is the height the OS is asked to draw the window controls at.
+      */}
       {/* macOS 左侧空白区域（留给窗口控制按钮） */}
       {isMac() && <div className="w-20"></div>}
 
@@ -166,8 +171,15 @@ export default function TopNavigationBar({
         </Button>
       )}
 
-      {/* Windows 右侧空白区域（留给窗口控制按钮） */}
-      {isWindows() && <div className="w-32"></div>}
+      {/*
+        Windows/Linux reserve room for the OS-drawn window controls so the tab
+        strip and the settings button cannot slide underneath them. The width is
+        the real caption-button footprint, not a round number: the old `w-32`
+        (128px) was 10px short of the 138px the three buttons occupy.
+      */}
+      {!isMac() && (
+        <div className="shrink-0" style={{ width: WINDOW_CONTROLS_WIDTH }} aria-hidden="true" />
+      )}
     </div>
   )
 }
