@@ -2,10 +2,11 @@
 
 # KnowNote
 
-> 本地优先的开源 Google NotebookLM 替代方案
-> 为希望拥有私有 LLM、无需 Docker 和完全掌控的学习者和开发者而构建。
+**本地优先的研究工作台。**
 
-**将您的文档转换为智能的、对话式的知识库**
+### 读你的文档。信每一个回答。
+
+桌面应用 · 本地 RAG · 自带模型 · 开源
 
 [![GitHub release](https://img.shields.io/github/v/release/MrSibe/KnowNote)](https://github.com/MrSibe/KnowNote/releases)
 [![GitHub stars](https://img.shields.io/github/stars/MrSibe/KnowNote)](https://github.com/MrSibe/KnowNote/stargazers)
@@ -18,50 +19,11 @@
 
 ---
 
-## 为什么选择 KnowNote？
+KnowNote 把你自己的文档变成可以提问的知识库，并让每个回答都带上它所依据的原文片段。
 
-我非常喜欢 **Google NotebookLM** 背后的理念：
-上传文档、构建上下文，并使用 LLM 进行推理。
+它是一款桌面应用，而不是一套自托管服务：不需要 Docker，不需要服务器，也不需要账号。解析、切分、嵌入和向量检索都在应用进程内完成，唯一离开这台机器的，是你发送到所配置模型端点的那一次请求。如果那个端点就是本地服务，那就什么都不会离开。
 
-但我希望它能提供一些目前没有的功能：
-
-- 使用我自己的**私有或自托管的 LLM API**
-- 保持**所有数据本地化**，无需依赖云端
-- **无需 Docker 或复杂部署**即可试用工具
-
-在探索 GitHub 时，我发现了许多令人印象深刻的"开放笔记本"项目。
-它们功能强大且设计精良——但几乎所有项目都依赖 Docker。
-对于初学者和非后端用户来说，仅这一点就可能成为致命的障碍。
-
-所以我构建了 **KnowNote**：
-一个简单的基于 Electron 的桌面应用，将 NotebookLM 风格的工作流程
-带入**本地优先、无需 Docker 的环境**。
-
-这是我的**第一个开源项目**。
-它仍处于早期阶段，但核心理念已经实现——我很高兴能分享它并向社区学习。
-
----
-
-## KnowNote 目前能做什么
-
-- 📚 从文档和笔记构建本地知识库
-- 💬 使用 LLM 对内容进行聊天、总结和推理
-- 🔌 自带 API：任何兼容 OpenAI、Anthropic 或 Google 协议的端点，或本地部署
-- 🔍 基于 RAG 的检索，具有精确的来源追溯能力
-- 🖥️ 使用 Electron 构建的桌面应用——无需 Docker，无需服务器设置
-
----
-
-## 这是为谁设计的？
-
-如果您符合以下情况，KnowNote 适合您：
-
-- 您喜欢 NotebookLM 但想要更多控制权
-- 您更喜欢使用私有或自托管的 LLM API
-- 您不想仅为尝试一个想法就启动 Docker
-- 您想要一个用于学习和研究的简单桌面应用
-
----
+**完整说明在官网：[knownote.pages.dev](https://knownote.pages.dev)** —— 机制、边界，以及与 NotebookLM、AnythingLLM 的诚实对比。中文页面在 [knownote.pages.dev/zh](https://knownote.pages.dev/zh/)。
 
 ## 预览
 
@@ -70,76 +32,22 @@
   <p><i>三栏布局：知识库 · AI 问答 · 笔记输出</i></p>
 </div>
 
----
+## 它能做什么
 
-## 主要特性
+- **本地检索（RAG）。** 导入 PDF、Word、PowerPoint 和网页。文本被切成片段，由在进程内运行的模型完成嵌入，所以断网时检索依然可用。
+- **可追溯的回答。** 每个回答都保留它依据的片段，以及每个片段在抽取文本中的位置 —— 你可以核对回答到底基于什么，而不是只能凭信。
+- **自带模型。** 任何兼容 OpenAI、Anthropic 或 Google 协议的端点，或 Ollama 这类本地服务。没有内置对话模型，也没有账号。
+- **笔记与思维导图。** 把你的结论作为结构化笔记保存在资料旁边，也可以把一本笔记本转成思维导图。
+- **无需部署。** 下载、打开、开始阅读。嵌入模型只下载一次，之后都在你的机器上运行。
 
-### 📚 文档管理
+## 还没有的部分
 
-- PDF、Word (.docx)、PowerPoint (.pptx) 和网页
-- 自动结构解析和内容提取
-- 使用 SQLite 的快速本地存储
+写出来，是因为不说的话，你就只能在安装之后才发现。
 
-### 🤖 AI 驱动的问答
-
-- 检索增强生成（RAG）
-- 任何兼容 OpenAI / Anthropic / Google 协议的端点，或本地模型
-- 带有精确来源引用的答案
-
-### 🔒 本地优先设计
-
-- 所有数据本地存储
-- 离线友好（LLM API 可选）
-- 完全控制您的知识资产
-
-### 🔍 向量搜索
-
-- 使用 sqlite-vec 的语义搜索
-- 快速准确的检索
-
-### ⚡ 轻量级且跨平台
-
-- 基于 Electron 的桌面应用
-- 支持 Windows 和 macOS
-
----
-
-## 项目状态
-
-KnowNote 是一个早期阶段的项目。
-某些部分仍然粗糙，但基础已经到位。
-
-我分享它主要是为了：
-
-- 从实际使用中学习
-- 改进学习和研究工作流程
-- 探索更好的知识可视化和检索方式
-
-非常欢迎反馈和建议。
-
----
-
-## 路线图
-
-### ✅ 已完成
-
-- 支持任意兼容端点的 AI LLM 对话（本地或远程）
-- 结构化笔记生成
-- 一键生成思维导图
-- 基于 RAG 的文档检索
-- 多格式文档导入（PDF / Word / PPT / 网页）
-
-### 🚧 开发中
-
-- 音频上传和转录
-- 从文档生成测验
-- 从笔记一键生成 PPT
-
-### 📋 计划中
-
-更多想法正在筹备中——欢迎在 Issues 中提出功能建议。
-
----
+- 音频上传与转录、测验生成、幻灯片生成仍在开发中，不在任何已发布的版本里。
+- 没有 Linux 构建，macOS 构建也只有 Apple 芯片版本。
+- 安装包未签名、未公证 —— 见下面的安装步骤。
+- 没有账号、没有同步、没有协作，也没有遥测：KnowNote 是单用户桌面工具。
 
 ## 快速开始
 
@@ -173,7 +81,7 @@ KnowNote 是一个早期阶段的项目。
 
 #### 首次启动
 
-应用默认没有任何模型配置：先在 **设置** 的 **Models** 中添加至少一个连接（OpenAI / Anthropic / Google 兼容端点，或 Ollama 等本地服务），然后才能开始对话。笔记本、笔记和嵌入数据全部保存在本地。
+应用默认没有任何模型配置：先在 **设置** 的 **Models** 中添加至少一个连接（OpenAI / Anthropic / Google 兼容端点，或 Ollama 等本地服务），然后就可以开始提问。笔记本、笔记和嵌入数据全部保存在本地。
 
 ### 开发
 
@@ -184,17 +92,18 @@ npm install
 npm run dev
 ```
 
----
+完整的命令列表、CI 使用的 Node 版本，以及提交 PR 前必须通过的检查，都在 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-## 技术栈
+## 架构
 
-Electron · React · TypeScript · Vite · TailwindCSS
-SQLite · sqlite-vec · Drizzle ORM
-pdfjs-dist · mammoth · officeparser · Tiptap
+这里是简版。官网上有更详细的[本地 RAG](https://knownote.pages.dev/zh/features/local-rag/) 和[引用机制](https://knownote.pages.dev/zh/features/citations/)说明，界面部分见 [DESIGN.md](DESIGN.md)。
 
----
-
-## 项目结构
+- **外壳** —— Electron + React + TypeScript + TailwindCSS，由 electron-vite 打包。笔记编辑器使用 Tiptap。
+- **解析** —— `pdfjs-dist`、`mammoth`、`officeparser`、`turndown`。每种格式都保留它自带的结构：页面边界、标题、幻灯片。
+- **切分** —— 片段约 500 字符，重叠约 50 字符。每个片段记录它在抽取文本中的起止偏移，这正是引用能指向片段而不是文件的原因。
+- **嵌入** —— `Xenova/multilingual-e5-small`，通过 ONNX 在 Electron 主进程内运行。384 维、`q8`、版本锁定，并且关闭了远程模型加载。按需下载后缓存在磁盘。
+- **存储** —— SQLite + `sqlite-vec`，通过 Drizzle ORM。每本笔记本有自己的向量表，携带自己的宽度，所以来自不同嵌入空间的向量永远不会被比较。
+- **模型** —— 对话模型由你配置的端点提供，不属于应用本身。
 
 ```plaintext
 KnowNote/
@@ -211,36 +120,20 @@ KnowNote/
 └── out/                   # 构建输出
 ```
 
----
+## 参与贡献
 
-## 反馈与贡献
-
-欢迎提出 Issues、进行讨论和提交 Pull Request。
-
-如果您对以下方面有想法：
-
-- 学习工作流程
-- 知识可视化
-- 模型连接 / API 协议抽象
-
-我很乐意听取。
-
----
+欢迎提出 Issue、参与讨论和提交 Pull Request。如果你对学习工作流程、知识可视化，或模型连接层有想法，尤其欢迎。开始之前请先看 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 许可证
 
-本项目采用 **GPL-3.0 许可证**。
-
----
+GPL-3.0，见 [LICENSE](LICENSE)。
 
 ## 致谢
 
-- Google NotebookLM —— 灵感来源
+- Google NotebookLM —— 工作流上的灵感来源
 - Electron —— 跨平台桌面框架
 - React —— UI 框架
-- SQLite & sqlite-vec —— 本地存储和向量检索
-
----
+- SQLite & sqlite-vec —— 本地存储与向量检索
 
 ## Star History
 
@@ -254,8 +147,7 @@ KnowNote/
 
 ---
 
-如果这个项目与您产生共鸣，欢迎试用、点赞或留下反馈。
-感谢您的关注 🙏
+如果这个项目与您产生共鸣，欢迎试用、点赞或留下反馈。感谢您的关注 🙏
 
 <div align="center">
   <p>由 <a href="https://github.com/MrSibe">@MrSibe</a> 用 ❤️ 构建</p>

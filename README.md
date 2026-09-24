@@ -2,10 +2,11 @@
 
 # KnowNote
 
-> A local-first, open-source alternative to Google NotebookLM  
-> Built for learners and developers who want private LLMs, no Docker, and full control.
+**A local-first research workspace.**
 
-**Transform your documents into an intelligent, conversational knowledge base**
+### Research your documents. Trust every answer.
+
+Desktop · Local RAG · Bring your own model · Open source
 
 [![GitHub release](https://img.shields.io/github/v/release/MrSibe/KnowNote)](https://github.com/MrSibe/KnowNote/releases)
 [![GitHub stars](https://img.shields.io/github/stars/MrSibe/KnowNote)](https://github.com/MrSibe/KnowNote/stargazers)
@@ -18,134 +19,59 @@
 
 ---
 
-## Why KnowNote?
+KnowNote turns your own documents into a knowledge base you can question, and
+answers from those documents with a reference back to the passage the answer came
+from.
 
-I really like the idea behind **Google NotebookLM**:
-upload documents, build context, and reason over them with LLMs.
+It is a desktop application rather than a self-hosted stack: no Docker, no
+server, no account. Parsing, splitting, embedding and vector search all run
+inside the app, and the only thing that leaves your machine is the request you
+send to the model endpoint you configured. If that endpoint is a local server,
+nothing leaves at all.
 
-But I wanted a few things it doesn’t give me:
-
-- Using my own **private or self-managed LLM APIs**
-- Keeping **all data local**, without cloud lock-in
-- Trying the tool **without Docker or complex deployment**
-
-While exploring GitHub, I found many impressive “Open Notebook” projects.
-They are powerful and well-designed — but almost all of them rely on Docker.
-For beginners and non-backend users, that alone can be a deal-breaker.
-
-So I built **KnowNote**:  
-a simple Electron-based desktop app that brings NotebookLM-style workflows
-to a **local-first, Docker-free environment**.
-
-This is my **first open-source project**.  
-It’s still early, but the core idea works — and I’m excited to share it and learn from the community.
-
----
-
-## What KnowNote does (so far)
-
-- 📚 Build a local knowledge base from documents and notes
-- 💬 Chat, summarize, and reason with your content using LLMs
-- 🔌 Bring your own API: any OpenAI-, Anthropic- or Google-compatible endpoint, or a local server
-- 🔍 RAG-powered retrieval with precise source traceability
-- 🖥️ Desktop app built with Electron — no Docker, no server setup
-
----
-
-## Who is this for?
-
-KnowNote is for you if:
-
-- You like NotebookLM but want more control
-- You prefer using private or self-hosted LLM APIs
-- You don’t want to spin up Docker just to try an idea
-- You want a simple desktop app for learning and research
-
----
+**The website is the full story: [knownote.pages.dev](https://knownote.pages.dev)** —
+the mechanism, the limits, and an honest comparison with NotebookLM and
+AnythingLLM.
 
 ## Preview
 
 <div align="center">
-  <img src="./.github/images/screenshot-main.png" alt="KnowNote Main Interface" width="800">
-  <p><i>Three-column layout: Knowledge Library · AI Q&A · Note Output</i></p>
+  <img src="./.github/images/screenshot-main.png" alt="KnowNote main interface" width="800">
+  <p><i>Three-column layout: Knowledge Library · AI Q&amp;A · Note Output</i></p>
 </div>
 
----
+## What it does
 
-## Key Features
+- **Local retrieval (RAG).** Import PDF, Word, PowerPoint and web pages. Text is
+  split into passages and embedded by a model that runs in-process, so retrieval
+  keeps working with the network off.
+- **Traceable answers.** Every answer keeps the passages it was built from, along
+  with where each passage sat in the extracted text — so you can inspect what the
+  answer was actually based on instead of taking it on faith.
+- **Bring your own model.** Any OpenAI-, Anthropic- or Google-compatible endpoint,
+  or a local server such as Ollama. No bundled chat model and no account.
+- **Notes and mind maps.** Save what you concluded as structured notes beside the
+  sources, and turn a notebook into a mind map.
+- **No deployment.** Download, open, start reading. The embedder downloads once
+  and then runs on your machine.
 
-### 📚 Document Management
+## What is not here yet
 
-- PDF, Word (.docx), PowerPoint (.pptx), and web pages
-- Automatic structure parsing and content extraction
-- Fast local storage with SQLite
+Written down because the alternative is that you find out after installing.
 
-### 🤖 AI-Powered Q&A
+- Audio upload and transcription, quiz generation and slide generation are in
+  development. They are not in any release.
+- There is no Linux build, and the macOS build is Apple Silicon only.
+- Builds are unsigned and not notarised — see the install steps below.
+- No accounts, no sync, no collaboration and no telemetry: KnowNote is a
+  single-user desktop tool.
 
-- Retrieval-Augmented Generation (RAG)
-- Any OpenAI / Anthropic / Google-compatible endpoint, or local models
-- Answers with precise source references
-
-### 🔒 Local-First by Design
-
-- All data stored locally
-- Offline-friendly (LLM APIs optional)
-- Full control over your knowledge assets
-
-### 🔍 Vector Search
-
-- Semantic search with sqlite-vec
-- Fast and accurate retrieval
-
-### ⚡ Lightweight & Cross-Platform
-
-- Electron-based desktop app
-- Windows and macOS support
-
----
-
-## Project Status
-
-KnowNote is an early-stage project.  
-Some parts are still rough, but the foundation is in place.
-
-I’m sharing it mainly to:
-
-- learn from real usage
-- improve learning and research workflows
-- explore better knowledge visualization and retrieval
-
-Feedback and suggestions are very welcome.
-
----
-
-## Roadmap
-
-### ✅ Completed
-
-- AI LLM conversation with any compatible endpoint, local or remote
-- Structured note generation
-- One-click mind map generation
-- RAG-based document retrieval
-- Multi-format document import (PDF / Word / PPT / Web)
-
-### 🚧 In Development
-
-- Audio upload and transcription
-- Quiz generation from documents
-- One-click PPT generation from notes
-
-### 📋 Planned
-
-More ideas are in the pipeline — feel free to suggest features in Issues.
-
----
-
-## Quick Start
+## Quick start
 
 ### Install
 
-Download the build for your platform from [GitHub Releases](https://github.com/MrSibe/KnowNote/releases/latest):
+Download the build for your platform from
+[GitHub Releases](https://github.com/MrSibe/KnowNote/releases/latest):
 
 - **Windows**: `knownote-{version}-setup.exe`
 - **macOS (Apple Silicon)**: `knownote-{version}-arm64.dmg`
@@ -181,8 +107,8 @@ If SmartScreen shows _"Windows protected your PC"_, choose **More info** →
 
 Nothing is configured out of the box: open **Settings**, add at least one model
 connection under **Models** (any OpenAI-, Anthropic- or Google-compatible
-endpoint, or a local server such as Ollama), then start chatting. Notebooks,
-notes and embeddings all stay on your machine.
+endpoint, or a local server such as Ollama), then start asking questions.
+Notebooks, notes and embeddings all stay on your machine.
 
 ### Development
 
@@ -193,17 +119,31 @@ npm install
 npm run dev
 ```
 
----
+[CONTRIBUTING.md](CONTRIBUTING.md) has the full command list, the Node version CI
+uses, and the checks that are gates before a pull request.
 
-## Tech Stack
+## Architecture
 
-Electron · React · TypeScript · Vite · TailwindCSS
-SQLite · sqlite-vec · Drizzle ORM
-pdfjs-dist · mammoth · officeparser · Tiptap
+A short version. The website goes further on
+[local RAG](https://knownote.pages.dev/features/local-rag) and
+[citations](https://knownote.pages.dev/features/citations), and
+[DESIGN.md](DESIGN.md) covers the interface.
 
----
-
-## Project Structure
+- **Shell** — Electron with React, TypeScript and TailwindCSS, bundled by
+  electron-vite. Tiptap for the note editor.
+- **Parsing** — `pdfjs-dist`, `mammoth`, `officeparser` and `turndown`. Each
+  format keeps the structure it has: page boundaries, headings, slides.
+- **Splitting** — passages of roughly 500 characters with about 50 characters of
+  overlap. Each passage records its start and end offset in the extracted text,
+  and that is what lets a citation point at a passage rather than a file.
+- **Embedding** — `Xenova/multilingual-e5-small` through ONNX, running in the
+  Electron main process. 384 dimensions, `q8`, the revision pinned, and remote
+  model loading disabled. Downloaded on demand and cached on disk.
+- **Storage** — SQLite with `sqlite-vec`, through Drizzle ORM. Each notebook gets
+  its own vector table carrying its own width, so vectors produced by different
+  embedding spaces are never compared.
+- **Models** — the chat model is whatever endpoint you configure; it is not part
+  of the application.
 
 ```plaintext
 KnowNote/
@@ -220,36 +160,22 @@ KnowNote/
 └── out/                   # Build output
 ```
 
----
+## Contributing
 
-## Feedback & Contributions
-
-Issues, discussions, and pull requests are all welcome.
-
-If you have ideas about:
-
-- learning workflows
-- knowledge visualization
-- model connection / API protocol abstraction
-
-I’d love to hear them.
-
----
+Issues, discussions and pull requests are all welcome. If you have ideas about
+learning workflows, knowledge visualization, or the model-connection layer, they
+are especially useful. See [CONTRIBUTING.md](CONTRIBUTING.md) before you start.
 
 ## License
 
-This project is licensed under the **GPL-3.0 License**.
-
----
+GPL-3.0. See [LICENSE](LICENSE).
 
 ## Acknowledgments
 
-- Google NotebookLM — inspiration
+- Google NotebookLM — inspiration for the workflow
 - Electron — cross-platform desktop framework
 - React — UI framework
 - SQLite & sqlite-vec — local storage and vector retrieval
-
----
 
 ## Star History
 
