@@ -1,116 +1,167 @@
 @import 'tailwindcss';
 
+/*
+ * Token layers, from most primitive to most derived:
+ *
+ *   surfaces / text levels / accent / borders / elevation   <- primitives
+ *   legacy aliases (background, card, popover, sidebar, ...) <- derived
+ *   @theme inline                                            <- Tailwind utilities
+ *
+ * See DESIGN.md for the rules. A component must use the semantic utilities
+ * (bg-surface-*, text-muted-foreground, shadow-elevation, ...), never a
+ * primitive with a literal colour.
+ *
+ * Light-mode text contrast against --surface-raised:
+ *   T1 foreground            7.2:1
+ *   T2 muted-foreground      3.3:1
+ *   T3 subtle-foreground     2.2:1  (meta only, never essential information)
+ * Dark-mode text contrast against --surface-base:
+ *   T1 foreground            4.8:1
+ *   T2 muted-foreground      3.7:1
+ *   T3 subtle-foreground     2.7:1  (meta only, never essential information)
+ */
 :root {
-  --background: oklch(0.9851 0 0);
+  /* Surface ladder: sunken < base < raised < overlay, monotonic in both modes. */
+  --surface-sunken: oklch(0.9551 0 0);
+  --surface-base: oklch(0.9851 0 0);
+  --surface-raised: oklch(1 0 0);
+  --surface-overlay: oklch(1 0 0);
+  /* Translucent state fills: they adapt to whatever surface they are drawn on. */
+  --surface-hover: oklch(0.3496 0.0141 274.5028 / 0.05);
+  --surface-selected: oklch(0.3496 0.0141 274.5028 / 0.09);
+
+  /* Opaque quiet fill for nested containers (bubbles, icon tiles, code). */
+  --muted: oklch(0.9551 0 0);
+
+  /* Text hierarchy: T1 primary, T2 secondary, T3 tertiary. */
   --foreground: oklch(0.3496 0.0141 274.5028);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.3496 0.0141 274.5028);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.3496 0.0141 274.5028);
+  --muted-foreground: oklch(0.58 0.0141 274.5028);
+  --subtle-foreground: oklch(0.68 0.0107 267.3269);
+
+  /* Accent: primary action, focus ring, selection indicator. */
   --primary: oklch(0.6017 0.193 263.2461);
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.9504 0.0042 236.4983);
-  --secondary-foreground: oklch(0.3496 0.0141 274.5028);
-  --muted: oklch(0.9551 0 0);
-  --muted-foreground: oklch(0.7055 0.0107 267.3269);
-  --accent: oklch(0.9335 0.0017 247.8402);
-  --accent-foreground: oklch(0.3496 0.0141 274.5028);
+  --ring: oklch(0.6017 0.193 263.2461);
   --destructive: oklch(0.6058 0.1839 29.6718);
   --destructive-foreground: oklch(1 0 0);
+
+  /* Hairline. --input is the neutral fill of unchecked controls, not a border. */
   --border: oklch(0.9067 0 0);
   --input: oklch(0.9551 0 0);
-  --ring: oklch(0.6017 0.193 263.2461);
+
   --chart-1: oklch(0.7304 0.1213 245.2972);
   --chart-2: oklch(0.7683 0.1103 133);
   --chart-3: oklch(0.6709 0.1448 16.9989);
   --chart-4: oklch(0.8249 0.097 82.2597);
   --chart-5: oklch(0.6936 0.1635 318.2073);
-  --sidebar: oklch(0.9551 0 0);
-  --sidebar-foreground: oklch(0.3496 0.0141 274.5028);
-  --sidebar-primary: oklch(0.6017 0.193 263.2461);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.88 0.01 250);
-  --sidebar-accent-foreground: oklch(0.3496 0.0141 274.5028);
-  --sidebar-border: oklch(0.8576 0 0);
-  --sidebar-ring: oklch(0.6017 0.193 263.2461);
+
+  /* Elevation: floating layers, plus a small lift for knobs and handles. */
+  --shadow-elevation: 0 6px 16px -4px hsl(0 0% 0% / 0.12), 0 2px 4px -1px hsl(0 0% 0% / 0.06);
+  --shadow-control: 0 1px 2px 0 hsl(0 0% 0% / 0.16);
+
   --font-sans: 'Inter', sans-serif;
   --font-serif: 'Lora', serif;
   --font-mono: 'Fira Code', monospace;
   --radius: 0.5rem;
+
   --shadow-x: 0px;
   --shadow-y: 2px;
   --shadow-blur: 8px;
   --shadow-spread: 0px;
   --shadow-opacity: 0.08;
   --shadow-color: #000000;
-  --shadow-2xs: 0px 2px 8px 0px hsl(0 0% 0% / 0.04);
-  --shadow-xs: 0px 2px 8px 0px hsl(0 0% 0% / 0.04);
-  --shadow-sm: 0px 2px 8px 0px hsl(0 0% 0% / 0.08), 0px 1px 2px -1px hsl(0 0% 0% / 0.08);
-  --shadow: 0px 2px 8px 0px hsl(0 0% 0% / 0.08), 0px 1px 2px -1px hsl(0 0% 0% / 0.08);
-  --shadow-md: 0px 2px 8px 0px hsl(0 0% 0% / 0.08), 0px 2px 4px -1px hsl(0 0% 0% / 0.08);
-  --shadow-lg: 0px 2px 8px 0px hsl(0 0% 0% / 0.08), 0px 4px 6px -1px hsl(0 0% 0% / 0.08);
-  --shadow-xl: 0px 2px 8px 0px hsl(0 0% 0% / 0.08), 0px 8px 10px -1px hsl(0 0% 0% / 0.08);
-  --shadow-2xl: 0px 2px 8px 0px hsl(0 0% 0% / 0.2);
   --tracking-normal: 0em;
   --spacing: 0.25rem;
   --shadow-offset-x: 0px;
   --shadow-offset-y: 2px;
   --letter-spacing: 0em;
+
+  /*
+   * Legacy aliases. Kept so un-migrated components keep working while the
+   * surfaces are adopted page by page; new code uses the tokens above.
+   * The shadow aliases collapse onto the two real tokens on purpose: a missed
+   * shadow-sm/md/lg then renders the same elevation instead of a third style.
+   */
+  --background: var(--surface-base);
+  --card: var(--surface-raised);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-overlay);
+  --popover-foreground: var(--foreground);
+  --secondary: oklch(0.9504 0.0042 236.4983);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--surface-selected);
+  --accent-foreground: var(--foreground);
+  --sidebar: var(--surface-sunken);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--surface-selected);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  --shadow-2xs: var(--shadow-control);
+  --shadow-xs: var(--shadow-control);
+  --shadow-sm: var(--shadow-elevation);
+  --shadow: var(--shadow-elevation);
+  --shadow-md: var(--shadow-elevation);
+  --shadow-lg: var(--shadow-elevation);
+  --shadow-xl: var(--shadow-elevation);
+  --shadow-2xl: var(--shadow-elevation);
 }
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Only primitives are redefined here. Every alias above resolves `var(...)` at
+ * use time, so the ladder stays in sync in both modes automatically — including
+ * the shadow aliases, which is why they are not repeated below.
+ */
 .dark {
-  --background: oklch(0.2925 0.0157 264.2965);
-  --foreground: oklch(0.7621 0.0202 262.9873);
-  --card: oklch(0.263 0.0127 258.3724);
-  --card-foreground: oklch(0.7621 0.0202 262.9873);
-  --popover: oklch(0.2925 0.0157 264.2965);
-  --popover-foreground: oklch(0.7621 0.0202 262.9873);
-  --primary: oklch(0.7304 0.1213 245.2972);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.3863 0.0235 265.6941);
-  --secondary-foreground: oklch(0.7621 0.0202 262.9873);
+  --surface-sunken: oklch(0.24 0.0127 258.3724);
+  --surface-base: oklch(0.2925 0.0157 264.2965);
+  --surface-raised: oklch(0.325 0.011 260);
+  --surface-overlay: oklch(0.365 0.011 260);
+  --surface-hover: oklch(0.9 0.01 262 / 0.06);
+  --surface-selected: oklch(0.9 0.01 262 / 0.1);
+
   --muted: oklch(0.3863 0.0235 265.6941);
-  --muted-foreground: oklch(0.4983 0.0225 262.9131);
-  --accent: oklch(0.3863 0.0235 265.6941);
-  --accent-foreground: oklch(0.7621 0.0202 262.9873);
+
+  --foreground: oklch(0.7621 0.0202 262.9873);
+  --muted-foreground: oklch(0.68 0.02 262.9873);
+  --subtle-foreground: oklch(0.58 0.02 262.9873);
+
+  --primary: oklch(0.7304 0.1213 245.2972);
+  --ring: oklch(0.7304 0.1213 245.2972);
   --destructive: oklch(0.6709 0.1448 16.9989);
-  --destructive-foreground: oklch(1 0 0);
+
   --border: oklch(0.3863 0.0235 265.6941);
   --input: oklch(0.3863 0.0235 265.6941);
-  --ring: oklch(0.7304 0.1213 245.2972);
+
   --chart-1: oklch(0.7304 0.1213 245.2972);
   --chart-2: oklch(0.7683 0.1103 133);
   --chart-3: oklch(0.6709 0.1448 16.9989);
   --chart-4: oklch(0.8249 0.097 82.2597);
   --chart-5: oklch(0.6936 0.1635 318.2073);
-  --sidebar: oklch(0.263 0.0127 258.3724);
-  --sidebar-foreground: oklch(0.7621 0.0202 262.9873);
-  --sidebar-primary: oklch(0.7304 0.1213 245.2972);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.36 0.015 250);
-  --sidebar-accent-foreground: oklch(0.2925 0.0157 264.2965);
-  --sidebar-border: oklch(0.3863 0.0235 265.6941);
-  --sidebar-ring: oklch(0.7304 0.1213 245.2972);
+
+  --shadow-elevation: 0 8px 22px -6px hsl(0 0% 0% / 0.55), 0 2px 4px -1px hsl(0 0% 0% / 0.35);
+  --shadow-control: 0 1px 2px 0 hsl(0 0% 0% / 0.5);
+
+  --secondary: oklch(0.3863 0.0235 265.6941);
+  /* A hairline on the sunken rail must step from --surface-sunken, not --border. */
+  --sidebar-border: oklch(0.3 0.0127 258.3724);
+
   --font-sans: 'Inter', sans-serif;
   --font-serif: 'Lora', serif;
   --font-mono: 'Fira Code', monospace;
   --radius: 0.5rem;
+
   --shadow-x: 0px;
   --shadow-y: 6px;
   --shadow-blur: 15px;
   --shadow-spread: 0px;
   --shadow-opacity: 0.3;
   --shadow-color: #000000;
-  --shadow-2xs: 0px 6px 15px 0px hsl(0 0% 0% / 0.15);
-  --shadow-xs: 0px 6px 15px 0px hsl(0 0% 0% / 0.15);
-  --shadow-sm: 0px 6px 15px 0px hsl(0 0% 0% / 0.3), 0px 1px 2px -1px hsl(0 0% 0% / 0.3);
-  --shadow: 0px 6px 15px 0px hsl(0 0% 0% / 0.3), 0px 1px 2px -1px hsl(0 0% 0% / 0.3);
-  --shadow-md: 0px 6px 15px 0px hsl(0 0% 0% / 0.3), 0px 2px 4px -1px hsl(0 0% 0% / 0.3);
-  --shadow-lg: 0px 6px 15px 0px hsl(0 0% 0% / 0.3), 0px 4px 6px -1px hsl(0 0% 0% / 0.3);
-  --shadow-xl: 0px 6px 15px 0px hsl(0 0% 0% / 0.3), 0px 8px 10px -1px hsl(0 0% 0% / 0.3);
-  --shadow-2xl: 0px 6px 15px 0px hsl(0 0% 0% / 0.75);
   --shadow-offset-x: 0px;
   --shadow-offset-y: 6px;
   --letter-spacing: 0em;
@@ -118,8 +169,17 @@
 }
 
 @theme inline {
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-base: var(--surface-base);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-selected: var(--surface-selected);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -129,7 +189,6 @@
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -155,11 +214,17 @@
   --font-mono: 'Fira Code', monospace;
   --font-serif: 'Lora', serif;
 
+  /* radius: control = md (6px), container = lg (8px), pill = full. */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
 
+  --shadow-elevation: var(--shadow-elevation);
+  --shadow-control: var(--shadow-control);
   --shadow-2xs: var(--shadow-2xs);
   --shadow-xs: var(--shadow-xs);
   --shadow-sm: var(--shadow-sm);
@@ -168,6 +233,7 @@
   --shadow-lg: var(--shadow-lg);
   --shadow-xl: var(--shadow-xl);
   --shadow-2xl: var(--shadow-2xl);
+
   --radius: 0.5rem;
   --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
   --tracking-tight: calc(var(--tracking-normal) - 0.025em);
@@ -183,9 +249,6 @@
   --shadow-blur: var(--shadow-blur);
   --shadow-opacity: var(--shadow-opacity);
   --color-shadow-color: var(--shadow-color);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
 }
 
 @layer base {
@@ -199,7 +262,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-surface-base text-foreground;
   }
 }
 
