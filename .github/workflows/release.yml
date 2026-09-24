@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*.*.*'
 
+# Least privilege: the jobs only need to create/upload/edit GitHub releases.
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ${{ matrix.os }}
@@ -30,6 +34,39 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      # Fail BEFORE anything is published if the entitlement that lets us load
+      # third-party native modules is missing from the plist.
+      - name: Verify macOS entitlements (pre-build gate)
+        if: matrix.os == 'macos-latest'
+        run: |
+          python3 - <<'PY'
+          import plistlib, sys
+
+          path = 'build/entitlements.mac.plist'
+          try:
+              ents = plistlib.load(open(path, 'rb'))
+          except Exception as exc:
+              print(f'::error::{path} is not a readable plist: {exc}')
+              sys.exit(1)
+
+          # keep-sorted start
+          required = [
+              'com.apple.security.cs.allow-jit',
+              'com.apple.security.cs.allow-unsigned-executable-memory',
+              'com.apple.security.cs.disable-library-validation',
+          ]
+          # keep-sorted end
+
+          missing = [k for k in required if ents.get(k) is not True]
+          if missing:
+              print('::error::' + path + ' is missing required entitlements: ' + ', '.join(missing))
+              print('::error::Without disable-library-validation the app crashes at launch')
+              print('::error::with "mapping process and mapped file have different Team IDs".')
+              sys.exit(1)
+
+          print('OK - entitlements present:', ', '.join(sorted(ents)))
+          PY
+
       - name: Build application
         run: pnpm build
 
@@ -47,6 +84,9 @@ jobs:
             security unlock-keychain -p actions build.keychain
             security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
             security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
+            security find-identity -v -p codesigning build.keychain
+          else
+            echo "::warning title=No Developer ID certificate::MACOS_CERTIFICATE is empty, so this build will be AD-HOC SIGNED and NOT notarized. It will not launch on other people's Macs until users run: sudo xattr -rd com.apple.quarantine /Applications/KnowNote.app"
           fi
 
       # Windows 代码签名（可选）
@@ -61,6 +101,8 @@ jobs:
           }
 
       # 构建和发布
+      # --arm64 is explicit so the produced architecture does not silently depend
+      # on whatever CPU the macos-latest runner happens to have.
       - name: Build & Release (macOS)
         if: matrix.os == 'macos-latest'
         env:
@@ -68,7 +110,84 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm build:mac --publish always
+        run: pnpm build:mac --arm64 --publish always
+
+      # Inspect the artifact we just shipped. This is the check that was missing
+      # when v1.2.0 went out ad-hoc signed, hardened-runtime, and unable to load
+      # better_sqlite3.node.
+      - name: Verify macOS artifact (signature, entitlements, native modules)
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -uo pipefail
+
+          APP=$(find dist -maxdepth 2 -type d -name 'KnowNote.app' | head -n1)
+          if [ -z "$APP" ]; then
+            echo "::error::no KnowNote.app was produced under dist/"
+            exit 1
+          fi
+          echo "Artifact: $APP"
+
+          echo "--- main binary signature ---"
+          codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Identifier|TeamIdentifier|Signature|flags' || true
+
+          TEAM=$(codesign -dv "$APP" 2>&1 | sed -n 's/^TeamIdentifier=//p')
+          case "$TEAM" in
+            ''|'not set')
+              IS_ADHOC=1
+              echo "::warning title=Ad-hoc signed macOS build::No Developer ID TeamIdentifier. Users must run: sudo xattr -rd com.apple.quarantine /Applications/KnowNote.app"
+              ;;
+            *)
+              IS_ADHOC=0
+              echo "Developer ID TeamIdentifier: $TEAM"
+              ;;
+          esac
+
+          echo "--- entitlements actually embedded in the shipped binary ---"
+          ENT=$(mktemp)
+          codesign -d --entitlements :- "$APP" > "$ENT" 2>/dev/null || true
+          cat "$ENT"
+          if ! grep -q 'disable-library-validation' "$ENT"; then
+            echo "::error::shipped app is missing com.apple.security.cs.disable-library-validation."
+            echo "::error::It will crash on launch when the main process loads better_sqlite3.node."
+            exit 1
+          fi
+
+          echo "--- native modules unpacked from the asar ---"
+          NATIVES=$(find "$APP/Contents/Resources/app.asar.unpacked" -type f \( -name '*.node' -o -name '*.dylib' \) 2>/dev/null)
+          if [ -z "$NATIVES" ]; then
+            echo "::error::no native modules found in app.asar.unpacked - asarUnpack is broken"
+            exit 1
+          fi
+          echo "$NATIVES" | while IFS= read -r f; do
+            printf '%s\n    -> ' "$f"
+            codesign -dv "$f" 2>&1 | grep -E 'TeamIdentifier|Signature' | tr '\n' ' ' || echo -n 'NO SIGNATURE'
+            echo
+          done
+
+          if ! echo "$NATIVES" | grep -q 'better_sqlite3.node'; then
+            echo "::error::better_sqlite3.node was not unpacked; the database will fail to open"
+            exit 1
+          fi
+
+          echo "--- consistency ---"
+          VERIFY_FAILED=0
+          codesign --verify --strict --verbose=2 "$APP" || VERIFY_FAILED=1
+          echo "$NATIVES" | while IFS= read -r f; do
+            codesign --verify --strict "$f" || echo "::warning::$f failed signature verification"
+          done
+
+          if [ "$VERIFY_FAILED" -eq 1 ]; then
+            if [ "$IS_ADHOC" -eq 0 ]; then
+              echo "::error::codesign --verify failed on a Developer ID signed bundle."
+              echo "::error::This build would be rejected on user machines."
+              exit 1
+            fi
+            echo "::warning title=Ad-hoc signature verify failed::codesign --verify --strict reported an inconsistency. The app may still launch; inspect the log above before publishing."
+          else
+            echo "signature verify: OK"
+          fi
+
+          echo "::notice title=macOS artifact verified::entitlements present, $(echo "$NATIVES" | wc -l | tr -d ' ') native module(s) unpacked and signed."
 
       - name: Build & Release (Windows)
         if: matrix.os == 'windows-latest'
@@ -76,3 +195,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm build:win --publish always
+
+  # electron-builder only creates a DRAFT release (see publish.releaseType in
+  # electron-builder.yml). It is promoted to public here, which happens only if
+  # every platform built and the macOS artifact verification passed. A broken
+  # package therefore never reaches users - it stays a draft.
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote draft release to public
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' | grep -qx true || {
+            echo "::error::no draft release found for $GITHUB_REF_NAME"; exit 1; }
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          echo "::notice title=Published::Released $GITHUB_REF_NAME"

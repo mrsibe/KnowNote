@@ -9,8 +9,13 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+# Native modules must live outside the asar so they can be loaded by dlopen()
+# AND so electron-builder signs them individually. Keep these patterns explicit:
+# if a native module stays inside app.asar it cannot be signed or loaded.
 asarUnpack:
   - resources/**
+  - '**/*.node'
+  - '**/*.dylib'
   - node_modules/better-sqlite3/**
   - node_modules/sqlite-vec/**
   - node_modules/sqlite-vec-*/**
@@ -26,15 +31,28 @@ nsis:
   createStartMenuShortcut: true
   deleteAppDataOnUninstall: false
 mac:
+  # Applied to the main binary; entitlementsInherit propagates the same set to
+  # the Helper (GPU/Renderer/Plugin) processes. Both must point at the same
+  # file, otherwise a helper can reject a library the main process accepted.
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  hardenedRuntime: true
+  # Do not let electron-builder run spctl during the build: an ad-hoc signed
+  # build always fails that assessment and would abort packaging.
+  gatekeeperAssess: false
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  # Notarization requires an Apple Developer ID (MACOS_CERTIFICATE +
+  # APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID secrets). Left off so
+  # unsigned/community builds still ship; see .github/workflows/release.yml.
   notarize: false
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  # ${arch} is required: without it an arm64 and an x64 build both produce
+  # `knownote-<version>.dmg` and silently clobber each other on the release.
+  artifactName: ${name}-${version}-${arch}.${ext}
 linux:
   target:
     - AppImage
@@ -45,10 +63,15 @@ linux:
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false
+# Published as a DRAFT: electron-builder uploads the artifacts, but the release
+# only becomes public after every platform built and the macOS artifact passed
+# the verification step in .github/workflows/release.yml.
 publish:
   provider: github
   owner: MrSibe
   repo: KnowNote
-  releaseType: release
-electronDownload:
-  mirror: https://npmmirror.com/mirrors/electron/
+  releaseType: draft
+# NOTE: no electronDownload.mirror on purpose. Pulling the Electron runtime
+# from a third-party mirror makes the shipped signature non-reproducible and
+# can mix differently-signed Electron binaries into the bundle. Developers who
+# need a mirror should set ELECTRON_MIRROR in their own environment instead.

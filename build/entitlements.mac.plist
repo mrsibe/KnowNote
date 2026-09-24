@@ -8,5 +8,15 @@
     <true/>
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
     <true/>
+    <!--
+      REQUIRED. The main process dlopen()s third-party prebuilt native modules
+      (better_sqlite3.node, vec0.dylib, skia.darwin-arm64.node) that are not
+      signed by the same team as this app. Hardened Runtime enforces that every
+      loaded library shares the process Team ID, so without this entitlement the
+      app aborts at launch with:
+        "mapping process and mapped file (non-platform) have different Team IDs"
+    -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
   </dict>
 </plist>
