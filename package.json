@@ -6,7 +6,6 @@
   "author": "MrSibe",
   "homepage": "https://github.com/MrSibe/KnowNote",
   "license": "GPL-3.0",
-  "packageManager": "pnpm@10.34.5",
   "repository": {
     "type": "git",
     "url": "https://github.com/MrSibe/KnowNote.git"
@@ -35,41 +34,36 @@
   },
   "//dependencies": [
     "ONLY packages that cannot be bundled belong here.",
-    "electron-vite treats every `dependencies` entry as external for main/preload,",
-    "so these must be present in app.asar at runtime - and electron-builder's pnpm",
-    "collector is what puts them there. Keeping this list tiny is the point: the",
-    "collector silently drops transitive dependencies, which is exactly how",
-    "`eventsource-parser`, `pako` and friends went missing from v1.2.1 and crashed",
-    "the app on every AI provider call.",
+    "electron-vite defaults build.externalizeDeps to true, so every `dependencies`",
+    "entry stays a runtime `require()` in out/main and out/preload. Those imports",
+    "must exist inside app.asar, and electron-builder's node-module collector is",
+    "what puts them there. Keeping this list tiny is the point.",
+    "",
+    "KnowNote uses npm, not pnpm, because that collector is built around npm's",
+    "node_modules layout. Under pnpm's virtual store it silently dropped transitive",
+    "dependencies (jsdom -> whatwg-url -> tr46, http-proxy-agent -> debug -> ms) and",
+    "v1.2.1 shipped an app.asar that crashed with MODULE_NOT_FOUND. Hand-listing",
+    "those transitives here was the old workaround; do not reintroduce it. Instead",
+    "keep this list minimal and rely on `allowMissingDependencies: false` in",
+    "electron-builder.yml, which fails the build if collection ever misses a",
+    "production dependency instead of shipping a broken app.",
     "",
     "1. better-sqlite3, sqlite-vec - native addons; rollup cannot inline .node or",
     "   .dylib. Also listed in asarUnpack so they stay loadable from disk.",
     "2. jsdom - rollup's commonjs plugin cannot parse a generated file inside its",
     "   cssstyle dependency (the source is valid JS, `node --check` accepts it), so",
-    "   jsdom cannot be bundled. Its subtree is therefore still exposed to the",
-    "   collector bug - this is the one to keep an eye on.",
+    "   jsdom cannot be bundled and its whole subtree has to be collected intact.",
     "3. @mixmark-io/domino - turndown calls require('@mixmark-io/domino') while its",
     "   module body runs, which rollup leaves as a runtime require. It has zero",
-    "   dependencies, so the collector handles it safely.",
+    "   dependencies, so collecting it is trivially safe.",
     "",
-    "Everything else lives in devDependencies and is bundled into out/main by rollup.",
-    "",
-    "The last block (ms, punycode, tr46, util-deprecate, wrappy) is a targeted",
-    "workaround, not a real dependency: they are leaf packages that electron-builder",
-    "drops while walking jsdom's subtree. Listing them here makes them root-level",
-    "entries of `pnpm list`, which the collector does handle. DELETE THEM once",
-    "electron-builder's PnpmNodeModulesCollector stops dropping transitive deps."
+    "Everything else lives in devDependencies and is bundled into out/main by rollup."
   ],
   "dependencies": {
     "@mixmark-io/domino": "^2.2.0",
     "better-sqlite3": "^12.6.2",
     "jsdom": "^27.4.0",
-    "ms": "^2.1.3",
-    "punycode": "^2.3.1",
-    "sqlite-vec": "0.1.7-alpha.2",
-    "tr46": "^6.0.0",
-    "util-deprecate": "^1.0.2",
-    "wrappy": "^1.0.2"
+    "sqlite-vec": "0.1.7-alpha.2"
   },
   "//devDependencies": [
     "Everything else, including packages the main process uses. electron-vite",
@@ -111,14 +105,12 @@
     "@tiptap/react": "^3.18.0",
     "@tiptap/starter-kit": "^3.18.0",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/dompurify": "^3.2.0",
     "@types/jsdom": "^27.0.0",
     "@types/lodash": "^4.17.23",
     "@types/mdast": "^4.0.4",
     "@types/node": "^22.19.7",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
-    "@types/react-router-dom": "^5.3.3",
     "@types/turndown": "^5.0.6",
     "@vitejs/plugin-react": "^5.1.2",
     "@xyflow/react": "^12.10.0",
@@ -132,7 +124,7 @@
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "electron": "^39.4.0",
-    "electron-builder": "^26.4.0",
+    "electron-builder": "^26.16.1",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.7.3",
     "electron-vite": "^5.0.0",
@@ -144,8 +136,6 @@
     "html-to-image": "1.11.11",
     "i18next": "^25.8.0",
     "i18next-browser-languagedetector": "^8.2.0",
-    "jsdom": "^27.4.0",
-    "jsdom": "^27.4.0",
     "katex": "^0.16.28",
     "lodash": "^4.17.23",
     "lucide-react": "^0.556.0",
@@ -153,7 +143,6 @@
     "nanoid": "^3.3.11",
     "next-themes": "^0.4.6",
     "officeparser": "^5.2.2",
-    "ollama-ai-provider": "^1.2.0",
     "ollama-ai-provider-v2": "^1.5.5",
     "pdfjs-dist": "^5.4.530",
     "postcss": "^8.5.6",
@@ -182,11 +171,29 @@
     "zod": "^4.3.6",
     "zustand": "^5.0.10"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3",
-      "electron",
-      "esbuild"
-    ]
+  "//overrides": [
+    "qwen-ai-provider@0.1.1 is an AI SDK v4 era provider: it pulls in",
+    "@ai-sdk/provider-utils@2 and declares `zod: ^3.25.49` as a peer, while the app",
+    "itself is on zod 4 (ollama-ai-provider-v2 and ai@5 require it). npm's strict",
+    "peer resolution therefore refuses to build a tree at all.",
+    "",
+    "pnpm did not error - it resolved qwen-ai-provider against the root zod 4 and",
+    "only logged a warning; the committed pnpm-lock.yaml had NO zod 3 in the tree",
+    "(qwen-ai-provider@0.1.1(zod@4.3.6), @ai-sdk/provider-utils@2.2.8(zod@4.3.6)).",
+    "The override below states that same fact explicitly so npm agrees. It does NOT",
+    "downgrade the app's zod: only qwen-ai-provider's peer edge is rewritten, and",
+    "the resulting shape (qwen-ai-provider -> provider-utils@2 -> root zod 4, with",
+    "no zod 3 anywhere) is the same one pnpm produced. Note that versions do drift:",
+    "regenerating the lockfile with npm resolves every `^` range to its latest",
+    "satisfying release.",
+    "",
+    "Delete this block when qwen-ai-provider is upgraded to an AI SDK v5 provider",
+    "or replaced - Qwen is OpenAI-compatible, so createOpenAICompatible (already a",
+    "dependency) would also remove it."
+  ],
+  "overrides": {
+    "qwen-ai-provider": {
+      "zod": "^4.3.6"
+    }
   }
 }

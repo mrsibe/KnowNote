@@ -155,8 +155,8 @@ Get the latest version from GitHub Releases:
 ```bash
 git clone https://github.com/MrSibe/KnowNote.git
 cd KnowNote
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
 
 ---
