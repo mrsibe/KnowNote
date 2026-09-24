@@ -6,6 +6,11 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import * as sqliteVec from 'sqlite-vec'
 import * as schema from './schema'
+import {
+  copyVectorsSql,
+  createVectorTableSql,
+  dropVectorTableSql
+} from '../vectorstore/vectorTableSql'
 
 let sqlite: Database.Database | null = null
 let db: ReturnType<typeof drizzle> | null = null
@@ -182,9 +187,131 @@ export function runMigrations() {
   }
 }
 
+// ==================== 向量表（每 notebook 一张） ====================
+//
+// vec0 表的宽度在创建时就固定(embedding MATCH 要求宽度一致),而换 embedding 模型
+// 往往就换了维度。所以向量表按 notebook 拆分,宽度记录在 vec_metadata 里 —— 它是维度
+// 的唯一权威来源。任何调用点都不能拿“猜”出来的默认维度去建表,更不能因为维度不一致
+// 就删表。
+
+/** 旧版本只有一张全局 vec_embeddings,宽度固定 1024(见 migrateLegacyVectorTable)。 */
+const LEGACY_VECTOR_DIMENSIONS = 1024
+
+/** 一个 notebook 的向量表和它的向量宽度。 */
+export interface NotebookVectorTable {
+  tableName: string
+  dimensions: number
+}
+
+function requireSqlite(): Database.Database {
+  if (!sqlite) {
+    throw new Error('[Database] Database not initialized. Call initDatabase() first.')
+  }
+  return sqlite
+}
+
 /**
- * 初始化向量存储表
- * 创建 sqlite-vec 的 vec0 虚拟表用于向量检索
+ * notebook id 转 vec0 表名。notebook id 是 `notebook_<timestamp>_<base36>`,只含
+ * 字母、数字和下划线,所以这个映射目前是恒等的;替换仍然保留,免得意外字符把表名
+ * 拼进 SQL。
+ */
+function notebookVectorTableName(notebookId: string): string {
+  return `vec_${notebookId.replace(/[^a-zA-Z0-9]/g, '_')}`
+}
+
+function readNotebookVectorTableRow(notebookId: string): NotebookVectorTable | undefined {
+  const row = requireSqlite()
+    .prepare('SELECT table_name, dimensions FROM vec_metadata WHERE notebook_id = ?')
+    .get(notebookId) as { table_name: string; dimensions: number } | undefined
+
+  return row ? { tableName: row.table_name, dimensions: row.dimensions } : undefined
+}
+
+/**
+ * 读取 notebook 的向量表信息。这个 notebook 还没有索引过向量时返回 undefined。
+ */
+export function getNotebookVectorTable(notebookId: string): NotebookVectorTable | undefined {
+  return readNotebookVectorTableRow(notebookId)
+}
+
+/**
+ * 为 notebook 建向量表。表已存在且宽度一致时幂等;宽度不一致时抛错而不是重建 ——
+ * 重建会丢掉全部向量,只能由索引链路显式调用 rebuildNotebookVectorTable()。
+ */
+export function createNotebookVectorTable(
+  notebookId: string,
+  dimensions: number
+): NotebookVectorTable {
+  const db = requireSqlite()
+
+  if (!Number.isInteger(dimensions) || dimensions <= 0) {
+    throw new Error(`[Database] Invalid embedding dimensions: ${dimensions}`)
+  }
+
+  const existing = readNotebookVectorTableRow(notebookId)
+  if (existing) {
+    if (existing.dimensions !== dimensions) {
+      throw new Error(
+        `[Database] Vector table ${existing.tableName} holds ${existing.dimensions}-dimensional vectors, ` +
+          `but ${dimensions} was requested. Changing the embedding model must go through ` +
+          `rebuildNotebookVectorTable() so the documents are marked for re-indexing.`
+      )
+    }
+    return existing
+  }
+
+  const tableName = notebookVectorTableName(notebookId)
+  const claimed = db
+    .prepare('SELECT notebook_id FROM vec_metadata WHERE table_name = ?')
+    .get(tableName) as { notebook_id: string } | undefined
+  if (claimed) {
+    throw new Error(
+      `[Database] Vector table name ${tableName} is already used by notebook ${claimed.notebook_id}`
+    )
+  }
+
+  // 上一次创建可能在 CREATE 之后、写元数据之前中断,留下一张没人认领的表:它不可能
+  // 写过向量(表名只来自元数据),清掉重来比沿用一张宽度未知的表安全。
+  db.exec(dropVectorTableSql(tableName))
+  db.exec(createVectorTableSql(tableName, dimensions))
+  db.prepare('INSERT INTO vec_metadata (notebook_id, table_name, dimensions) VALUES (?, ?, ?)').run(
+    notebookId,
+    tableName,
+    dimensions
+  )
+
+  console.log(`[Database] Created vector table ${tableName} with ${dimensions} dimensions`)
+  return { tableName, dimensions }
+}
+
+/**
+ * 用新的维度重建 notebook 的向量表,旧向量随之丢弃。只有索引链路在量到真实的
+ * embedding 维度、发现与既有表不一致时才应该调用,并且要负责把文档标回待索引。
+ */
+export function rebuildNotebookVectorTable(
+  notebookId: string,
+  dimensions: number
+): NotebookVectorTable {
+  dropNotebookVectorTable(notebookId)
+  return createNotebookVectorTable(notebookId, dimensions)
+}
+
+/**
+ * 删除 notebook 的向量表和元数据。没有索引过的 notebook 是 no-op。
+ */
+export function dropNotebookVectorTable(notebookId: string): void {
+  const db = requireSqlite()
+  const existing = readNotebookVectorTableRow(notebookId)
+  if (!existing) return
+
+  db.exec(dropVectorTableSql(existing.tableName))
+  db.prepare('DELETE FROM vec_metadata WHERE notebook_id = ?').run(notebookId)
+  console.log(`[Database] Dropped vector table ${existing.tableName}`)
+}
+
+/**
+ * 初始化向量存储
+ * 创建 vec_metadata 并把旧版本的全局向量表迁移成每 notebook 一张表
  * 在 runMigrations 后调用
  */
 export function initVectorStore() {
@@ -195,22 +322,57 @@ export function initVectorStore() {
   console.log('[Database] Initializing vector store...')
 
   try {
-    // 创建向量索引虚拟表（如果不存在）
-    // 使用 cosine 距离度量，1024 维度（BAAI/bge-m3 默认维度）
     sqlite.exec(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS vec_embeddings USING vec0(
-        embedding_id TEXT PRIMARY KEY,
-        chunk_id TEXT,
-        notebook_id TEXT,
-        embedding FLOAT[1024] distance_metric=cosine
+      CREATE TABLE IF NOT EXISTS vec_metadata (
+        notebook_id TEXT PRIMARY KEY,
+        table_name TEXT NOT NULL,
+        dimensions INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );
     `)
+
+    migrateLegacyVectorTable()
 
     console.log('[Database] Vector store initialized successfully')
   } catch (error) {
     console.error('[Database] Failed to initialize vector store:', error)
     throw error
   }
+}
+
+/**
+ * 把旧版本的全局 vec_embeddings 搬到每 notebook 一张的向量表,然后删掉旧表。
+ *
+ * 旧表是 initVectorStore() 用 FLOAT[1024] 建的,宽度不可变,所以整张表都是 1024 维。
+ * sqlite-vec 支持 vec0 到 vec0 的 INSERT..SELECT,一个 notebook 一条语句即可。元数据
+ * 已存在就跳过,所以迁移中途失败后重跑是幂等的。
+ */
+function migrateLegacyVectorTable(): void {
+  const db = requireSqlite()
+  const legacy = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'vec_embeddings'")
+    .get()
+  if (!legacy) return
+
+  // 关联 notebooks 是为了丢掉已经被删掉的笔记本留下的孤儿向量
+  const notebooks = db
+    .prepare(
+      'SELECT DISTINCT v.notebook_id AS notebook_id FROM vec_embeddings v ' +
+        'JOIN notebooks n ON n.id = v.notebook_id'
+    )
+    .all() as Array<{ notebook_id: string }>
+
+  for (const { notebook_id: notebookId } of notebooks) {
+    if (readNotebookVectorTableRow(notebookId)) continue
+
+    const { tableName } = createNotebookVectorTable(notebookId, LEGACY_VECTOR_DIMENSIONS)
+    db.prepare(copyVectorsSql(tableName, 'vec_embeddings')).run(notebookId)
+    console.log(`[Database] Migrated vectors of ${notebookId} into ${tableName}`)
+  }
+
+  db.exec('DROP TABLE IF EXISTS vec_embeddings')
+  console.log('[Database] Replaced legacy vec_embeddings with per-notebook vector tables')
 }
 
 /**
@@ -272,7 +434,7 @@ export function closeDatabase() {
 /**
  * 获取原始 SQLite 实例（用于 pragma 等操作）
  */
-export function getSqlite() {
+export function getSqlite(): Database.Database | null {
   return sqlite
 }
 

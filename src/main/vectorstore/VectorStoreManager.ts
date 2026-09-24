@@ -14,13 +14,13 @@ import Logger from '../../shared/utils/logger'
 export class VectorStoreManager {
   private stores: Map<string, VectorStore> = new Map()
   private defaultType: VectorStoreType = 'sqlite'
-  private defaultDimensions: number = 1024
 
   /**
    * 获取或创建 notebook 的 VectorStore
    * @param notebookId 笔记本 ID
    * @param type 存储类型（可选，默认 sqlite）
-   * @param dimensions 向量维度（可选，如果提供则覆盖默认值）
+   * @param dimensions 向量维度；只有索引链路知道真实维度时才传。不传时由 store 从
+   *                   已存的向量表元数据读取，不能拿默认值去建表/删表。
    */
   async getStore(
     notebookId: string,
@@ -29,36 +29,36 @@ export class VectorStoreManager {
   ): Promise<VectorStore> {
     const storeType = type || this.defaultType
     const key = `${notebookId}_${storeType}`
-    const targetDimensions = dimensions || this.defaultDimensions
 
-    // 检查是否已存在且维度匹配
     const existingStore = this.stores.get(key)
+    if (
+      existingStore &&
+      (dimensions === undefined || existingStore.getDimensions() === dimensions)
+    ) {
+      return existingStore
+    }
+
     if (existingStore) {
-      const existingDimensions = existingStore.getDimensions()
-      if (existingDimensions === targetDimensions) {
-        return existingStore
-      } else {
-        // 维度不匹配，需要重新创建
-        Logger.warn(
-          'VectorStoreManager',
-          `Dimension mismatch for ${key}: existing=${existingDimensions}, new=${targetDimensions}. Recreating store.`
-        )
-        await existingStore.close()
-        this.stores.delete(key)
-      }
+      // 维度变了,缓存的 store 指向旧的表,换一个
+      Logger.warn(
+        'VectorStoreManager',
+        `Dimension change for ${key}: existing=${existingStore.getDimensions()}, new=${dimensions}. Recreating store.`
+      )
+      await existingStore.close()
+      this.stores.delete(key)
     }
 
     // 创建新的 VectorStore
     const store = this.createStore(storeType)
     await store.initialize({
       notebookId,
-      dimensions: targetDimensions
+      dimensions
     })
 
     this.stores.set(key, store)
     Logger.info(
       'VectorStoreManager',
-      `Created ${storeType} store for notebook: ${notebookId} with dimensions: ${targetDimensions}`
+      `Created ${storeType} store for notebook: ${notebookId} (dimensions: ${store.getDimensions() ?? 'unknown'})`
     )
 
     return store
@@ -109,20 +109,6 @@ export class VectorStoreManager {
     }
     this.stores.clear()
     Logger.info('VectorStoreManager', 'All stores closed')
-  }
-
-  /**
-   * 设置默认向量维度
-   */
-  setDefaultDimensions(dimensions: number): void {
-    this.defaultDimensions = dimensions
-  }
-
-  /**
-   * 获取默认向量维度
-   */
-  getDefaultDimensions(): number {
-    return this.defaultDimensions
   }
 
   /**
