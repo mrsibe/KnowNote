@@ -1,8 +1,21 @@
 import * as React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState, ReactNode, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import DragHandle, { type DragHandleSide } from './DragHandle'
+import DragHandle from './DragHandle'
 import { lockDrag } from '../../lib/dragLock'
+import {
+  DEFAULT_LEFT_WIDTH,
+  DEFAULT_RIGHT_WIDTH,
+  MIN_SIDE_WIDTH,
+  calculateGoldenRatioWidths,
+  isResizeKey,
+  maxSideWidth,
+  nextPanelWidth,
+  readStoredWidths,
+  writeStoredWidths,
+  type PanelSide,
+  type PanelWidths
+} from './panelGeometry'
 
 export interface ResizableLayoutProps {
   leftPanel: ReactNode
@@ -10,73 +23,6 @@ export interface ResizableLayoutProps {
   rightPanel: ReactNode
   defaultLeftWidth?: number
   defaultRightWidth?: number
-}
-
-/** Minimum width of a side panel, in CSS pixels. */
-const MIN_SIDE_WIDTH = 260
-/** Minimum width of the centre panel, in CSS pixels. */
-const MIN_CENTER_WIDTH = 420
-/** The seam is `w-3`. The canvas gutter between two panels is the handle, so it costs layout. */
-const HANDLE_WIDTH = 12
-/** `p-2` on the container, both sides. */
-const CONTAINER_PADDING_X = 16
-const DEFAULT_LEFT_WIDTH = 320
-const DEFAULT_RIGHT_WIDTH = 360
-const KEYBOARD_STEP = 10
-const KEYBOARD_STEP_FAST = 50
-const STORAGE_KEY = 'knownote:panel-widths'
-
-/** The sides start at the golden ratio of the free space. Documented in DESIGN.md. */
-const GOLDEN_RATIO = 1.618
-
-interface PanelWidths {
-  left: number
-  right: number
-}
-
-const readStoredWidths = (): PanelWidths | null => {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<PanelWidths>
-    if (
-      typeof parsed.left !== 'number' ||
-      typeof parsed.right !== 'number' ||
-      !Number.isFinite(parsed.left) ||
-      !Number.isFinite(parsed.right)
-    ) {
-      return null
-    }
-    return { left: parsed.left, right: parsed.right }
-  } catch {
-    return null
-  }
-}
-
-const writeStoredWidths = (widths: PanelWidths): void => {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(widths))
-  } catch {
-    // Persistence is a convenience; losing it must never break the layout.
-  }
-}
-
-/** Space the panels and seams leave free inside a container of this width. */
-const availableFrom = (containerWidth: number): number =>
-  Math.max(0, containerWidth - CONTAINER_PADDING_X - HANDLE_WIDTH * 2)
-
-/**
- * The widest a side panel may become: everything except the other side panel and
- * the centre's minimum. The floor is `MIN_SIDE_WIDTH`, so a window too narrow for
- * both minimums degrades by letting the centre shrink rather than by clamping a
- * side panel to something unusable.
- */
-const maxSideWidth = (other: number, containerWidth: number): number =>
-  Math.max(MIN_SIDE_WIDTH, availableFrom(containerWidth) - other - MIN_CENTER_WIDTH)
-
-const calculateGoldenRatioWidths = (containerWidth: number): PanelWidths => {
-  const width = Math.floor(availableFrom(containerWidth) * (1 / (2 + GOLDEN_RATIO)))
-  return { left: width, right: width }
 }
 
 interface DragSession {
@@ -101,7 +47,7 @@ export default function ResizableLayout({
     () => defaultRightWidth ?? storedWidths?.right ?? DEFAULT_RIGHT_WIDTH
   )
   const [containerWidth, setContainerWidth] = useState(0)
-  const [draggingSide, setDraggingSide] = useState<DragHandleSide | null>(null)
+  const [draggingSide, setDraggingSide] = useState<PanelSide | null>(null)
   const [isLeftCollapsed, setIsLeftCollapsed] = useState(false)
   const [isRightCollapsed, setIsRightCollapsed] = useState(false)
 
@@ -117,7 +63,7 @@ export default function ResizableLayout({
   const hasAppliedInitial = useRef(false)
 
   /** The single writer for panel widths: state and both mirrors move together. */
-  const setPanelWidth = useCallback((side: DragHandleSide, value: number): void => {
+  const setPanelWidth = useCallback((side: PanelSide, value: number): void => {
     if (side === 'left') {
       leftWidthRef.current = value
       setLeftWidth(value)
@@ -183,7 +129,7 @@ export default function ResizableLayout({
    * layout is read while the pointer is moving.
    */
   const beginDrag = useCallback(
-    (side: DragHandleSide, event: React.PointerEvent<HTMLDivElement>): void => {
+    (side: PanelSide, event: React.PointerEvent<HTMLDivElement>): void => {
       if (event.button !== 0) return
       const container = containerRef.current
       if (!container) return
@@ -293,27 +239,17 @@ export default function ResizableLayout({
   }, [])
 
   const handleKeyDown = useCallback(
-    (side: DragHandleSide, event: React.KeyboardEvent<HTMLDivElement>): void => {
-      const step = event.shiftKey ? KEYBOARD_STEP_FAST : KEYBOARD_STEP
+    (side: PanelSide, event: React.KeyboardEvent<HTMLDivElement>): void => {
+      // The mapping lives in panelGeometry so it can be tested; arrow keys move the
+      // seam, which makes the same key grow one panel and shrink the other.
+      if (!isResizeKey(event.key)) return
+      event.preventDefault()
+
       const current = side === 'left' ? leftWidthRef.current : rightWidthRef.current
       const other = side === 'left' ? rightWidthRef.current : leftWidthRef.current
       const max = maxSideWidth(other, containerWidthRef.current)
-      // The seam moves in the direction of the arrow, so the panel it resizes moves
-      // the other way: ArrowLeft shrinks the panel on the left of the seam and
-      // grows the panel on the right of it. Getting this backwards made the two
-      // separators report opposite value changes for the same key.
-      const growsWithArrowRight = side === 'left'
 
-      let next: number | null = null
-      if (event.key === 'ArrowLeft') next = current + (growsWithArrowRight ? -step : step)
-      else if (event.key === 'ArrowRight') next = current + (growsWithArrowRight ? step : -step)
-      else if (event.key === 'Home') next = MIN_SIDE_WIDTH
-      else if (event.key === 'End') next = max
-
-      if (next === null) return
-      event.preventDefault()
-
-      setPanelWidth(side, Math.max(MIN_SIDE_WIDTH, Math.min(max, next)))
+      setPanelWidth(side, nextPanelWidth(event.key, side, current, max, event.shiftKey))
       lastSizeRef.current = { left: leftWidthRef.current, right: rightWidthRef.current }
       writeStoredWidths(lastSizeRef.current)
     },
@@ -325,7 +261,7 @@ export default function ResizableLayout({
    * way back is a trap: one bad drag kept a 260px reading pane forever.
    */
   const resetPanel = useCallback(
-    (side: DragHandleSide): void => {
+    (side: PanelSide): void => {
       const golden = calculateGoldenRatioWidths(containerWidthRef.current)
       const other = side === 'left' ? rightWidthRef.current : leftWidthRef.current
       const target = side === 'left' ? golden.left : golden.right

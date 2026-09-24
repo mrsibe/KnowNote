@@ -36,7 +36,29 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
   const bottomRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
   const [isPinned, setIsPinned] = useState(true)
+  // Completion announcements. Kept as `{ text, id }` so the node is replaced and
+  // the live region re-announces: setting the same string twice is a no-op for a
+  // screen reader.
+  const [announcement, setAnnouncement] = useState<{ text: string; id: number } | null>(null)
+  const streamingRef = useRef(false)
   const { t } = useTranslation()
+
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : undefined
+  const isStreaming = Boolean(lastMessage?.isStreaming)
+
+  useEffect(() => {
+    // Announce the END of a turn, never its tokens. A live region on the
+    // transcript would re-announce on every token, which is worse than silence —
+    // the previous state of this surface was no announcement at all, and the
+    // product's entire output arrived silently.
+    if (streamingRef.current && !isStreaming) {
+      setAnnouncement((previous) => ({
+        text: t('ui:answerComplete'),
+        id: (previous?.id ?? 0) + 1
+      }))
+    }
+    streamingRef.current = isStreaming
+  }, [isStreaming, t])
 
   const scrollToBottom = useCallback((): void => {
     // Deliberately instant, not smooth: while an answer streams this runs per
@@ -82,6 +104,11 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
   // arrive would never be observed and the follow would silently never work.
   return (
     <div className="relative h-full">
+      {/* Completion only, and never the tokens in between. */}
+      <div key={announcement?.id ?? 0} role="status" aria-live="polite" className="sr-only">
+        {announcement?.text}
+      </div>
+
       <ScrollArea className="h-full" viewportRef={viewportRef}>
         {messages.length === 0 ? (
           <div className="flex min-h-full items-center justify-center p-8">
