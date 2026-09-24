@@ -6,6 +6,8 @@ import { toPng } from 'html-to-image'
 import { useMindMapStore } from '../../store/mindmapStore'
 import MindMapCanvas from '../notebook/mindmap/MindMapCanvas'
 import NodeDetailPanel from '../notebook/mindmap/NodeDetailPanel'
+import WindowTitleBar from '../common/WindowTitleBar'
+import { TITLE_BAR_HEIGHT } from '../../../../shared/utils/windowChrome'
 
 export default function MindMapPage() {
   const { notebookId, mindMapId } = useParams<{ notebookId?: string; mindMapId?: string }>()
@@ -14,21 +16,7 @@ export default function MindMapPage() {
 
   const [isLoading, setIsLoading] = useState(true)
   const [direction, setDirection] = useState<'TB' | 'LR'>('LR')
-  const [platform, setPlatform] = useState<string>('')
   const mindMapContainerRef = useRef<HTMLDivElement>(null)
-
-  // 获取平台信息
-  useEffect(() => {
-    const getPlatform = async () => {
-      try {
-        const platformName = await window.api.getPlatform()
-        setPlatform(platformName)
-      } catch (error) {
-        console.error('Failed to get platform:', error)
-      }
-    }
-    getPlatform()
-  }, [])
 
   // 加载思维导图
   useEffect(() => {
@@ -187,24 +175,16 @@ export default function MindMapPage() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-surface-base">
-      {/* 顶部可拖拽标题栏 */}
-      <div
-        className="absolute top-0 left-0 right-0 h-11 z-10 flex items-center justify-between px-3 bg-surface-base border-b border-border"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      >
-        {/* macOS 左侧空白区域（留给窗口控制按钮） */}
-        {platform === 'darwin' && <div className="w-16"></div>}
-        {/* 非 macOS 左侧空白区域 */}
-        {platform !== 'darwin' && <div style={{ width: '100px' }}></div>}
-
-        <span className="text-sm font-medium text-foreground">{t('mindMap')}</span>
-
-        <div
-          className="flex items-center gap-2"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-        >
-          {currentMindMap && (
-            <>
+      <WindowTitleBar
+        overlay
+        className="border-b border-border"
+        center={<span className="text-sm font-medium text-foreground">{t('mindMap')}</span>}
+        right={
+          currentMindMap ? (
+            <div
+              className="flex items-center gap-2"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            >
               <button
                 onClick={toggleDirection}
                 className="p-1.5 rounded-md hover:bg-surface-hover transition-colors"
@@ -225,13 +205,10 @@ export default function MindMapPage() {
               >
                 <Download className="w-4 h-4 text-muted-foreground" />
               </button>
-            </>
-          )}
-        </div>
-
-        {/* Windows 右侧空白区域（留给窗口控制按钮） */}
-        {platform === 'win32' && <div className="w-32"></div>}
-      </div>
+            </div>
+          ) : undefined
+        }
+      />
 
       {/* 内容区域 */}
       <div
@@ -240,7 +217,7 @@ export default function MindMapPage() {
           display: 'flex',
           overflow: 'hidden',
           position: 'relative',
-          paddingTop: '44px'
+          paddingTop: TITLE_BAR_HEIGHT
         }}
       >
         {isLoading ? (

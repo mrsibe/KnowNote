@@ -37,14 +37,14 @@ The app is a stack of opaque surfaces plus two translucent state fills. Higher
 in the stack means further from the window background, and **lighter** in both
 colour schemes.
 
-| Token                | Tailwind              | Light               | Dark                            | Use for                                                                 |
-| -------------------- | --------------------- | ------------------- | ------------------------------- | ----------------------------------------------------------------------- |
-| `--surface-sunken`   | `bg-surface-sunken`   | `oklch(0.9551 0 0)` | `oklch(0.24 0.0127 258.3724)`   | Window chrome that sits _behind_ content: sidebar, left rail, title bar |
-| `--surface-base`     | `bg-surface-base`     | `oklch(0.9851 0 0)` | `oklch(0.2925 0.0157 264.2965)` | App canvas, page background, the gap between panels                     |
-| `--surface-raised`   | `bg-surface-raised`   | `oklch(1 0 0)`      | `oklch(0.325 0.011 260)`        | Content panels: document list, reader, chat, editor, cards              |
-| `--surface-overlay`  | `bg-surface-overlay`  | `oklch(1 0 0)`      | `oklch(0.365 0.011 260)`        | Floating layers: dialog, sheet, popover, menu, select, tooltip, toast   |
-| `--surface-hover`    | `bg-surface-hover`    | `foreground @ 5%`   | `neutral 0.9 @ 6%`              | Translucent hover fill for rows, menu items, ghost buttons              |
-| `--surface-selected` | `bg-surface-selected` | `foreground @ 9%`   | `neutral 0.9 @ 10%`             | Translucent selected/active fill for rows and toggles                   |
+| Token                | Tailwind              | Light               | Dark                            | Use for                                                                                                    |
+| -------------------- | --------------------- | ------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `--surface-sunken`   | `bg-surface-sunken`   | `oklch(0.9551 0 0)` | `oklch(0.24 0.0127 258.3724)`   | Window chrome that sits _behind_ content: the settings sidebar and dialog shell, a segmented-control track |
+| `--surface-base`     | `bg-surface-base`     | `oklch(0.9851 0 0)` | `oklch(0.2925 0.0157 264.2965)` | App canvas, page background, the gap between panels                                                        |
+| `--surface-raised`   | `bg-surface-raised`   | `oklch(1 0 0)`      | `oklch(0.325 0.011 260)`        | Content panels: document list, reader, chat, editor, cards                                                 |
+| `--surface-overlay`  | `bg-surface-overlay`  | `oklch(1 0 0)`      | `oklch(0.365 0.011 260)`        | Floating layers: dialog, sheet, popover, menu, select, tooltip, toast                                      |
+| `--surface-hover`    | `bg-surface-hover`    | `foreground @ 5%`   | `neutral 0.9 @ 6%`              | Translucent hover fill for rows, menu items, ghost buttons                                                 |
+| `--surface-selected` | `bg-surface-selected` | `foreground @ 9%`   | `neutral 0.9 @ 10%`             | Translucent selected/active fill for rows and toggles                                                      |
 
 Rules:
 
@@ -65,28 +65,36 @@ Rules:
   `surface-raised` in both colour schemes. Do not nest `surface-raised` inside
   `surface-raised`.
 
+**Not** part of the ladder: the window title bar. It is the OS window frame
+rather than a panel, so every window draws it `bg-surface-base`, the same tone as
+the canvas. Do not give it a surface step.
+
 Legacy aliases kept for compatibility while pages migrate: `--background`,
 `--card`, `--popover`, `--sidebar` and `--accent` — with their `-foreground`
 siblings and the remaining `--sidebar-*` tokens — are defined in terms of the
 tokens above. New code uses `surface-*`.
 
-`--secondary` / `--secondary-foreground` are not aliases: they hold their own
-literal values, and nothing renders them — `Button` and `Badge` `variant="secondary"`
-both use `bg-muted`. They are dead tokens, and the light value is the only
-blue-tinted neutral in the palette. Do not adopt them; delete them from
-`theme.css` instead.
+`--secondary` / `--secondary-foreground` were dead tokens: they held their own
+literals rather than aliases, nothing rendered them (`Button` and `Badge`
+`variant="secondary"` both use `bg-muted`), and the light value was the only
+blue-tinted neutral in the palette. They have been deleted; do not reintroduce
+them — the `secondary` **variant** name is unrelated to a `--secondary` colour
+and is spelled with `bg-muted`.
 
 ## Window chrome
 
 The title bar is the one piece of the interface the OS and the renderer draw
 _together_: the renderer draws the bar, the OS draws minimize / maximize / close
 on top of it. Both halves therefore read their geometry from
-`src/shared/utils/windowChrome.ts`, and neither repeats the numbers.
+`src/shared/utils/windowChrome.ts`, and neither repeats the numbers. The
+renderer half is one component, `components/common/WindowTitleBar.tsx`, shared
+by all four windows — main, mind map, quiz and Anki.
 
-| Value                  | Constant                | Renderer side                         |
-| ---------------------- | ----------------------- | ------------------------------------- |
-| Title bar height, 44px | `TITLE_BAR_HEIGHT`      | `h-11` on `TopNavigationBar`          |
-| Control strip, 138px   | `WINDOW_CONTROLS_WIDTH` | reserved spacer in `TopNavigationBar` |
+| Value                  | Constant                   | Renderer side                            |
+| ---------------------- | -------------------------- | ---------------------------------------- |
+| Title bar height, 44px | `TITLE_BAR_HEIGHT`         | `h-11` in `WindowTitleBar`               |
+| Control strip, 138px   | `WINDOW_CONTROLS_WIDTH`    | reserved on the right, Windows and Linux |
+| Traffic lights, 80px   | `MAC_TRAFFIC_LIGHTS_WIDTH` | reserved on the left, macOS              |
 
 Rules:
 
@@ -94,12 +102,19 @@ Rules:
   window controls, so it has to equal the renderer's bar. A mismatch shows up as
   controls that are visibly not centred in their bar — that is what a 35px
   overlay under a 44px bar looked like.
-- Windows/Linux reserve the control strip on the right, whether or not the
-  renderer puts anything there; on macOS the traffic lights sit on the left and
-  are reserved separately.
-- The control strip is a real measurement (3 x 46px caption buttons), not a round
-  number. `w-32` was 10px short and put the settings button under the minimize
-  button.
+- Every window reserves the OS strips, not just the one that happened to get it
+  right. Each window used to carry its own copy of this geometry and they had
+  drifted to 100px, 128px and 0 for the same reserve: the controls sat over the
+  content on Windows, and on Linux two windows reserved nothing at all.
+- Both reserves are real measurements, not round numbers. Windows caption
+  buttons are 3 x 46px, so `w-32` (128px) was 10px short and put the settings
+  button under the minimize button.
+- A window whose content is full-bleed (the mind map canvas, the quiz view, the
+  flashcard list) adds `border-b border-border` to separate the bar from the
+  content. The main window does not: its panels already sit in a `p-2` canvas
+  gutter.
+- A window that overlays its bar on the content offsets that content by
+  `TITLE_BAR_HEIGHT`. Do not write the number again.
 
 `color-scheme` is declared per theme in `theme.css` so that the surfaces the CSS
 does not paint — scrollbars, caret, selection, form controls — follow the app
@@ -161,7 +176,7 @@ Base rhythm is 4 / 8 / 12 / 16 (`gap-1,2,3,4`; `p-2,3,4,6`). Half steps
 | Element                                    | Height    | Padding                                |
 | ------------------------------------------ | --------- | -------------------------------------- |
 | Panel header                               | `h-11`    | `px-3`, content `gap-2`                |
-| Title bar (`TopNavigationBar`)             | `h-11`    | `px-2`                                 |
+| Title bar (`WindowTitleBar`)               | `h-11`    | `px-2` main · `px-3` overlay           |
 | Title-bar icon button                      | `w-7 h-7` | —                                      |
 | Title-bar tab                              | `h-7`     | `px-3`                                 |
 | Toolbar icon button (`Button size="icon"`) | `size-8`  | —                                      |
@@ -337,6 +352,28 @@ Implementation: `components/ui/panel-header.tsx`.
 ```tsx
 <div className="flex h-11 shrink-0 items-center justify-between border-b border-border px-3" />
 ```
+
+### Window title bar
+
+Implementation: `components/common/WindowTitleBar.tsx`. Every window uses it;
+none hand-rolls the geometry. `left` and `right` take content (the reserves are
+applied around them), and `center` takes the remaining width.
+
+```tsx
+// main window: the tab strip is the centre, settings sits next to the controls
+<WindowTitleBar className="gap-0.5" right={<SettingsButton />} center={<TabStrip />} />
+
+// secondary window: the bar floats over full-bleed content
+<WindowTitleBar
+  overlay
+  className="border-b border-border"
+  center={<span className="text-sm font-medium text-foreground">{title}</span>}
+  right={<Actions />}
+/>
+```
+
+Children that live inside a `WebkitAppRegion: 'drag'` bar must set
+`WebkitAppRegion: 'no-drag'` on themselves, or they cannot be clicked.
 
 ### Section / list
 
