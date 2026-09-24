@@ -442,7 +442,7 @@ export default function ItemList({
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-8 text-center gap-4">
+      <div className="flex select-none flex-col items-center justify-center h-full p-8 text-center gap-4">
         <FileText className="w-12 h-12 text-muted-foreground" />
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">{t('noNotesYet')}</p>

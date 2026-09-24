@@ -313,7 +313,8 @@ Dialog, popover, menu, toast:
 
 Implementation: `components/ui/empty.tsx`. `EmptyMedia variant="icon"` uses
 `bg-muted text-muted-foreground`, never the accent; the container is a
-`rounded-lg` dashed hairline, no shadow.
+`rounded-lg` dashed hairline, no shadow. Empty state copy is chrome, not
+content: mark the container `select-none` so a mouse drag cannot select it.
 
 ### Form field
 
