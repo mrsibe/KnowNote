@@ -103,6 +103,27 @@ which workflow, what you observed.
 `feat:`, `fix:`, `docs:`, `refactor:`, `chore:`, `build:`, `style:`. A scope is
 welcome when it is meaningful: `fix(mac): ...`.
 
+**Pull request titles** use the same prefixes, because the prefix decides two
+things automatically:
+
+- the label applied by the `Label PR` workflow, and
+- the section the change appears under in the generated release notes
+  (`.github/release.yml`).
+
+| Title prefix                       | Label            | Release section   |
+| ---------------------------------- | ---------------- | ----------------- |
+| `feat:`, `perf:`                   | `enhancement`    | Features          |
+| `fix:`                             | `bug`            | Bug Fixes         |
+| `build:`                           | `build`          | Build & Packaging |
+| `deps:`, `chore(deps):`            | `dependencies`   | Dependencies      |
+| `docs:`                            | `documentation`  | Documentation     |
+| `chore:`, `ci:`, `style:`, `test:` | `skip-changelog` | _(excluded)_      |
+| `refactor:`                        | _(none)_         | Other Changes     |
+
+`refactor:` is left unlabelled on purpose: the workflow cannot tell whether a
+refactor changes user-visible behaviour. Add `enhancement` or `bug` yourself
+when it does, and `breaking` when it breaks compatibility.
+
 **Version bumps and releases are done by the maintainer** — don't change
 `version` in `package.json` or add a tag in a PR.
 

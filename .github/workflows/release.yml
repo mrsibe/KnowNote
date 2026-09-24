@@ -212,7 +212,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+
           gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' | grep -qx true || {
             echo "::error::no draft release found for $GITHUB_REF_NAME"; exit 1; }
-          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+          # Release notes are generated from the labels on the merged PRs, per
+          # .github/release.yml. `gh release edit` has no --generate-notes, so
+          # the API endpoint is used and its body written back to the draft.
+          NOTES=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$GITHUB_REF_NAME" --jq '.body')
+          if [ -z "$NOTES" ]; then
+            echo "::error::generated release notes for $GITHUB_REF_NAME are empty"
+            exit 1
+          fi
+
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --notes "$NOTES" --draft=false --latest
           echo "::notice title=Published::Released $GITHUB_REF_NAME"

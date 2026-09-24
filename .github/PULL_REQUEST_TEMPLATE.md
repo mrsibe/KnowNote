@@ -1,3 +1,9 @@
+<!--
+PR title: use a Conventional Commits prefix (feat:, fix:, build:, docs:, ...).
+It decides the label and the section this change lands in under the generated
+release notes. See "Conventions" in CONTRIBUTING.md.
+-->
+
 ## What does this PR do?
 
 <!--

@@ -1,0 +1,70 @@
+name: Label PR
+
+# Release notes are generated from labels (`.github/release.yml`), so the labels
+# have to be applied consistently. CONTRIBUTING.md already requires Conventional
+# Commits in PR titles, so the type prefix decides the label instead of a human
+# remembering to.
+#
+# `pull_request_target` rather than `pull_request`: the token a `pull_request`
+# run gets for a fork is read-only, so fork PRs could never be labelled this way.
+# This workflow never checks out or executes the pull request's code, which is
+# what keeps `pull_request_target` safe here. Only the title is read, through an
+# environment variable rather than inlined into the shell.
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    name: label
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Derive the label from the PR title prefix
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # `feat(scope): description` -> type=feat, scope=scope. Only the type
+          # and scope are read; the description is ignored.
+          type=$(printf '%s' "$PR_TITLE" \
+            | sed -nE 's/^([A-Za-z]+)(\(([^)]*)\))?!?:.*/\1/p' \
+            | tr '[:upper:]' '[:lower:]')
+          scope=$(printf '%s' "$PR_TITLE" \
+            | sed -nE 's/^[A-Za-z]+\(([^)]*)\)!?:.*/\1/p' \
+            | tr '[:upper:]' '[:lower:]')
+
+          case "$type" in
+            feat|perf)           label=enhancement ;;
+            fix)                 label=bug ;;
+            docs)                label=documentation ;;
+            build)               label=build ;;
+            deps)                label=dependencies ;;
+            chore|ci|style|test) label=skip-changelog ;;
+            *)                   label='' ;;
+          esac
+
+          # `chore(deps): ...` is a dependency update, not a chore.
+          if [ "$type" = chore ] && [ "$scope" = deps ]; then
+            label=dependencies
+          fi
+
+          # `refactor:` is deliberately left unlabelled: it may or may not change
+          # user-visible behaviour. Unlabelled PRs still reach the release notes
+          # under "Other Changes" via the catch-all category.
+          if [ -z "$label" ]; then
+            echo "No label derived (type='${type:-none}'): $PR_TITLE"
+            exit 0
+          fi
+
+          echo "PR #$PR_NUMBER -> $label"
+          gh pr edit "$PR_NUMBER" --repo "$REPO" --add-label "$label"

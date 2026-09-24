@@ -1,0 +1,40 @@
+# Configures the release notes that GitHub generates from merged pull requests.
+#
+# `.github/workflows/release.yml` calls the `generate-notes` API endpoint when it
+# promotes the draft release, so this file decides the sections users see. A PR
+# is placed by the first matching category, top to bottom, and anything left
+# over falls into "Other Changes".
+#
+# The labels are applied automatically from the Conventional Commits prefix in
+# the PR title (see `.github/workflows/label-pr.yml`). `breaking` is manual: it
+# has no title prefix and has to be added by the author or the maintainer.
+
+changelog:
+  exclude:
+    # Internal-only changes: chore, ci, style, test.
+    labels:
+      - skip-changelog
+  categories:
+    - title: Breaking Changes
+      labels:
+        - breaking
+    - title: Features
+      labels:
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - bug
+    - title: Build & Packaging
+      labels:
+        - build
+    - title: Dependencies
+      labels:
+        - dependencies
+    - title: Documentation
+      labels:
+        - documentation
+    # Catch-all. Must stay last: `'*'` matches every PR not placed above,
+    # including unlabelled ones such as `refactor:`.
+    - title: Other Changes
+      labels:
+        - '*'
