@@ -25,7 +25,18 @@
 import Logger from '../shared/utils/logger'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
-import { closeDatabase, getSqlite, initDatabase, initVectorStore, runMigrations } from './db'
+import {
+  closeDatabase,
+  createNotebookVectorTable,
+  dropNotebookVectorTable,
+  getNotebookVectorTable,
+  getSqlite,
+  initDatabase,
+  initVectorStore,
+  rebuildNotebookVectorTable,
+  runMigrations
+} from './db'
+import type Database from 'better-sqlite3'
 import { FileParserService } from './services/FileParserService'
 import { WebLoader } from './services/loaders/WebLoader'
 import { SQLiteVectorStore } from './vectorstore/SQLiteVectorStore'
@@ -57,13 +68,57 @@ function excerpt(text: string, max = 80): string {
   return flat.length > max ? `${flat.slice(0, max)}...` : flat
 }
 
-/** Must match the FLOAT[...] width of vec_embeddings in initVectorStore(). */
+/** Width of the vector tables this test creates itself (see seedLegacyVectorTable). */
 const EMBEDDING_DIM = 1024
+
+/** Notebook seeded by seedLegacyVectorTable() to exercise the upgrade path. */
+const LEGACY_NOTEBOOK = 'smoke-notebook-legacy'
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message)
   }
+}
+
+function assertThrows(run: () => unknown, message: string): void {
+  try {
+    run()
+  } catch {
+    return
+  }
+  throw new Error(message)
+}
+
+/**
+ * Rewinds the database to the old layout: one global vec_embeddings table whose
+ * width is fixed at 1024, plus a notebook that owns a vector in it.
+ *
+ * initVectorStore() is expected to move that row into a per-notebook table and
+ * drop the global one. Without the migration, upgrading users keep a table the
+ * new code never reads, i.e. their knowledge bases silently stop retrieving.
+ */
+function seedLegacyVectorTable(database: Database.Database): void {
+  const now = Date.now()
+  database
+    .prepare('INSERT INTO notebooks (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)')
+    .run(LEGACY_NOTEBOOK, 'Legacy smoke notebook', now, now)
+
+  database.exec(`
+    CREATE VIRTUAL TABLE vec_embeddings USING vec0(
+      embedding_id TEXT PRIMARY KEY,
+      chunk_id TEXT,
+      notebook_id TEXT,
+      embedding FLOAT[1024] distance_metric=cosine
+    );
+  `)
+
+  const vector = new Float32Array(EMBEDDING_DIM)
+  vector[0] = 1
+  database
+    .prepare(
+      'INSERT INTO vec_embeddings (embedding_id, chunk_id, notebook_id, embedding) VALUES (?, ?, ?, ?)'
+    )
+    .run('smoke-legacy-embedding', 'smoke-legacy-chunk', LEGACY_NOTEBOOK, vector)
 }
 
 /**
@@ -82,14 +137,43 @@ async function runChecks(): Promise<string[]> {
   initDatabase()
   pass('better-sqlite3 opened the database and loaded the sqlite-vec extension')
 
+  const database = getSqlite()
+  assert(database, 'database handle is missing after initDatabase()')
+
   runMigrations()
   pass('drizzle migrations applied')
 
+  // --- upgrade path: one global vec_embeddings -> one table per notebook -----
+  seedLegacyVectorTable(database)
   initVectorStore()
-  pass('vec0 virtual table created')
 
-  const database = getSqlite()
-  assert(database, 'database handle is missing after initDatabase()')
+  const migratedTable = getNotebookVectorTable(LEGACY_NOTEBOOK)
+  assert(
+    migratedTable?.dimensions === EMBEDDING_DIM,
+    `the legacy 1024-dimensional table was not migrated (got ${JSON.stringify(migratedTable)})`
+  )
+  assert(
+    database.prepare("SELECT name FROM sqlite_master WHERE name = 'vec_embeddings'").get() ===
+      undefined,
+    'the legacy global vec_embeddings table was left behind'
+  )
+
+  const migratedStore = new SQLiteVectorStore()
+  await migratedStore.initialize({ notebookId: LEGACY_NOTEBOOK })
+  assert(
+    (await migratedStore.count()) === 1,
+    'the migrated notebook lost the vector it had before the upgrade'
+  )
+
+  const legacyQuery = new Float32Array(EMBEDDING_DIM)
+  legacyQuery[0] = 1
+  const migratedHits = await migratedStore.query(legacyQuery, { topK: 1 })
+  assert(
+    migratedHits[0]?.chunkId === 'smoke-legacy-chunk',
+    `the migrated vector is not searchable (got ${JSON.stringify(migratedHits)})`
+  )
+  pass('legacy global vec_embeddings migrates into a searchable per-notebook table')
+
   const { version } = database.prepare('SELECT vec_version() AS version').get() as {
     version: string
   }
@@ -124,6 +208,61 @@ async function runChecks(): Promise<string[]> {
   await store.delete(['smoke-near', 'smoke-far'])
   assert((await store.count()) === 0, 'vector store delete left rows behind')
   pass('sqlite-vec upsert + KNN query + delete round trip')
+
+  // --- vector width is a per-notebook decision -------------------------------
+  // A vec0 table has a fixed FLOAT[...] width, so notebooks using different
+  // embedding models must not share a table. Getting this wrong used to fail the
+  // insert; the first attempt at fixing it dropped the whole table instead, which
+  // is worse - it destroys user data - so the policy is asserted here.
+  const otherModel = new SQLiteVectorStore()
+  await otherModel.initialize({ notebookId: 'smoke-notebook-768', dimensions: 768 })
+  await otherModel.upsert([
+    { id: 'smoke-768', chunkId: 'smoke-chunk-768', vector: new Float32Array(768).fill(0.25) }
+  ])
+  assert((await otherModel.count()) === 1, 'a 768-dimensional notebook did not store its vector')
+  assert((await store.count()) === 0, 'two notebooks are sharing one vector table')
+
+  // A mismatched width must be refused rather than silently dropped
+  assertThrows(
+    () => createNotebookVectorTable('smoke-notebook-768', 1024),
+    'a width change was accepted without a rebuild'
+  )
+  assert(
+    (await otherModel.count()) === 1,
+    'a mismatched width silently dropped the notebook vectors'
+  )
+
+  // Only an explicit rebuild may replace the table, and it must not look indexed
+  rebuildNotebookVectorTable('smoke-notebook-768', 1536)
+  const rebuilt = new SQLiteVectorStore()
+  await rebuilt.initialize({ notebookId: 'smoke-notebook-768' })
+  assert(rebuilt.getDimensions() === 1536, 'the rebuilt table did not take the new width')
+  assert((await rebuilt.count()) === 0, 'a rebuilt vector table kept the old rows')
+
+  // A notebook that has never been indexed answers empty instead of throwing
+  const neverIndexed = new SQLiteVectorStore()
+  await neverIndexed.initialize({ notebookId: 'smoke-notebook-empty' })
+  assert(neverIndexed.getDimensions() === null, 'an unindexed notebook reported dimensions')
+  assert((await neverIndexed.count()) === 0, 'an unindexed notebook reported vectors')
+  assert(
+    (await neverIndexed.query(new Float32Array(EMBEDDING_DIM), { topK: 3 })).length === 0,
+    'an unindexed notebook returned search results'
+  )
+  pass('vector width is per notebook, mismatch is refused, rebuild is explicit')
+
+  // Deleting a notebook has to take its vector table with it
+  dropNotebookVectorTable('smoke-notebook-768')
+  assert(
+    getNotebookVectorTable('smoke-notebook-768') === undefined,
+    'notebook deletion left the vector metadata behind'
+  )
+  assert(
+    database
+      .prepare("SELECT name FROM sqlite_master WHERE name = 'vec_smoke_notebook_768'")
+      .get() === undefined,
+    'notebook deletion left the vector table behind'
+  )
+  pass('deleting a notebook drops its vector table')
 
   // --- packages that have broken packaged startup before ---------------------
   // Imported lazily on purpose: normal startup should not depend on the smoke

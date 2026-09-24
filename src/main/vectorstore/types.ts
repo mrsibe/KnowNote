@@ -40,7 +40,11 @@ export interface QueryOptions {
  */
 export interface VectorStoreConfig {
   notebookId: string
-  dimensions?: number // 向量维度，默认 1536
+  /**
+   * 向量维度。只有刚从 embedding 模型量到真实维度、准备建表的索引链路才传它 ——
+   * 不传时维度以已存的表为准,以免拿一个猜的值去建表或删表。
+   */
+  dimensions?: number
 }
 
 /**
@@ -97,9 +101,9 @@ export interface VectorStore {
   getNotebookId(): string
 
   /**
-   * 获取向量维度
+   * 获取向量维度;该 notebook 还没有向量表时为 null
    */
-  getDimensions(): number
+  getDimensions(): number | null
 }
 
 /**

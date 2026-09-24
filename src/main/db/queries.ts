@@ -1,5 +1,5 @@
 import { eq, desc, and } from 'drizzle-orm'
-import { getDatabase, executeCheckpoint } from './index'
+import { getDatabase, executeCheckpoint, dropNotebookVectorTable } from './index'
 import { chatSessions, chatMessages, notebooks, notes, documents, items } from './schema'
 
 // ==================== Chat Sessions ====================
@@ -151,7 +151,7 @@ export function createMessage(
   sessionId: string,
   role: 'user' | 'assistant' | 'system',
   content: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ) {
   const db = getDatabase()
   const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`
@@ -282,6 +282,14 @@ export async function deleteNotebook(id: string) {
 
     // 删除笔记本（外键级联会自动删除所有关联的 sessions、messages 和 documents）
     db.delete(notebooks).where(eq(notebooks.id, id)).run()
+
+    // 级联删除管不到 vec0 虚拟表,单独把该笔记本的向量表和元数据清掉。笔记本行已经
+    // 删掉了,所以这里失败只会多占一点磁盘,不会留下读得到半截数据的笔记本。
+    try {
+      dropNotebookVectorTable(id)
+    } catch (error) {
+      console.error(`[Database] Failed to drop vector table of notebook ${id}:`, error)
+    }
 
     // 删除本地文件（异步执行，不阻塞数据库操作）
     if (docsWithLocalFiles.length > 0) {

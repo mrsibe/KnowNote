@@ -7,7 +7,12 @@ import { createHash } from 'crypto'
 import { app } from 'electron'
 import { join, basename } from 'path'
 import { mkdir, copyFile, unlink, stat } from 'fs/promises'
-import { getDatabase, executeCheckpoint } from '../db'
+import {
+  getDatabase,
+  executeCheckpoint,
+  getNotebookVectorTable,
+  rebuildNotebookVectorTable
+} from '../db'
 import { documents, chunks, embeddings, notes } from '../db/schema'
 import type { Document, Chunk, NewDocument, NewChunk, NewEmbedding } from '../db/schema'
 import { eq, desc, inArray, sql } from 'drizzle-orm'
@@ -211,22 +216,26 @@ export class KnowledgeService {
       }
 
       // 4. 生成嵌入向量
+      // 不指定维度:维度由 embedding 模型决定,写死维度会让用别的模型的笔记本直接
+      // 索引失败(vec0 表的宽度在创建时固定,见 #33)。测出真实维度之后再用它建表。
       onProgress?.('generating_embeddings', 30)
       const embeddingResults = await this.embeddingService.embedBatch(
         chunkContents,
-        { dimensions: 1024 }, // 显式指定 1024 维
+        {},
         (completed, total) => {
           const progress = 30 + (completed / total) * 50
           onProgress?.('generating_embeddings', Math.round(progress))
         }
       )
 
-      // 检测向量维度并更新 VectorStoreManager
-      const detectedDimensions = embeddingResults.length > 0 ? embeddingResults[0].dimensions : 1536
-      if (embeddingResults.length > 0) {
-        vectorStoreManager.setDefaultDimensions(detectedDimensions)
-        Logger.debug('KnowledgeService', `Detected embedding dimensions: ${detectedDimensions}`)
+      if (embeddingResults.length === 0) {
+        throw new Error('Embedding 服务没有返回任何向量')
       }
+
+      // 维度由模型决定;与既有向量表不一致时重建表并把文档标回待索引
+      const detectedDimensions = embeddingResults[0].dimensions
+      await this.reconcileVectorDimensions(notebookId, detectedDimensions)
+      Logger.info('KnowledgeService', `Embedding dimensions: ${detectedDimensions}`)
 
       // 5. 保存嵌入元数据并添加到向量存储
       onProgress?.('saving_embeddings', 85)
@@ -395,22 +404,26 @@ export class KnowledgeService {
       }
 
       // 4. 生成嵌入向量
+      // 不指定维度:维度由 embedding 模型决定,写死维度会让用别的模型的笔记本直接
+      // 索引失败(vec0 表的宽度在创建时固定,见 #33)。测出真实维度之后再用它建表。
       onProgress?.('generating_embeddings', 30)
       const embeddingResults = await this.embeddingService.embedBatch(
         chunkContents,
-        { dimensions: 1024 }, // 显式指定 1024 维
+        {},
         (completed, total) => {
           const progress = 30 + (completed / total) * 50
           onProgress?.('generating_embeddings', Math.round(progress))
         }
       )
 
-      // 检测向量维度并更新 VectorStoreManager
-      const detectedDimensions = embeddingResults.length > 0 ? embeddingResults[0].dimensions : 1536
-      if (embeddingResults.length > 0) {
-        vectorStoreManager.setDefaultDimensions(detectedDimensions)
-        Logger.debug('KnowledgeService', `Detected embedding dimensions: ${detectedDimensions}`)
+      if (embeddingResults.length === 0) {
+        throw new Error('Embedding 服务没有返回任何向量')
       }
+
+      // 维度由模型决定;与既有向量表不一致时重建表并把文档标回待索引
+      const detectedDimensions = embeddingResults[0].dimensions
+      await this.reconcileVectorDimensions(notebookId, detectedDimensions)
+      Logger.info('KnowledgeService', `Embedding dimensions: ${detectedDimensions}`)
 
       // 5. 保存嵌入元数据并添加到向量存储
       onProgress?.('saving_embeddings', 85)
@@ -554,6 +567,35 @@ export class KnowledgeService {
       },
       onProgress
     )
+  }
+
+  /**
+   * 向量维度由 embedding 模型决定,而 vec0 表的宽度在创建时就固定了。模型换掉之后
+   * 旧向量和新查询向量已经不可比,所以这里显式重建该 notebook 的向量表,并把它的文档
+   * 标回待索引。
+   *
+   * 只有索引链路(刚刚量到真实维度)能走到这里:搜索、删除、重建单篇文档这些路径不会
+   * 传维度,也就不会因为一次误判把别人的向量删掉。
+   */
+  private async reconcileVectorDimensions(notebookId: string, dimensions: number): Promise<void> {
+    const existingTable = getNotebookVectorTable(notebookId)
+    if (!existingTable || existingTable.dimensions === dimensions) {
+      return
+    }
+
+    Logger.warn(
+      'KnowledgeService',
+      `Embedding dimensions for ${notebookId} changed from ${existingTable.dimensions} to ${dimensions}, rebuilding its vector table`
+    )
+
+    rebuildNotebookVectorTable(notebookId, dimensions)
+
+    const db = getDatabase()
+    db.delete(embeddings).where(eq(embeddings.notebookId, notebookId)).run()
+    db.update(documents)
+      .set({ status: 'pending', updatedAt: new Date() })
+      .where(eq(documents.notebookId, notebookId))
+      .run()
   }
 
   /**

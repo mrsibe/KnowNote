@@ -3,59 +3,76 @@
  * 基于 sqlite-vec 扩展的向量存储实现
  */
 
-import { getSqlite } from '../db'
+import { getSqlite, createNotebookVectorTable, getNotebookVectorTable } from '../db'
+import type { NotebookVectorTable } from '../db'
 import type { VectorStore, VectorItem, QueryResult, QueryOptions, VectorStoreConfig } from './types'
+import {
+  upsertVectorsSql,
+  deleteVectorsByEmbeddingIdsSql,
+  deleteVectorsByChunkIdsSql,
+  knnQuerySql,
+  clearVectorsSql,
+  countVectorsSql
+} from './vectorTableSql'
 import Logger from '../../shared/utils/logger'
 
 /**
  * SQLite 向量存储实现
  * 使用 sqlite-vec 的 vec0 虚拟表进行高性能向量检索
+ *
+ * 每个 notebook 一张向量表,宽度(维度)在创建时固定并记录在 vec_metadata 里。
+ * 表只由索引链路(知道真实维度)创建,其它路径读到什么就用什么。
  */
 export class SQLiteVectorStore implements VectorStore {
   private notebookId: string = ''
-  private dimensions: number = 1024
+  private table: NotebookVectorTable | null = null
   private initialized: boolean = false
 
   async initialize(config: VectorStoreConfig): Promise<void> {
     this.notebookId = config.notebookId
-    this.dimensions = config.dimensions || 1024
+
+    // 传了维度 = 索引链路刚量到真实维度;没传 = 以 vec_metadata 为准。没有向量表时
+    // 不建表也不报错:新笔记本还没索引过,查询和计数按空处理。
+    this.table = config.dimensions
+      ? createNotebookVectorTable(config.notebookId, config.dimensions)
+      : (getNotebookVectorTable(config.notebookId) ?? null)
+
     this.initialized = true
-    Logger.info('SQLiteVectorStore', `Initialized for notebook: ${this.notebookId}`)
+    Logger.info(
+      'SQLiteVectorStore',
+      this.table
+        ? `Initialized for notebook: ${this.notebookId}, table: ${this.table.tableName}, dimensions: ${this.table.dimensions}`
+        : `Initialized for notebook: ${this.notebookId} (no vectors indexed yet)`
+    )
   }
 
   async upsert(items: VectorItem[]): Promise<void> {
-    if (!this.initialized) {
-      throw new Error('VectorStore not initialized')
-    }
+    const table = this.requireTable()
 
     const sqlite = getSqlite()
     if (!sqlite) {
       throw new Error('SQLite instance not available')
     }
 
-    const insertStmt = sqlite.prepare(`
-      INSERT OR REPLACE INTO vec_embeddings (embedding_id, chunk_id, notebook_id, embedding)
-      VALUES (?, ?, ?, ?)
-    `)
+    const insertStmt = sqlite.prepare(upsertVectorsSql(table.tableName))
 
     const insertMany = sqlite.transaction((items: VectorItem[]) => {
       for (const item of items) {
-        // 验证向量维度
-        if (item.vector.length !== this.dimensions) {
-          Logger.warn(
-            'SQLiteVectorStore',
-            `Vector dimension mismatch: expected ${this.dimensions}, got ${item.vector.length}`
+        // 宽度不符还插进去,sqlite-vec 只会报一句难懂的错,这里直接说清楚
+        if (item.vector.length !== table.dimensions) {
+          throw new Error(
+            `Vector dimension mismatch: ${table.tableName} holds ${table.dimensions}-dimensional vectors, got ${item.vector.length}`
           )
         }
 
         // sqlite-vec 可以直接接受 Float32Array
-        insertStmt.run(item.id, item.chunkId, this.notebookId, item.vector)
+        insertStmt.run(item.id, item.chunkId, item.vector)
       }
     })
 
     try {
       insertMany(items)
-      Logger.debug('SQLiteVectorStore', `Upserted ${items.length} vectors`)
+      Logger.debug('SQLiteVectorStore', `Upserted ${items.length} vectors into ${table.tableName}`)
     } catch (error) {
       Logger.error('SQLiteVectorStore', 'Failed to upsert vectors:', error)
       throw error
@@ -67,21 +84,23 @@ export class SQLiteVectorStore implements VectorStore {
       throw new Error('VectorStore not initialized')
     }
 
-    if (ids.length === 0) return
+    if (ids.length === 0 || !this.table) return
 
     const sqlite = getSqlite()
     if (!sqlite) {
       throw new Error('SQLite instance not available')
     }
 
-    const placeholders = ids.map(() => '?').join(',')
-    const deleteStmt = sqlite.prepare(`
-      DELETE FROM vec_embeddings WHERE embedding_id IN (${placeholders})
-    `)
+    const deleteStmt = sqlite.prepare(
+      deleteVectorsByEmbeddingIdsSql(this.table.tableName, ids.length)
+    )
 
     try {
       deleteStmt.run(...ids)
-      Logger.debug('SQLiteVectorStore', `Deleted ${ids.length} vectors`)
+      Logger.debug(
+        'SQLiteVectorStore',
+        `Deleted ${ids.length} vectors from ${this.table.tableName}`
+      )
     } catch (error) {
       Logger.error('SQLiteVectorStore', 'Failed to delete vectors:', error)
       throw error
@@ -93,21 +112,23 @@ export class SQLiteVectorStore implements VectorStore {
       throw new Error('VectorStore not initialized')
     }
 
-    if (chunkIds.length === 0) return
+    if (chunkIds.length === 0 || !this.table) return
 
     const sqlite = getSqlite()
     if (!sqlite) {
       throw new Error('SQLite instance not available')
     }
 
-    const placeholders = chunkIds.map(() => '?').join(',')
-    const deleteStmt = sqlite.prepare(`
-      DELETE FROM vec_embeddings WHERE chunk_id IN (${placeholders})
-    `)
+    const deleteStmt = sqlite.prepare(
+      deleteVectorsByChunkIdsSql(this.table.tableName, chunkIds.length)
+    )
 
     try {
       deleteStmt.run(...chunkIds)
-      Logger.debug('SQLiteVectorStore', `Deleted vectors for ${chunkIds.length} chunks`)
+      Logger.debug(
+        'SQLiteVectorStore',
+        `Deleted vectors for ${chunkIds.length} chunks from ${this.table.tableName}`
+      )
     } catch (error) {
       Logger.error('SQLiteVectorStore', 'Failed to delete vectors by chunk IDs:', error)
       throw error
@@ -118,6 +139,9 @@ export class SQLiteVectorStore implements VectorStore {
     if (!this.initialized) {
       throw new Error('VectorStore not initialized')
     }
+
+    // 还没索引过的笔记本没有向量表,没有结果可言
+    if (!this.table) return []
 
     const { topK = 5, threshold } = options
 
@@ -130,20 +154,10 @@ export class SQLiteVectorStore implements VectorStore {
       // 使用 sqlite-vec 的 KNN 查询
       // cosine 距离：0 表示完全相同，2 表示完全相反
       // 转换为相似度分数：1 - (distance / 2)
-      const queryStmt = sqlite.prepare(`
-        SELECT
-          embedding_id,
-          chunk_id,
-          distance
-        FROM vec_embeddings
-        WHERE embedding MATCH ?
-          AND k = ?
-          AND notebook_id = ?
-        ORDER BY distance ASC
-      `)
+      const queryStmt = sqlite.prepare(knnQuerySql(this.table.tableName))
 
       // sqlite-vec 可以直接接受 Float32Array
-      const results = queryStmt.all(queryVector, topK, this.notebookId) as Array<{
+      const results = queryStmt.all(queryVector, topK) as Array<{
         embedding_id: string
         chunk_id: string
         distance: number
@@ -169,7 +183,7 @@ export class SQLiteVectorStore implements VectorStore {
 
       Logger.debug(
         'SQLiteVectorStore',
-        `Query returned ${filteredResults.length} results (threshold: ${threshold})`
+        `Query returned ${filteredResults.length} results from ${this.table.tableName} (threshold: ${threshold})`
       )
 
       return filteredResults
@@ -184,18 +198,17 @@ export class SQLiteVectorStore implements VectorStore {
       throw new Error('VectorStore not initialized')
     }
 
+    if (!this.table) return
+
     const sqlite = getSqlite()
     if (!sqlite) {
       throw new Error('SQLite instance not available')
     }
 
     try {
-      const deleteStmt = sqlite.prepare(`
-        DELETE FROM vec_embeddings WHERE notebook_id = ?
-      `)
-      deleteStmt.run(this.notebookId)
+      sqlite.prepare(clearVectorsSql(this.table.tableName)).run()
 
-      Logger.info('SQLiteVectorStore', `Cleared all vectors for notebook: ${this.notebookId}`)
+      Logger.info('SQLiteVectorStore', `Cleared all vectors from ${this.table.tableName}`)
     } catch (error) {
       Logger.error('SQLiteVectorStore', 'Failed to clear vectors:', error)
       throw error
@@ -207,16 +220,17 @@ export class SQLiteVectorStore implements VectorStore {
       throw new Error('VectorStore not initialized')
     }
 
+    if (!this.table) return 0
+
     const sqlite = getSqlite()
     if (!sqlite) {
       throw new Error('SQLite instance not available')
     }
 
     try {
-      const countStmt = sqlite.prepare(`
-        SELECT COUNT(*) as count FROM vec_embeddings WHERE notebook_id = ?
-      `)
-      const result = countStmt.get(this.notebookId) as { count: number }
+      const result = sqlite.prepare(countVectorsSql(this.table.tableName)).get() as {
+        count: number
+      }
 
       return result?.count || 0
     } catch (error) {
@@ -234,7 +248,23 @@ export class SQLiteVectorStore implements VectorStore {
     return this.notebookId
   }
 
-  getDimensions(): number {
-    return this.dimensions
+  getDimensions(): number | null {
+    return this.table?.dimensions ?? null
+  }
+
+  /**
+   * 写向量必须有表,而表由索引链路带着真实维度创建 —— 走到这里说明调用顺序错了,
+   * 直接报错比静默丢向量强。
+   */
+  private requireTable(): NotebookVectorTable {
+    if (!this.initialized) {
+      throw new Error('VectorStore not initialized')
+    }
+    if (!this.table) {
+      throw new Error(
+        `Notebook ${this.notebookId} has no vector table; it must be created while indexing with the embedding dimensions`
+      )
+    }
+    return this.table
   }
 }
