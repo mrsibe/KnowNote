@@ -7,7 +7,7 @@
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createDeepSeek } from '@ai-sdk/deepseek'
-import { createQwen } from 'qwen-ai-provider'
+import { createAlibaba } from '@ai-sdk/alibaba'
 import { createOllama } from 'ollama-ai-provider-v2'
 import { streamText, embed, embedMany } from 'ai'
 import type { BaseProvider, LLMProviderConfig } from '../capabilities/BaseProvider'
@@ -43,7 +43,7 @@ export class AISDKProvider implements BaseProvider {
     | ReturnType<typeof createOpenAI>
     | ReturnType<typeof createOpenAICompatible>
     | ReturnType<typeof createDeepSeek>
-    | ReturnType<typeof createQwen>
+    | ReturnType<typeof createAlibaba>
     | ReturnType<typeof createOllama>
     | null = null
 
@@ -83,8 +83,8 @@ export class AISDKProvider implements BaseProvider {
           apiKey: config.apiKey
         })
       } else if (this.name === 'qwen') {
-        // Qwen 使用社区 provider
-        this.aiProvider = createQwen({
+        // Qwen 使用官方 Alibaba / DashScope provider
+        this.aiProvider = createAlibaba({
           baseURL: this.config.baseUrl,
           apiKey: config.apiKey
         })

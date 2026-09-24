@@ -89,6 +89,7 @@
     "rather than in app.asar."
   ],
   "devDependencies": {
+    "@ai-sdk/alibaba": "^0.0.31",
     "@ai-sdk/deepseek": "^1.0.33",
     "@ai-sdk/openai": "^2.0.89",
     "@ai-sdk/openai-compatible": "^1.0.31",
@@ -162,7 +163,6 @@
     "ollama-ai-provider-v2": "^1.5.5",
     "postcss": "^8.5.6",
     "prettier": "^3.8.1",
-    "qwen-ai-provider": "^0.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-i18next": "^16.5.4",
@@ -185,30 +185,5 @@
     "vite": "^7.3.1",
     "zod": "^4.3.6",
     "zustand": "^5.0.10"
-  },
-  "//overrides": [
-    "qwen-ai-provider@0.1.1 is an AI SDK v4 era provider: it pulls in",
-    "@ai-sdk/provider-utils@2 and declares `zod: ^3.25.49` as a peer, while the app",
-    "itself is on zod 4 (ollama-ai-provider-v2 and ai@5 require it). npm's strict",
-    "peer resolution therefore refuses to build a tree at all.",
-    "",
-    "pnpm did not error - it resolved qwen-ai-provider against the root zod 4 and",
-    "only logged a warning; the committed pnpm-lock.yaml had NO zod 3 in the tree",
-    "(qwen-ai-provider@0.1.1(zod@4.3.6), @ai-sdk/provider-utils@2.2.8(zod@4.3.6)).",
-    "The override below states that same fact explicitly so npm agrees. It does NOT",
-    "downgrade the app's zod: only qwen-ai-provider's peer edge is rewritten, and",
-    "the resulting shape (qwen-ai-provider -> provider-utils@2 -> root zod 4, with",
-    "no zod 3 anywhere) is the same one pnpm produced. Note that versions do drift:",
-    "regenerating the lockfile with npm resolves every `^` range to its latest",
-    "satisfying release.",
-    "",
-    "Delete this block when qwen-ai-provider is upgraded to an AI SDK v5 provider",
-    "or replaced - Qwen is OpenAI-compatible, so createOpenAICompatible (already a",
-    "dependency) would also remove it."
-  ],
-  "overrides": {
-    "qwen-ai-provider": {
-      "zod": "^4.3.6"
-    }
   }
 }
