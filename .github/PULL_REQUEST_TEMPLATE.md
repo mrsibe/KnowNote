@@ -55,8 +55,8 @@ Remove this section if not applicable.
 -->
 
 | Before | After |
-| --- | --- |
-|  |  |
+| ------ | ----- |
+|        |       |
 
 ## Checklist
 

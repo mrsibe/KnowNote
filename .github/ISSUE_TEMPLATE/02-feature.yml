@@ -1,6 +1,6 @@
 name: Feature Request
 description: Suggest an improvement or new capability for KnowNote
-title: "[Feature]: "
+title: '[Feature]: '
 labels:
   - enhancement
 body:
