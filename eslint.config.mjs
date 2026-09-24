@@ -37,5 +37,14 @@ export default defineConfig(
       'react-refresh/only-export-components': 'off'
     }
   },
+  {
+    // Build scripts are plain JS (run directly by node/CI), so the TS-only
+    // explicit-return-type rule cannot be satisfied there. Source files turn it
+    // off above for the same reason.
+    files: ['scripts/**/*.mjs'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off'
+    }
+  },
   eslintConfigPrettier
 )
