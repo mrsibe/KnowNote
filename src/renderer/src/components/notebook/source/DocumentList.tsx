@@ -33,7 +33,7 @@ export default function DocumentList({
   // 未配置嵌入模型的提示（优先级最高）
   if (!hasEmbeddingModel && documents.length === 0) {
     return (
-      <Empty>
+      <Empty className="border-none">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <Database className="w-12 h-12 text-muted-foreground" />
@@ -51,7 +51,7 @@ export default function DocumentList({
   // 暂无文档的空状态（使用Empty组件重构）
   if (documents.length === 0) {
     return (
-      <Empty>
+      <Empty className="border-none">
         <EmptyHeader>
           <EmptyMedia variant="icon">
             <FileText className="w-12 h-12 text-muted-foreground" />
