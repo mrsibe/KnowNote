@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, ReactElement } from 'react'
+import { memo, useState, useEffect, useRef, ReactElement } from 'react'
 import {
   Send,
   StopCircle,
@@ -24,7 +24,7 @@ interface ProcessPanelProps {
   isRightCollapsed?: boolean
 }
 
-export default function ProcessPanel({
+function ProcessPanel({
   onToggleLeft,
   onToggleRight,
   isLeftCollapsed = false,
@@ -288,8 +288,11 @@ export default function ProcessPanel({
       <div
         className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none rounded-b-lg z-10"
         style={{
+          // A scroll fade, not decoration: it keeps the transcript readable as it
+          // passes under the floating composer. Uses the surface token rather than
+          // the legacy --card alias, and never a raw hsl().
           background:
-            'linear-gradient(to bottom, transparent 0%, hsl(var(--card)) 40%, hsl(var(--card)) 100%)'
+            'linear-gradient(to bottom, transparent 0%, var(--surface-raised) 40%, var(--surface-raised) 100%)'
         }}
       />
 
@@ -350,3 +353,11 @@ export default function ProcessPanel({
     </Card>
   )
 }
+
+/**
+ * Memoised because `ResizableLayout` re-renders on every drag frame and clones
+ * this element with a fresh props object each time. The props are stable between
+ * frames, so memo keeps the transcript out of the resize path entirely — without
+ * it the whole message list re-rendered at pointer-event frequency.
+ */
+export default memo(ProcessPanel)

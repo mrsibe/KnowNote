@@ -36,3 +36,10 @@ desktop.ini
 *.bak
 *.swp
 *~
+
+# impeccable workflow artifacts that stay local
+# PRODUCT.md and DESIGN.md are the committed records; these are per-session.
+.impeccable/critique/
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/live/

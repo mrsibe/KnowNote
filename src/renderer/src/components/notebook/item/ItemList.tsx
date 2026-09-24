@@ -164,7 +164,7 @@ function SortableItemRow({
       }}
       className={`group grid grid-cols-[auto_1fr_auto] gap-2 items-start rounded-md border px-2 py-2 ${isDragging ? 'cursor-grabbing opacity-75' : 'cursor-grab hover:cursor-grab'} ${
         isGenerating
-          ? 'bg-chart-1/5 border-chart-1/30 animate-pulse cursor-wait'
+          ? 'bg-muted border-border animate-pulse cursor-wait'
           : isFailed
             ? 'bg-destructive/5 border-destructive/30'
             : isCurrentNote
@@ -176,11 +176,13 @@ function SortableItemRow({
       <div className="flex items-center">
         {/* 图标 */}
         {isNote && <FileText className="w-4 h-4 text-muted-foreground" />}
-        {isMindMap && !isGenerating && <Network className="w-4 h-4 text-chart-1" />}
-        {isQuiz && !isGenerating && <ClipboardList className="w-4 h-4 text-chart-2" />}
-        {isAnki && !isGenerating && <Layers className="w-4 h-4 text-chart-3" />}
+        {/* Artifact types are told apart by their icon, not by colour: DESIGN.md keeps
+            --chart-* for charts and graph surfaces, and neutrals the chrome. */}
+        {isMindMap && !isGenerating && <Network className="w-4 h-4 text-muted-foreground" />}
+        {isQuiz && !isGenerating && <ClipboardList className="w-4 h-4 text-muted-foreground" />}
+        {isAnki && !isGenerating && <Layers className="w-4 h-4 text-muted-foreground" />}
         {(isMindMap || isQuiz || isAnki) && isGenerating && (
-          <Loader2 className="w-4 h-4 text-chart-1 animate-spin" />
+          <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
         )}
       </div>
 

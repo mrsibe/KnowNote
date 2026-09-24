@@ -57,13 +57,9 @@ export default function ShortcutSettings(): ReactElement {
         key = key.toUpperCase()
       }
 
-      // 允许纯Escape键
-      if (key === 'Escape' && modifiers.length === 0) {
-        setTempAccelerator('Escape')
-        return
-      }
-
-      // 其他键必须带修饰键
+      // Every global accelerator must carry a modifier. A bare key here becomes a
+      // window-wide shortcut that the main process prevents default on, so it
+      // steals the key from every text field in the app.
       if (modifiers.length === 0) {
         setTempAccelerator('')
         return

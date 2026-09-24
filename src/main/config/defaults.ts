@@ -272,7 +272,12 @@ export const defaultShortcuts: ShortcutConfig[] = [
   },
   {
     action: ShortcutAction.CLOSE_NOTEBOOK,
-    accelerator: 'Escape',
+    // Not bare Escape. Escape is the key that dismisses a field, a dialog and a
+    // dropdown, and this action closes the whole workspace — including unsaved
+    // note text, because the main process claims the key before the renderer's
+    // unsaved-changes guard can see it. Ctrl/Cmd+W is the platform idiom for
+    // "close this tab" and cannot be pressed by accident.
+    accelerator: 'CommandOrControl+W',
     enabled: true,
     description: 'shortcuts:closeNotebook'
   },
