@@ -45,7 +45,8 @@ const PALETTE =
 /**
  * The only surfaces allowed to use `--chart-*`. DESIGN.md bans chart colours
  * outside chart and graph surfaces, and the mind-map node is a graph node in a
- * separate window. Path fragments, matched with `includes`.
+ * separate window. Suffixes of the path, always with forward slashes — the rule
+ * normalises separators before matching.
  */
 const CHART_SURFACES = ['/components/notebook/mindmap/CustomNode.tsx']
 
@@ -103,7 +104,11 @@ const RULES = [
     describe: 'chart colours stay on chart and graph surfaces',
     applies: ['.ts', '.tsx'],
     scan(line, check, file) {
-      if (file && CHART_SURFACES.some((allowed) => file.includes(allowed))) return
+      // Separators are normalised first: `file` is a platform path, so the
+      // allowlist below never matched on Windows and every legitimately allowed
+      // use was reported. CI caught it, not the local run.
+      const normalized = file ? file.replace(/\\/g, '/') : ''
+      if (CHART_SURFACES.some((allowed) => normalized.endsWith(allowed))) return
       const patterns = [
         /\b(bg|text|border|ring|fill|stroke|from|to|via)-chart-[1-5](?:\/\d+)?\b/g,
         /var\(--chart-[1-5]\)/g
