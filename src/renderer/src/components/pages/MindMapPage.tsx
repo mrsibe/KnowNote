@@ -208,7 +208,9 @@ export default function MindMapPage() {
               <button
                 onClick={toggleDirection}
                 className="p-1.5 rounded-md hover:bg-surface-hover transition-colors"
-                title={direction === 'LR' ? '切换为垂直布局' : '切换为横向布局'}
+                title={
+                  direction === 'LR' ? t('switchToVerticalLayout') : t('switchToHorizontalLayout')
+                }
               >
                 {direction === 'LR' ? (
                   <ArrowUpDown className="w-4 h-4 text-muted-foreground" />
@@ -219,7 +221,7 @@ export default function MindMapPage() {
               <button
                 onClick={handleExport}
                 className="p-1.5 rounded-md hover:bg-surface-hover transition-colors"
-                title="导出为图片"
+                title={t('exportAsImage')}
               >
                 <Download className="w-4 h-4 text-muted-foreground" />
               </button>
