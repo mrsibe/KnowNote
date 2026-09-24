@@ -15,6 +15,8 @@ export interface DragHandleProps {
   dragging: boolean
   onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void
+  /** Double-click restores this panel to its default share of the space. */
+  onDoubleClick: () => void
   /** Screen-reader label, e.g. "Resize the knowledge base panel". */
   label: string
 }
@@ -39,6 +41,7 @@ export default function DragHandle({
   dragging,
   onPointerDown,
   onKeyDown,
+  onDoubleClick,
   label
 }: DragHandleProps): ReactElement {
   return (
@@ -49,6 +52,7 @@ export default function DragHandle({
       aria-valuenow={Math.round(value)}
       aria-valuemin={min}
       aria-valuemax={max}
+      aria-valuetext={`${Math.round(value)} pixels`}
       tabIndex={0}
       data-handle={side}
       data-dragging={dragging || undefined}
@@ -66,6 +70,7 @@ export default function DragHandle({
       }
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
+      onDoubleClick={onDoubleClick}
     />
   )
 }

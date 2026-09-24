@@ -53,41 +53,38 @@ export default function MessageList({ messages }: MessageListProps): ReactElemen
     scrollToBottom()
   }, [messages, scrollToBottom])
 
-  // 空状态
-  if (messages.length === 0) {
-    return (
-      <ScrollArea className="h-full">
-        <div className="flex min-h-full items-center justify-center p-8">
-          <Empty className="border-none">
-            <EmptyHeader>
-              <EmptyMedia variant="icon">
-                <MessageSquare className="w-6 h-6" />
-              </EmptyMedia>
-              <EmptyTitle>{t('ui:newChat')}</EmptyTitle>
-              <EmptyDescription>{t('ui:noMessages')}</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        </div>
-      </ScrollArea>
-    )
-  }
-
-  // 消息列表
+  // 空状态与消息列表共用同一个 ScrollArea：视口必须在首次渲染就存在，
+  // 否则下面那个 `[]` 依赖的 scroll 订阅会在 viewportRef 为空时直接返回，
+  // 之后再也不会重试 —— pinnedRef 会永远是 true，跟随/回到最新全部失效。
   return (
     <div className="relative h-full">
       <ScrollArea className="h-full" viewportRef={viewportRef}>
-        <div className="px-4 py-6 pb-32">
-          <div className="space-y-4">
-            {messages.map((message) => (
-              <MessageItem key={message.id} message={message} />
-            ))}
-            {/* 滚动锚点 */}
-            <div ref={bottomRef} />
+        {messages.length === 0 ? (
+          <div className="flex min-h-full items-center justify-center p-8">
+            <Empty className="border-none">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <MessageSquare className="w-6 h-6" />
+                </EmptyMedia>
+                <EmptyTitle>{t('ui:newChat')}</EmptyTitle>
+                <EmptyDescription>{t('ui:noMessages')}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           </div>
-        </div>
+        ) : (
+          <div className="px-4 py-6 pb-32">
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <MessageItem key={message.id} message={message} />
+              ))}
+              {/* 滚动锚点 */}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+        )}
       </ScrollArea>
 
-      {!isPinned && (
+      {!isPinned && messages.length > 0 && (
         // `bottom-32` matches the `pb-32` reserve above, so the pill lands in the
         // gap between the last message and the floating composer.
         <Button

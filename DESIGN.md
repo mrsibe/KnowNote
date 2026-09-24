@@ -132,8 +132,9 @@ live only in component constants. These are the values; change them here first.
 | Container gutter     | `p-2` (`CONTAINER_PADDING_X`)          | The canvas gap around and between the panels               |
 | Initial side widths  | golden ratio of the free space         | `1 / (2 + 1.618)` each; the centre takes `1.618 / 3.618`   |
 | Minimum side panel   | `260px` (`MIN_SIDE_WIDTH`)             | A drag and a keyboard step both clamp here                 |
-| Minimum centre panel | `420px` (`MIN_CENTER_WIDTH`)           | Never traded away; the sides give up width first           |
+| Minimum centre panel | `420px` (`MIN_CENTER_WIDTH`)           | The sides give up width first, down to their own minimum   |
 | Seam                 | `w-3` (`HANDLE_WIDTH`)                 | 12px canvas gutter; the gutter itself is the drag target   |
+| Fallback widths      | `320px` / `360px`                      | Used when the container has no measurable width yet        |
 | Keyboard step        | `10px` / `50px`                        | `Shift` for the larger step; `Home` / `End` for the limits |
 | Persistence          | `localStorage` `knownote:panel-widths` | Survives navigation, unlike the component's own lifetime   |
 
@@ -161,15 +162,40 @@ Rules:
   adjacent surfaces sharing a divider. This is the one place a hairline is wrong —
   do not "tidy" it.
 - **The seam is a real `separator`**: `role`, `aria-orientation`, `aria-valuenow`,
-  `tabIndex={0}`, arrow keys. Panel resizing is not mouse-only. `bg-surface-hover`
-  on hover and while dragging, plus the standard focus ring.
+  `aria-valuetext`, `tabIndex={0}`, arrow keys. Panel resizing is not mouse-only.
+- **Arrow keys move the seam, not the panel.** `ArrowLeft` shrinks the panel on the
+  left of the seam and grows the panel on the right of it; `ArrowRight` does the
+  opposite. `Home` / `End` go to the minimum and maximum of the value. The two
+  seams report the same kind of number (the panel width in px) under the same key
+  semantics — an earlier revision inverted one of them, so the same key raised the
+  reported value on one seam and lowered it on the other.
+- **Double-click a seam** restores that panel to its default share. Persistence
+  without a way back is a trap: one bad drag otherwise keeps a 260px reading pane
+  forever.
+- **The centre's minimum is not absolute.** `maxSideWidth` floors each side at
+  `MIN_SIDE_WIDTH`, so on a window too narrow for both minimums the centre absorbs
+  the shortfall rather than a side panel being clamped to something unusable. In
+  practice the window's own 1000px minimum keeps the two from colliding, but the
+  guarantee comes from the window, not from this layout.
 - A collapsed panel keeps its previous width in the session so expanding restores
   it; `0` is never persisted as a width.
 
 `MessageList` follows the transcript only while the reader is already at the
 bottom (within 48px). Scrolling up suspends the follow and reveals a
 `jumpToLatest` pill; the follow resumes when they return to the bottom. A stream
-that force-scrolls per token makes re-reading impossible.
+that force-scrolls per token makes re-reading impossible. The scroll itself is
+instant, never smooth: this effect runs per token, and an animation queued that
+often never settles.
+
+The transcript's empty state and its message list must share **one** `ScrollArea`.
+The scroll subscription runs once, so a viewport that only exists after messages
+arrive can never be observed — that is how the follow silently stopped working
+while looking correct in review.
+
+`ProcessPanel` floats the composer over the transcript and reserves `pb-32`
+(128px) for it; the scroll fade above it is `h-32` for the same reason. The fade
+is sized to the reserve, not to taste: a taller fade dims the last line of every
+answer, because the content scrolls under it.
 
 ## Borders and elevation
 

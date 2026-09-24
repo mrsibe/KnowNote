@@ -286,7 +286,10 @@ function ProcessPanel({
 
       {/* 底部渐变遮罩 - 独立于消息区域，避免堆叠上下文问题 */}
       <div
-        className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none rounded-b-lg z-10"
+        // Height must match the `pb-32` reserve in MessageList: the fade only needs
+        // to cover the space the composer floats over. At h-48 (192px) it reached
+        // ~64px higher than the reserve and dimmed the last line of every answer.
+        className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none rounded-b-lg z-10"
         style={{
           // A scroll fade, not decoration: it keeps the transcript readable as it
           // passes under the floating composer. Uses the surface token rather than
