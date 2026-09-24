@@ -1,10 +1,9 @@
 import { ipcMain, IpcMainInvokeEvent } from 'electron'
 import * as queries from '../db/queries'
-import { ProviderManager } from '../providers/ProviderManager'
+import { ConnectionManager } from '../models/ConnectionManager'
 import { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
 import { KnowledgeService } from '../services/KnowledgeService'
 import { validateAndCleanMessages } from '../utils/messageValidator'
-import { settingsManager } from '../config'
 import Logger from '../../shared/utils/logger'
 import { ChatSchemas, validate } from './validation'
 
@@ -38,7 +37,7 @@ ${contextParts.join('\n\n---\n\n')}
  * Register chat-related IPC Handlers
  */
 export function registerChatHandlers(
-  providerManager: ProviderManager,
+  connectionManager: ConnectionManager,
   sessionAutoSwitchService: SessionAutoSwitchService,
   knowledgeService: KnowledgeService
 ) {
@@ -126,13 +125,11 @@ export function registerChatHandlers(
     }
 
     // 3.2 RAG 增强：检索相关知识并注入上下文
-    // 只有在设置了默认嵌入模型时才启用 RAG
+    // 只有在配置了 embedding connection 时才启用 RAG
     try {
-      const settings = await settingsManager.getAllSettings()
-      const hasEmbeddingModel =
-        settings.defaultEmbeddingModel && settings.defaultEmbeddingModel.includes(':')
+      const embeddingClient = await connectionManager.getEmbeddingClient()
 
-      if (hasEmbeddingModel) {
+      if (embeddingClient) {
         const session = queries.getSessionById(sessionId)
         if (session?.notebookId) {
           const searchResults = await knowledgeService.search(session.notebookId, content, {
@@ -162,12 +159,12 @@ export function registerChatHandlers(
       Logger.warn('ChatHandlers', 'RAG search failed:', error)
     }
 
-    // 4. 调用 AI Provider 流式生成
-    const provider = await providerManager.getActiveChatProvider()
-    if (!provider) {
+    // 4. 调用 Model Connection 流式生成
+    const client = await connectionManager.getChatClient()
+    if (!client) {
       event.sender.send('message-error', {
         messageId: assistantMessage.id,
-        error: 'AI Provider not configured, please configure in settings'
+        error: 'Chat model not configured, please configure in settings'
       })
       return assistantMessage.id
     }
@@ -176,8 +173,8 @@ export function registerChatHandlers(
     let fullReasoningContent = ''
     let usageMetadata: any = null
 
-    // 调用 Provider 流式生成,获取 AbortController（基于 AI SDK fullStream）
-    const abortController = await provider.sendMessageStream(
+    // 调用 ModelClient 流式生成,获取 AbortController（基于 AI SDK fullStream）
+    const abortController = await client.sendMessageStream(
       messages,
       // onChunk - 处理 AI SDK fullStream 的各种 part 类型
       (chunk) => {

@@ -7,7 +7,7 @@ import {
   closeDatabase,
   executeCheckpoint
 } from './db'
-import { ProviderManager } from './providers/ProviderManager'
+import { ConnectionManager } from './models/ConnectionManager'
 import { SessionAutoSwitchService } from './services/SessionAutoSwitchService'
 import { KnowledgeService } from './services/KnowledgeService'
 import { UpdateService } from './services/UpdateService'
@@ -15,10 +15,11 @@ import { ShortcutManager } from './services/ShortcutManager'
 import { createMainWindow } from './windows'
 import { registerAllHandlers } from './ipc'
 import { getStore } from './config/store'
+import { migrateProvidersToConnections } from './config/connectionMigration'
 import { isSmokeTestRequested, runSmokeTest } from './smokeTest'
 import Logger from '../shared/utils/logger'
 
-let providerManager: ProviderManager | null = null
+let connectionManager: ConnectionManager | null = null
 let sessionAutoSwitchService: SessionAutoSwitchService | null = null
 let knowledgeService: KnowledgeService | null = null
 let updateService: UpdateService | null = null
@@ -56,31 +57,33 @@ app.whenReady().then(async () => {
   initVectorStore()
   Logger.info('Main', 'Database initialized')
 
-  // Initialize Provider Manager
-  Logger.info('Main', 'Initializing Provider Manager...')
-  providerManager = new ProviderManager()
-  await providerManager.initialize()
-  Logger.info('Main', 'Provider Manager initialized')
+  // Initialize electron-store
+  Logger.info('Main', 'Initializing electron-store...')
+  const store = await getStore()
+  Logger.info('Main', 'electron-store initialized')
+
+  // One-time migration: legacy Provider config -> Model Connections
+  await migrateProvidersToConnections(store)
+
+  // Initialize Connection Manager
+  Logger.info('Main', 'Initializing Connection Manager...')
+  connectionManager = new ConnectionManager()
+  Logger.info('Main', 'Connection Manager initialized')
 
   // Initialize Session Auto Switch Service
   Logger.info('Main', 'Initializing Session Auto Switch Service...')
-  sessionAutoSwitchService = new SessionAutoSwitchService(providerManager)
+  sessionAutoSwitchService = new SessionAutoSwitchService(connectionManager)
   Logger.info('Main', 'Session Auto Switch Service initialized')
 
   // Initialize Knowledge Service
   Logger.info('Main', 'Initializing Knowledge Service...')
-  knowledgeService = new KnowledgeService(providerManager)
+  knowledgeService = new KnowledgeService(connectionManager)
   Logger.info('Main', 'Knowledge Service initialized')
 
   // Initialize Update Service
   Logger.info('Main', 'Initializing Update Service...')
   updateService = new UpdateService()
   Logger.info('Main', 'Update Service initialized')
-
-  // Initialize electron-store
-  Logger.info('Main', 'Initializing electron-store...')
-  const store = await getStore()
-  Logger.info('Main', 'electron-store initialized')
 
   // Initialize Shortcut Manager
   Logger.info('Main', 'Initializing Shortcut Manager...')
@@ -89,7 +92,7 @@ app.whenReady().then(async () => {
 
   // Register all IPC Handlers
   registerAllHandlers(
-    providerManager,
+    connectionManager,
     sessionAutoSwitchService,
     knowledgeService,
     updateService,

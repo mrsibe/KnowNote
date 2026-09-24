@@ -12,8 +12,6 @@ function mergeSettings(stored: Partial<AppSettings>): AppSettings {
     language: stored.language ?? defaultSettings.language,
     autoLaunch: stored.autoLaunch ?? defaultSettings.autoLaunch,
     hasCompletedOnboarding: stored.hasCompletedOnboarding ?? defaultSettings.hasCompletedOnboarding,
-    defaultChatModel: stored.defaultChatModel ?? defaultSettings.defaultChatModel,
-    defaultEmbeddingModel: stored.defaultEmbeddingModel ?? defaultSettings.defaultEmbeddingModel,
     prompts: {
       mindMap: {
         'zh-CN': stored.prompts?.mindMap?.['zh-CN'] ?? defaultSettings.prompts!.mindMap!['zh-CN'],

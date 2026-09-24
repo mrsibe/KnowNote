@@ -1,13 +1,16 @@
-import type { AppSettings, ShortcutConfig } from '../../shared/types'
+import type { AppSettings, ConnectionMap, ShortcutConfig } from '../../shared/types'
+import type {
+  LegacyModelEntry,
+  LegacyProviderConfig,
+  LegacyProviderConfigData,
+  LegacySettingsShape
+} from './legacyConnectionMapping'
 
-/**
- * 提供商配置接口
- */
-export interface ProviderConfig {
-  providerName: string
-  config: Record<string, any>
-  enabled: boolean
-  updatedAt: number
+export type {
+  LegacyModelEntry,
+  LegacyProviderConfig,
+  LegacyProviderConfigData,
+  LegacySettingsShape
 }
 
 /**
@@ -15,8 +18,26 @@ export interface ProviderConfig {
  */
 export interface StoreSchema {
   settings: AppSettings
-  providers: Record<string, ProviderConfig>
+  connections: ConnectionMap
   shortcuts: ShortcutConfig[]
+  /**
+   * 旧版 Provider 配置，仅用于一次性迁移到 connections。
+   * 迁移完成后不再写入。
+   */
+  providers?: Record<string, LegacyProviderConfig>
+  /** 旧版模型缓存，仅用于一次性迁移。 */
+  models?: Record<string, { models: LegacyModelEntry[] }>
+  /** 迁移状态标记。 */
+  connectionMigration?: ConnectionMigrationState
+}
+
+/**
+ * 一次性迁移状态
+ */
+export interface ConnectionMigrationState {
+  migratedAt: number
+  /** 迁移中遇到的无法转换的配置；非空表示需要用户手动重新配置。 */
+  warnings: string[]
 }
 
 // 重新导出 AppSettings 以保持向后兼容

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.node.json",
+  "include": ["test/**/*.ts"],
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  }
+}

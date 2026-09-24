@@ -121,25 +121,23 @@ const api = {
     return () => ipcRenderer.removeListener('session-auto-switched', listener)
   },
 
-  // Provider 配置相关
-  saveProviderConfig: (config: any) => invokeWithTimeout('save-provider-config', 5000, config),
-  getProviderConfig: (providerName: string) =>
-    ipcRenderer.invoke('get-provider-config', { providerName }),
-  getAllProviderConfigs: () => ipcRenderer.invoke('get-all-provider-configs'),
-  deleteProviderConfig: (providerName: string) =>
-    ipcRenderer.invoke('delete-provider-config', { providerName }),
-  validateProviderConfig: (providerName: string, config: any) =>
-    invokeWithTimeout('validate-provider-config', 15000, { providerName, config }), // 15秒超时（网络验证）
-  fetchModels: (providerName: string, apiKey: string) =>
-    invokeWithTimeout('fetch-models', 15000, { providerName, apiKey }), // 15秒超时（网络请求）
-  getProviderModels: (providerName: string) =>
-    ipcRenderer.invoke('get-provider-models', { providerName }),
+  // Model Connection 相关
+  connections: {
+    getAll: () => ipcRenderer.invoke('get-connections'),
+    getProtocols: () => ipcRenderer.invoke('get-connection-protocols'),
+    save: (capability: string, connection: any) =>
+      invokeWithTimeout('save-connection', 5000, { capability, connection }),
+    remove: (capability: string) => ipcRenderer.invoke('delete-connection', { capability }),
+    test: (connection: any) => invokeWithTimeout('test-connection', 15000, { connection }), // 15秒超时（网络验证）
+    fetchModels: (connection: any) =>
+      invokeWithTimeout('fetch-connection-models', 15000, { connection }), // 15秒超时（网络请求）
 
-  // Provider 配置变更监听
-  onProviderConfigChanged: (callback: () => void) => {
-    const listener = () => callback()
-    ipcRenderer.on('provider-config-changed', listener)
-    return () => ipcRenderer.removeListener('provider-config-changed', listener)
+    // 连接配置变更监听
+    onChanged: (callback: () => void) => {
+      const listener = () => callback()
+      ipcRenderer.on('connections-changed', listener)
+      return () => ipcRenderer.removeListener('connections-changed', listener)
+    }
   },
 
   // Knowledge 知识库相关

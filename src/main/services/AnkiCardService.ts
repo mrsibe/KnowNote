@@ -12,8 +12,7 @@ import type {
   AnkiGenerationOptions
 } from '../../shared/types/anki'
 import { eq, desc, and, inArray } from 'drizzle-orm'
-import { ProviderManager } from '../providers/ProviderManager'
-import { AISDKProvider } from '../providers/base/AISDKProvider'
+import { ConnectionManager } from '../models/ConnectionManager'
 import { streamObject } from 'ai'
 import { z } from 'zod'
 import Logger from '../../shared/utils/logger'
@@ -115,7 +114,7 @@ function createAnkiSchema(cardCount: number) {
  * Anki卡片服务
  */
 export class AnkiCardService {
-  constructor(private providerManager: ProviderManager) {}
+  constructor(private connectionManager: ConnectionManager) {}
 
   /**
    * 聚合笔记本内容
@@ -177,17 +176,12 @@ export class AnkiCardService {
     options?: AnkiGenerationOptions,
     onProgress?: AnkiProgressCallback
   ): Promise<AnkiGenerationResult> {
-    const provider = await this.providerManager.getActiveChatProvider()
-    if (!provider) {
-      throw new Error('没有可用的对话模型,请先配置LLM提供商')
+    const client = await this.connectionManager.getChatClient()
+    if (!client) {
+      throw new Error('没有可用的对话模型,请先在设置中配置模型连接')
     }
 
-    // 确保 provider 是 AISDKProvider 实例
-    if (!(provider instanceof AISDKProvider)) {
-      throw new Error('当前 provider 不支持结构化输出')
-    }
-
-    Logger.info('AnkiCardService', `Using provider: ${provider.name}`)
+    Logger.info('AnkiCardService', `Using model: ${client.label}`)
 
     // 获取基础提示词
     const promptTemplate = await getAnkiPrompt(options?.customPrompt)
@@ -205,7 +199,7 @@ export class AnkiCardService {
       onProgress?.('generating_cards', 30)
 
       // 获取 AI SDK 模型实例
-      const model = provider.getAIModel()
+      const model = client.getAIModel()
 
       // 创建动态Schema
       const AnkiSchema = createAnkiSchema(cardCount)
@@ -412,9 +406,9 @@ export class AnkiCardService {
 
       const generationTime = Date.now() - startTime
 
-      // 捕获当前 provider 名称，避免在更新时再次异步调用
-      const activeProvider = await this.providerManager.getActiveChatProvider()
-      const providerName = activeProvider?.name || 'unknown'
+      // 捕获当前模型 ID，避免在更新时再次异步调用
+      const activeProvider = await this.connectionManager.getChatClient()
+      const providerName = activeProvider?.modelId || 'unknown'
 
       db.update(ankiCards)
         .set({

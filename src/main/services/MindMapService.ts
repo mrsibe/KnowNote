@@ -8,9 +8,8 @@ import { mindMaps, documents, chunks, notebooks, items } from '../db/schema'
 import type { MindMap, NewMindMap } from '../db/schema'
 import type { MindMapTreeNode, MindMapGenerationResult } from '../../shared/types/mindmap'
 import { eq, desc, and, inArray } from 'drizzle-orm'
-import { ProviderManager } from '../providers/ProviderManager'
+import { ConnectionManager } from '../models/ConnectionManager'
 // import { KnowledgeService } from './KnowledgeService'
-import { AISDKProvider } from '../providers/base/AISDKProvider'
 import { streamObject } from 'ai'
 import { z } from 'zod'
 import Logger from '../../shared/utils/logger'
@@ -70,7 +69,7 @@ async function getMindMapPrompt(): Promise<string> {
  */
 export class MindMapService {
   constructor(
-    private providerManager: ProviderManager
+    private connectionManager: ConnectionManager
     // Reserved for future use
 
     // private _knowledgeService: KnowledgeService
@@ -131,17 +130,12 @@ export class MindMapService {
     content: string,
     onProgress?: MindMapProgressCallback
   ): Promise<MindMapGenerationResult> {
-    const provider = await this.providerManager.getActiveChatProvider()
-    if (!provider) {
-      throw new Error('没有可用的对话模型,请先配置LLM提供商')
+    const client = await this.connectionManager.getChatClient()
+    if (!client) {
+      throw new Error('没有可用的对话模型,请先在设置中配置模型连接')
     }
 
-    // 确保 provider 是 AISDKProvider 实例
-    if (!(provider instanceof AISDKProvider)) {
-      throw new Error('当前 provider 不支持结构化输出')
-    }
-
-    Logger.info('MindMapService', `Using provider: ${provider.name}`)
+    Logger.info('MindMapService', `Using model: ${client.label}`)
 
     const promptTemplate = await getMindMapPrompt()
     const prompt = promptTemplate.replace('{{CONTENT}}', content)
@@ -150,7 +144,7 @@ export class MindMapService {
       onProgress?.('generating_mindmap', 30)
 
       // 获取 AI SDK 模型实例
-      const model = provider.getAIModel()
+      const model = client.getAIModel()
 
       // 使用 streamObject 生成结构化数据
       const { partialObjectStream, object } = streamObject({
@@ -364,7 +358,7 @@ export class MindMapService {
           treeData: validatedResult.rootNode as any,
           chunkMapping: validatedResult.chunkMapping as any,
           metadata: {
-            model: (await this.providerManager.getActiveChatProvider())?.name || 'unknown',
+            model: (await this.connectionManager.getChatClient())?.modelId || 'unknown',
             totalNodes: validatedResult.metadata.totalNodes,
             maxDepth: validatedResult.metadata.maxDepth,
             generationTime
