@@ -1,7 +1,8 @@
-import { BrowserWindow, nativeTheme } from 'electron'
+import { BrowserWindow } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { settingsManager } from '../config'
+import { applyTitleBarTheme, titleBarOverlayOptions } from './titleBarOverlay'
 
 let ankiWindow: BrowserWindow | null = null
 let settingsUnsubscribe: (() => void) | null = null
@@ -30,7 +31,6 @@ export function createAnkiWindow(notebookId: string, ankiCardId?: string): void 
   // 根据用户主题设置背景色
   const theme = settingsManager.getSettingSync('theme')
   const backgroundColor = theme === 'dark' ? '#1a1b1e' : '#fafafa'
-  const preferDark = nativeTheme.shouldUseDarkColors || theme === 'dark'
 
   // 创建Anki卡片窗口
   ankiWindow = new BrowserWindow({
@@ -43,15 +43,7 @@ export function createAnkiWindow(notebookId: string, ankiCardId?: string): void 
     titleBarStyle: 'hidden',
     // Position macOS traffic lights (window controls)
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
-    ...(process.platform !== 'darwin'
-      ? {
-          titleBarOverlay: {
-            color: 'rgba(0,0,0,0)',
-            height: 35,
-            symbolColor: preferDark ? 'white' : 'black'
-          }
-        }
-      : {}),
+    ...(process.platform !== 'darwin' ? { titleBarOverlay: titleBarOverlayOptions(theme) } : {}),
     backgroundColor,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -84,12 +76,7 @@ export function createAnkiWindow(notebookId: string, ankiCardId?: string): void 
         const newBackgroundColor = newSettings.theme === 'dark' ? '#1a1b1e' : '#fafafa'
         ankiWindow.setBackgroundColor(newBackgroundColor)
         // 更新 titleBarOverlay 的符号颜色
-        const newSymbol = newSettings.theme === 'dark' ? 'white' : 'black'
-        try {
-          ankiWindow.setTitleBarOverlay({ symbolColor: newSymbol })
-        } catch {
-          // 某些平台或旧版本可能不支持 setTitleBarOverlay
-        }
+        applyTitleBarTheme(ankiWindow, newSettings.theme)
       }
     })
     .then((unsubscribe) => {
