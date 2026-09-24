@@ -19,13 +19,8 @@ interface NotebookCardProps {
   onRename: () => void
 }
 
-// 主题图表颜色映射 - 用于侧边装饰
-const chartColors = ['bg-chart-1', 'bg-chart-2', 'bg-chart-3', 'bg-chart-4', 'bg-chart-5']
-
-const getChartColor = (id: string): string => {
-  const hash = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  return chartColors[hash % 5]
-}
+// 笔记本卡片。DESIGN.md 明确禁止在图表/图谱之外使用 --chart-* 颜色，
+// 所以卡片不再用彩色侧边条区分，颜色只用于正文层级和交互状态。
 
 export default function NotebookCard({
   notebook,
@@ -34,7 +29,6 @@ export default function NotebookCard({
   onRename
 }: NotebookCardProps): ReactElement {
   const { t, i18n } = useTranslation('ui')
-  const chartColor = getChartColor(notebook.id)
 
   const formatDate = (date: Date): string => {
     const now = new Date()
@@ -52,9 +46,18 @@ export default function NotebookCard({
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <Card onClick={onClick} className="relative overflow-hidden">
-          {/* 左侧彩色装饰条 */}
-          <div className={`absolute left-0 top-0 bottom-0 w-1 ${chartColor}`} />
+        <Card onClick={onClick} className="group relative cursor-pointer overflow-hidden">
+          {/*
+            Hover fill as an overlay, not as `hover:bg-surface-hover` on the card
+            itself: the card is opaque `surface-raised`, so replacing its
+            background with the translucent token would make it almost the same
+            lightness as `surface-base` in dark mode — an invisible hover.
+            Compositing keeps it visible in both themes.
+          */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-surface-hover opacity-0 transition-opacity group-hover:opacity-100"
+          />
 
           <CardHeader>
             <CardTitle>{notebook.title}</CardTitle>

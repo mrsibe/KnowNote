@@ -84,9 +84,9 @@
   margin-bottom: 0.25rem;
 }
 
-/* 引用块 */
+/* 引用块。宽度与 noteEditor.css 保持一致，同一个元素在两个阅读面上应同宽。 */
 .markdown-content blockquote {
-  border-left: 4px solid var(--border);
+  border-left: 2px solid var(--border);
   padding-left: 1rem;
   margin: 1rem 0;
   font-style: italic;

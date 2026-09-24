@@ -70,6 +70,35 @@ Legacy aliases kept for compatibility while pages migrate:
 `--sidebar-accent` are defined in terms of the tokens above. New code uses
 `surface-*`.
 
+## Window chrome
+
+The title bar is the one piece of the interface the OS and the renderer draw
+_together_: the renderer draws the bar, the OS draws minimize / maximize / close
+on top of it. Both halves therefore read their geometry from
+`src/shared/utils/windowChrome.ts`, and neither repeats the numbers.
+
+| Value                  | Constant                | Renderer side                         |
+| ---------------------- | ----------------------- | ------------------------------------- |
+| Title bar height, 44px | `TITLE_BAR_HEIGHT`      | `h-11` on `TopNavigationBar`          |
+| Control strip, 138px   | `WINDOW_CONTROLS_WIDTH` | reserved spacer in `TopNavigationBar` |
+
+Rules:
+
+- The height given to `titleBarOverlay.height` **is** the height of the drawn
+  window controls, so it has to equal the renderer's bar. A mismatch shows up as
+  controls that are visibly not centred in their bar — that is what a 35px
+  overlay under a 44px bar looked like.
+- Windows/Linux reserve the control strip on the right, whether or not the
+  renderer puts anything there; on macOS the traffic lights sit on the left and
+  are reserved separately.
+- The control strip is a real measurement (3 x 46px caption buttons), not a round
+  number. `w-32` was 10px short and put the settings button under the minimize
+  button.
+
+`color-scheme` is declared per theme in `theme.css` so that the surfaces the CSS
+does not paint — scrollbars, caret, selection, form controls — follow the app
+theme instead of the OS light default.
+
 ## Borders and elevation
 
 Two border weights exist, and only two:
@@ -209,14 +238,16 @@ State expressions (use these literal forms, they are the contract):
 
 | State         | Expression                                                                                                                                                                          |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| hover         | `hover:bg-surface-hover` (rows, menu items, ghost/outline buttons)                                                                                                                  |
+| hover         | `hover:bg-surface-hover` (rows, menu items, ghost/outline buttons; see [Raised card](#raised-card) for opaque cards)                                                                |
 | selected      | `bg-surface-selected` + `text-foreground` + `font-medium`; optional 2px primary indicator                                                                                           |
 | focus-visible | `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background` (inputs use `ring-1` with `border-ring`) |
 | disabled      | `disabled:pointer-events-none disabled:opacity-50`                                                                                                                                  |
 | transition    | `transition-colors` for fills; `transition-[transform,opacity]` for popovers. No bouncy or long animations on chrome.                                                               |
 
 A row that is both hovered and selected keeps the selected fill; do not stack
-`hover:bg-surface-hover` on `bg-surface-selected` elements.
+`hover:bg-surface-hover` on `bg-surface-selected` elements. The one exception to
+the hover form above is an opaque `surface-raised` card, where the token has to
+be composited rather than swapped — see [Raised card](#raised-card).
 
 A **segmented control** (`Tabs`) is the one place where selection is expressed as
 a surface step rather than a translucent fill, because the thumb must cover the
@@ -308,6 +339,29 @@ Dialog, popover, menu, toast:
 ```tsx
 <div className="rounded-lg border border-border bg-surface-overlay shadow-elevation" />
 ```
+
+### Raised card
+
+Implementation: `components/common/NotebookCard.tsx`.
+
+A card is opaque `bg-surface-raised`, so `hover:bg-surface-hover` does **not**
+work on it the way it does on a row: it replaces the fill instead of adding to
+it, and in dark mode `surface-hover` over `surface-base` lands on almost the
+same lightness as `surface-raised` — an invisible hover. Composite the token as
+an overlay so it stays visible in both themes:
+
+```tsx
+<Card className="group relative cursor-pointer overflow-hidden">
+  <div
+    aria-hidden="true"
+    className="pointer-events-none absolute inset-0 bg-surface-hover opacity-0 transition-opacity group-hover:opacity-100"
+  />
+  …
+</Card>
+```
+
+That is the only sanctioned use of an extra overlay element; do not reach for it
+on rows, menu items or buttons, where `hover:bg-surface-hover` is still correct.
 
 ### Empty state
 

@@ -36,7 +36,7 @@ export default function Home({
   if (notebooks.length === 0) {
     return (
       <ScrollArea className="flex-1">
-        <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-12">
+        <div className="flex items-center justify-center min-h-[calc(100vh-80px)] px-6">
           <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
