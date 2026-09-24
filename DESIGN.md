@@ -120,6 +120,49 @@ Rules:
 does not paint — scrollbars, caret, selection, form controls — follow the app
 theme instead of the OS light default.
 
+## Workspace shell
+
+Implementation: `components/layouts/ResizableLayout.tsx` and `DragHandle.tsx`.
+
+The three-zone workspace is the one part of the interface whose geometry used to
+live only in component constants. These are the values; change them here first.
+
+| Value                | Constant                               | Notes                                                      |
+| -------------------- | -------------------------------------- | ---------------------------------------------------------- |
+| Container gutter     | `p-2` (`CONTAINER_PADDING_X`)          | The canvas gap around and between the panels               |
+| Initial side widths  | golden ratio of the free space         | `1 / (2 + 1.618)` each; the centre takes `1.618 / 3.618`   |
+| Minimum side panel   | `260px` (`MIN_SIDE_WIDTH`)             | A drag and a keyboard step both clamp here                 |
+| Minimum centre panel | `420px` (`MIN_CENTER_WIDTH`)           | Never traded away; the sides give up width first           |
+| Seam                 | `w-px` (`HANDLE_WIDTH`)                | 1px hairline, 12px invisible hit area, `z-10`              |
+| Keyboard step        | `10px` / `50px`                        | `Shift` for the larger step; `Home` / `End` for the limits |
+| Persistence          | `localStorage` `knownote:panel-widths` | Survives navigation, unlike the component's own lifetime   |
+
+Rules:
+
+- **The constraints live in one place.** They are computed from the measured
+  container width in `ResizableLayout`, never restated as a CSS `min-width` — the
+  two drifted apart, and the CSS copy was derived from a width that stopped
+  being measured after the first render.
+- **A drag owns the whole gesture.** Listeners go on `window`, the container rect
+  and the constraints are snapshotted at pointer-down, and the commit is
+  rAF-coalesced. A drag ends on `pointerup`, `pointercancel`, `window` `blur`,
+  `visibilitychange` **and** on `event.buttons === 0` in the move handler — that
+  last one is what catches a button released while another window held focus,
+  where neither `pointerup` nor `pointerleave` ever arrives.
+- **`pointerdown` calls `preventDefault()` and takes the drag lock**
+  (`lib/dragLock.ts`: `user-select: none` + a forced cursor, ref-counted, Escape
+  cancels). Without the lock, dragging past a panel's limit leaves the browser's
+  native selection drag running and selects the text underneath.
+- **The seam is a real `separator`**: `role`, `aria-orientation`, `aria-valuenow`,
+  `tabIndex={0}`, arrow keys. Panel resizing is not mouse-only.
+- A collapsed panel keeps its previous width in the session so expanding restores
+  it; `0` is never persisted as a width.
+
+`MessageList` follows the transcript only while the reader is already at the
+bottom (within 48px). Scrolling up suspends the follow and reveals a
+`jumpToLatest` pill; the follow resumes when they return to the bottom. A stream
+that force-scrolls per token makes re-reading impossible.
+
 ## Borders and elevation
 
 Two border weights exist, and only two:

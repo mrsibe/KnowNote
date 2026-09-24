@@ -7,14 +7,20 @@ import { cn } from '@/lib/utils'
 
 const ScrollArea = React.forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> & {
+    /**
+     * The scrolling element itself. Radix owns the viewport, so pass a ref here
+     * when you need to read or set scroll position instead of querying for it.
+     */
+    viewportRef?: React.Ref<React.ElementRef<typeof ScrollAreaPrimitive.Viewport>>
+  }
+>(({ className, children, viewportRef, ...props }, ref) => (
   <ScrollAreaPrimitive.Root
     ref={ref}
     className={cn('relative overflow-hidden', className)}
     {...props}
   >
-    <ScrollAreaPrimitive.Viewport className="h-full w-full">
+    <ScrollAreaPrimitive.Viewport ref={viewportRef} className="h-full w-full">
       {children}
     </ScrollAreaPrimitive.Viewport>
     <ScrollBar />

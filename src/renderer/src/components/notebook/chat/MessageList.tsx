@@ -1,38 +1,72 @@
-import { ReactElement, useEffect, useRef } from 'react'
-import { MessageSquare } from 'lucide-react'
+import { ReactElement, useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowDown, MessageSquare } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ChatMessage } from '../../../../../shared/types/chat'
 import MessageItem from './MessageItem'
 import { ScrollArea } from '../../ui/scroll-area'
+import { Button } from '../../ui/button'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '../../ui/empty'
 // messageList.css 已合并到 effects.css（通过 main.css 全局导入）
 
 interface MessageListProps {
   messages: ChatMessage[]
 }
 
+/** How close to the bottom still counts as "following the answer". */
+const PINNED_THRESHOLD = 48
+
 export default function MessageList({ messages }: MessageListProps): ReactElement {
+  const viewportRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const pinnedRef = useRef(true)
+  const [isPinned, setIsPinned] = useState(true)
   const { t } = useTranslation()
 
-  // 自动滚动到底部
+  const scrollToBottom = useCallback((): void => {
+    // Deliberately instant, not smooth: while an answer streams this effect runs
+    // per token, and an animated scroll queued that often never settles — it
+    // fights the reader and burns frames instead of following the text.
+    bottomRef.current?.scrollIntoView({ block: 'end' })
+  }, [])
+
+  // Follow the transcript only while the reader is already at the bottom.
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' })
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    const handleScroll = (): void => {
+      const distance = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+      const pinned = distance <= PINNED_THRESHOLD
+      pinnedRef.current = pinned
+      setIsPinned(pinned)
     }
-  }, [messages])
+
+    viewport.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
+    return () => viewport.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  useEffect(() => {
+    // Scrolling up to re-read a passage used to be impossible: every streamed
+    // token forced the view back down, so the reader lost their place mid-sentence.
+    if (!pinnedRef.current) return
+    scrollToBottom()
+  }, [messages, scrollToBottom])
 
   // 空状态
   if (messages.length === 0) {
     return (
       <ScrollArea className="h-full">
-        <div className="flex min-h-full select-none flex-col items-center justify-center p-8">
-          <div className="flex flex-col items-center gap-4 text-muted-foreground">
-            <MessageSquare className="w-16 h-16 opacity-20" />
-            <div className="text-center flex flex-col gap-1">
-              <p className="text-lg font-medium">{t('ui:newChat')}</p>
-              <p className="text-sm">{t('ui:noMessages')}</p>
-            </div>
-          </div>
+        <div className="flex min-h-full items-center justify-center p-8">
+          <Empty className="border-none">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <MessageSquare className="w-6 h-6" />
+              </EmptyMedia>
+              <EmptyTitle>{t('ui:newChat')}</EmptyTitle>
+              <EmptyDescription>{t('ui:noMessages')}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         </div>
       </ScrollArea>
     )
@@ -40,16 +74,32 @@ export default function MessageList({ messages }: MessageListProps): ReactElemen
 
   // 消息列表
   return (
-    <ScrollArea className="h-full">
-      <div className="px-4 py-6 pb-32">
-        <div className="space-y-4">
-          {messages.map((message) => (
-            <MessageItem key={message.id} message={message} />
-          ))}
-          {/* 滚动锚点 */}
-          <div ref={bottomRef} />
+    <div className="relative h-full">
+      <ScrollArea className="h-full" viewportRef={viewportRef}>
+        <div className="px-4 py-6 pb-32">
+          <div className="space-y-4">
+            {messages.map((message) => (
+              <MessageItem key={message.id} message={message} />
+            ))}
+            {/* 滚动锚点 */}
+            <div ref={bottomRef} />
+          </div>
         </div>
-      </div>
-    </ScrollArea>
+      </ScrollArea>
+
+      {!isPinned && (
+        // `bottom-32` matches the `pb-32` reserve above, so the pill lands in the
+        // gap between the last message and the floating composer.
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={scrollToBottom}
+          className="absolute bottom-32 left-1/2 -translate-x-1/2 bg-surface-overlay shadow-elevation"
+        >
+          <ArrowDown className="w-3 h-3" />
+          {t('ui:jumpToLatest')}
+        </Button>
+      )}
+    </div>
   )
 }
