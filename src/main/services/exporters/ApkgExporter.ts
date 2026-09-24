@@ -3,8 +3,16 @@
  * 将Anki卡片导出为.apkg格式
  */
 
-import AnkiExport from 'anki-apkg-export'
+import AnkiExportModule from 'anki-apkg-export'
 import type { AnkiCardItem } from '../../../shared/types/anki'
+
+// anki-apkg-export is Babel-compiled CJS: the factory lives on `exports.default`
+// and `module.exports` itself is just `{ default, Exporter }`. Because the package
+// is external (see the `//dependencies` note in package.json), rollup emits a
+// bare `require('anki-apkg-export')` and does not unwrap it, so `new AnkiExport()`
+// threw `TypeError: AnkiExport is not a constructor`. Unwrap it explicitly instead
+// of relying on bundler interop.
+const AnkiExport = AnkiExportModule.default ?? AnkiExportModule
 
 /**
  * APKG导出器类
