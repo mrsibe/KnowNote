@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { settingsManager } from '../config'
+import { applyTitleBarTheme, titleBarOverlayOptions } from './titleBarOverlay'
 
 let quizWindow: BrowserWindow | null = null
 
@@ -41,9 +42,7 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
     titleBarStyle: 'hidden',
     // Position macOS traffic lights (window controls)
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
-    ...(process.platform !== 'darwin'
-      ? { titleBarOverlay: { color: 'rgba(0,0,0,0)', height: 35, symbolColor: 'white' } }
-      : {}),
+    ...(process.platform !== 'darwin' ? { titleBarOverlay: titleBarOverlayOptions(theme) } : {}),
     backgroundColor,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -64,6 +63,7 @@ export function createQuizWindow(notebookId: string, quizId?: string): void {
     if (quizWindow && !quizWindow.isDestroyed()) {
       const newBackgroundColor = newSettings.theme === 'dark' ? '#1a1b1e' : '#fafafa'
       quizWindow.setBackgroundColor(newBackgroundColor)
+      applyTitleBarTheme(quizWindow, newSettings.theme)
     }
   })
 

@@ -2,6 +2,7 @@ import { BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { settingsManager } from '../config'
+import { applyTitleBarTheme, titleBarOverlayOptions } from './titleBarOverlay'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -25,9 +26,7 @@ export function createMainWindow(): BrowserWindow {
     // Position macOS traffic lights (window controls)
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 16, y: 16 } } : {}),
     // expose window controls in Windows/Linux
-    ...(process.platform !== 'darwin'
-      ? { titleBarOverlay: { color: 'rgba(0,0,0,0)', height: 35, symbolColor: 'white' } }
-      : {}),
+    ...(process.platform !== 'darwin' ? { titleBarOverlay: titleBarOverlayOptions(theme) } : {}),
     backgroundColor,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -44,11 +43,12 @@ export function createMainWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
-  // 监听主题变化，动态更新窗口背景色
+  // 监听主题变化，动态更新窗口背景色和窗口按钮颜色
   settingsManager.onSettingsChangeSync((newSettings) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       const newBackgroundColor = newSettings.theme === 'dark' ? '#282c34' : '#fafafa'
       mainWindow.setBackgroundColor(newBackgroundColor)
+      applyTitleBarTheme(mainWindow, newSettings.theme)
     }
   })
 
