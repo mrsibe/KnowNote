@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { join } from 'path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import {
   initDatabase,
@@ -8,18 +9,21 @@ import {
   executeCheckpoint
 } from './db'
 import { ConnectionManager } from './models/ConnectionManager'
+import { EmbeddingService } from './services/EmbeddingService'
 import { SessionAutoSwitchService } from './services/SessionAutoSwitchService'
 import { KnowledgeService } from './services/KnowledgeService'
 import { UpdateService } from './services/UpdateService'
 import { ShortcutManager } from './services/ShortcutManager'
 import { createMainWindow } from './windows'
 import { registerAllHandlers } from './ipc'
+import { broadcastProgress as broadcastEmbeddingProgress } from './ipc/embeddingHandlers'
 import { getStore } from './config/store'
 import { migrateProvidersToConnections } from './config/connectionMigration'
 import { isSmokeTestRequested, runSmokeTest } from './smokeTest'
 import Logger from '../shared/utils/logger'
 
 let connectionManager: ConnectionManager | null = null
+let embeddingService: EmbeddingService | null = null
 let sessionAutoSwitchService: SessionAutoSwitchService | null = null
 let knowledgeService: KnowledgeService | null = null
 let updateService: UpdateService | null = null
@@ -75,9 +79,17 @@ app.whenReady().then(async () => {
   sessionAutoSwitchService = new SessionAutoSwitchService(connectionManager)
   Logger.info('Main', 'Session Auto Switch Service initialized')
 
+  // Initialize Embedding Service (local model management + remote fallback)
+  Logger.info('Main', 'Initializing Embedding Service...')
+  embeddingService = new EmbeddingService(connectionManager, {
+    cacheDir: join(app.getPath('userData'), 'models'),
+    onDownloadProgress: broadcastEmbeddingProgress
+  })
+  Logger.info('Main', 'Embedding Service initialized')
+
   // Initialize Knowledge Service
   Logger.info('Main', 'Initializing Knowledge Service...')
-  knowledgeService = new KnowledgeService(connectionManager)
+  knowledgeService = new KnowledgeService(embeddingService)
   Logger.info('Main', 'Knowledge Service initialized')
 
   // Initialize Update Service
@@ -95,6 +107,7 @@ app.whenReady().then(async () => {
     connectionManager,
     sessionAutoSwitchService,
     knowledgeService,
+    embeddingService,
     updateService,
     shortcutManager,
     store

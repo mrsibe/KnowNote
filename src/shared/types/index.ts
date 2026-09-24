@@ -21,6 +21,9 @@ export * from './anki'
 // 导出 Model Connection 类型
 export * from './connection'
 
+// 导出 Embedding 类型
+export * from './embedding'
+
 /**
  * 笔记本接口
  * 与 Drizzle schema 推导的类型兼容
