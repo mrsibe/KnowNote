@@ -100,9 +100,9 @@
 /* 代码样式 */
 .markdown-content code {
   background-color: var(--muted);
-  color: var(--primary);
+  color: var(--foreground);
   padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
+  border-radius: 0.375rem;
   font-size: 0.75rem;
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
@@ -129,7 +129,7 @@
 }
 
 .markdown-content a:hover {
-  color: var(--primary) / 80;
+  color: color-mix(in oklab, var(--primary) 80%, transparent);
 }
 
 /* 分割线 */

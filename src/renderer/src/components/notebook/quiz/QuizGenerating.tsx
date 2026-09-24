@@ -14,15 +14,15 @@ export default function QuizGenerating() {
     <div className="flex flex-col items-center justify-center h-full p-8">
       <div className="max-w-md w-full space-y-8">
         {/* 标题 */}
-        <h2 className="text-2xl font-semibold text-center text-foreground">
-          {t('generatingQuiz')}
-        </h2>
+        <h2 className="text-lg font-medium text-center text-foreground">{t('generatingQuiz')}</h2>
 
         {/* 进度指示器 */}
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-16 h-16 animate-spin text-primary" />
+          <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
           <div className="text-center space-y-2">
-            <p className="text-3xl font-bold text-primary">{generationProgress?.progress || 0}%</p>
+            <p className="text-2xl font-medium text-foreground">
+              {generationProgress?.progress || 0}%
+            </p>
             <p className="text-base text-muted-foreground">
               {generationProgress?.stage && getStageText(generationProgress.stage)}
             </p>
@@ -30,9 +30,9 @@ export default function QuizGenerating() {
         </div>
 
         {/* 进度条 */}
-        <div className="w-full bg-secondary rounded-full h-3">
+        <div className="w-full bg-muted rounded-full h-2">
           <div
-            className="bg-primary h-3 rounded-full transition-all duration-300 ease-in-out"
+            className="bg-primary h-2 rounded-full transition-[width] duration-300 ease-in-out"
             style={{ width: `${generationProgress?.progress || 0}%` }}
           />
         </div>

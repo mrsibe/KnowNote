@@ -16,7 +16,7 @@ export default function SettingItem({
   action
 }: SettingItemProps): ReactElement {
   return (
-    <div className="bg-card border border-border rounded-xl p-4">
+    <div className="rounded-lg border border-border bg-muted p-4">
       {layout === 'horizontal' ? (
         <div className="flex items-center justify-between gap-6">
           <div className="flex-1 min-w-0 flex flex-col gap-0.5">

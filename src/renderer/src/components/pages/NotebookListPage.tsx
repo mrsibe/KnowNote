@@ -80,7 +80,7 @@ export default function NotebookListPage(): ReactElement {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
+    <div className="flex flex-col h-screen bg-surface-base text-foreground">
       <TopNavigationBar isHomePage={true} onCreateClick={handleCreateNotebook} />
 
       {/* 主内容区域 - 使用 Home 组件 */}

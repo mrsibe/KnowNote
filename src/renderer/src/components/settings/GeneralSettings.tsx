@@ -49,21 +49,29 @@ export default function GeneralSettings({
             <FieldLabel>{t('themeMode')}</FieldLabel>
             <FieldDescription>{t('selectTheme')}</FieldDescription>
           </FieldContent>
-          <div className="inline-flex rounded-lg border bg-muted p-1">
+          <div className="inline-flex rounded-md border border-border bg-surface-sunken p-0.5">
             <Button
               onClick={() => onSettingsChange({ theme: 'light' })}
-              variant={settings.theme === 'light' ? 'default' : 'ghost'}
+              variant="ghost"
               size="sm"
-              className="gap-1.5 rounded-md"
+              className={`gap-1.5 ${
+                settings.theme === 'light'
+                  ? 'bg-surface-raised text-foreground hover:bg-surface-raised'
+                  : ''
+              }`}
             >
               <Sun className="w-3.5 h-3.5" />
               <span className="text-xs font-medium">{t('light')}</span>
             </Button>
             <Button
               onClick={() => onSettingsChange({ theme: 'dark' })}
-              variant={settings.theme === 'dark' ? 'default' : 'ghost'}
+              variant="ghost"
               size="sm"
-              className="gap-1.5 rounded-md"
+              className={`gap-1.5 ${
+                settings.theme === 'dark'
+                  ? 'bg-surface-raised text-foreground hover:bg-surface-raised'
+                  : ''
+              }`}
             >
               <Moon className="w-3.5 h-3.5" />
               <span className="text-xs font-medium">{t('dark')}</span>

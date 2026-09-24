@@ -140,11 +140,11 @@ export default function ShortcutSettings(): ReactElement {
 
       {/* 冲突错误提示 */}
       {conflictError && (
-        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl animate-in fade-in slide-in-from-top-2">
+        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg animate-in fade-in slide-in-from-top-2">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm font-medium">{conflictError}</p>
-            <p className="text-xs mt-1 opacity-80">{t('shortcuts:conflictHint')}</p>
+            <p className="text-xs mt-1">{t('shortcuts:conflictHint')}</p>
           </div>
           <Button
             variant="ghost"
@@ -254,7 +254,7 @@ function ShortcutItem({
         {isRecording ? (
           // 录制模式
           <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2">
-            <kbd className="px-4 py-2 bg-accent/50 text-accent-foreground rounded-lg border-2 border-primary/20 text-sm font-mono min-w-[140px] text-center transition-all shadow-lg shadow-primary/10 animate-pulse">
+            <kbd className="px-4 py-2 bg-surface-selected text-foreground rounded-md border border-ring text-sm font-mono min-w-[140px] text-center transition-colors animate-pulse">
               {tempAccelerator || t('pressKey')}
             </kbd>
             <Button
@@ -262,7 +262,7 @@ function ShortcutItem({
               size="icon"
               variant="ghost"
               disabled={!tempAccelerator}
-              className="h-9 w-9 hover:bg-primary/10 hover:text-primary transition-all"
+              className="hover:bg-surface-hover transition-colors"
             >
               <Check className="w-4 h-4" />
             </Button>
@@ -270,7 +270,7 @@ function ShortcutItem({
               onClick={onCancel}
               size="icon"
               variant="ghost"
-              className="h-9 w-9 hover:bg-destructive/10 hover:text-destructive transition-all"
+              className="hover:bg-destructive/10 hover:text-destructive transition-colors"
             >
               <X className="w-4 h-4" />
             </Button>
@@ -280,7 +280,7 @@ function ShortcutItem({
           <>
             <button
               onClick={onStartRecording}
-              className="px-4 py-2 bg-muted hover:bg-accent text-foreground rounded-lg border border-border text-sm font-mono min-w-[140px] text-center transition-all hover:scale-105 hover:shadow-md active:scale-95"
+              className="px-4 py-2 bg-muted hover:bg-surface-hover active:bg-surface-selected text-foreground rounded-md border border-border text-sm font-mono min-w-[140px] text-center transition-colors"
             >
               {formatAccelerator(shortcut.accelerator)}
             </button>
@@ -288,7 +288,7 @@ function ShortcutItem({
               onClick={onReset}
               size="icon"
               variant="ghost"
-              className="h-9 w-9 hover:bg-primary/10 hover:text-primary transition-all"
+              className="hover:bg-surface-hover transition-colors"
             >
               <RotateCcw className="w-4 h-4" />
             </Button>

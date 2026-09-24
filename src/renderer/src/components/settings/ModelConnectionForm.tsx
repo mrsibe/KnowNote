@@ -137,7 +137,7 @@ export default function ModelConnectionForm({
     <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-h1 text-foreground">
+          <h2 className="text-lg font-medium text-foreground">
             {capability === 'chat' ? t('chatModel') : t('embeddingModel')}
           </h2>
           <p className="text-muted-foreground text-sm">
@@ -145,7 +145,7 @@ export default function ModelConnectionForm({
           </p>
         </div>
         {connection && (
-          <Button onClick={onClear} variant="ghost" size="icon" className="w-8 h-8 shrink-0">
+          <Button onClick={onClear} variant="ghost" size="icon" className="shrink-0">
             <Trash2 className="w-4 h-4 text-destructive" />
           </Button>
         )}
@@ -234,7 +234,7 @@ export default function ModelConnectionForm({
             onClick={() => setShowApiKey(!showApiKey)}
             variant="ghost"
             size="icon"
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8"
+            className="absolute right-2 top-1/2 -translate-y-1/2"
           >
             {showApiKey ? (
               <EyeOff className="w-4 h-4 text-muted-foreground" />
@@ -299,7 +299,7 @@ export default function ModelConnectionForm({
           )}
         </Button>
         {testResult?.ok && (
-          <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+          <span className="flex items-center gap-1 text-sm text-success">
             <CheckCircle2 className="w-4 h-4" />
             {t('connectionSuccessful')}
           </span>

@@ -61,8 +61,9 @@ Rules:
 - Adjacent surfaces must differ in lightness; two neighbours at the same value
   mean you are expressing hierarchy through a shadow, which is not allowed.
 - Inside a panel, nested containers (a bubble, an inline code block, an icon
-  tile) use `bg-muted` — a quiet opaque fill — not another surface step. Do not
-  nest `surface-raised` inside `surface-raised`.
+  tile) use `bg-muted` — a quiet opaque fill that is _recessed_ relative to
+  `surface-raised` in both colour schemes. Do not nest `surface-raised` inside
+  `surface-raised`.
 
 Legacy aliases kept for compatibility while pages migrate:
 `--background`, `--card`, `--popover`, `--sidebar`, `--accent`,
@@ -132,6 +133,7 @@ Base rhythm is 4 / 8 / 12 / 16 (`gap-1,2,3,4`; `p-2,3,4,6`). Half steps
 | Input / Select trigger                     | `h-9`    | `px-3`                                 |
 | List row, compact                          | `h-8`    | `px-2`                                 |
 | List row, comfortable                      | `h-9`    | `px-3`                                 |
+| List row, multi-line (title + meta)        | —        | `px-2 py-2`, `rounded-md`              |
 | Sidebar nav item                           | `h-8`    | `px-2`                                 |
 | Card / panel body padding                  | —        | `p-4`                                  |
 | Dialog padding                             | —        | `p-5`                                  |
@@ -168,12 +170,14 @@ Sizes:
 | 14px | `text-sm`     | **Default UI size**: buttons, labels, list rows, inputs, prose in chat and the editor |
 | 16px | `text-base`   | Dialog titles, empty-state body (only where 14px reads cramped)                       |
 | 18px | `text-lg`     | Page titles, empty-state titles                                                       |
-| 20px | `text-xl`     | Home hero only                                                                        |
+| 20px | `text-xl`     | Focus content: home page title, flashcard face                                        |
+| 36px | `text-4xl`    | A single focus readout (quiz score). One per screen                                   |
 
 Weights: `font-normal` for body, `font-medium` for interactive labels, panel
-headers, section titles and the selected state of anything. `font-semibold` and
-above are reserved for page titles and the home hero. Never use weight alone to
-express selection — pair it with `bg-surface-selected`.
+headers, section titles, titles and the selected state of anything.
+`font-semibold` and above are reserved for the one focus readout per screen.
+Never use weight alone to express selection — pair it with
+`bg-surface-selected`.
 
 Line height: UI text uses Tailwind defaults. Long-form reading surfaces
 (`markdown.css`, `noteEditor.css`) use 14px / `line-height: 1.75`.
@@ -194,7 +198,12 @@ Line height: UI text uses Tailwind defaults. Long-form reading surfaces
 Everywhere else — toolbars, icon buttons, headers, cards, badges, tab labels,
 progress — the UI is neutral. A blue icon in a neutral toolbar is a violation.
 `--destructive` is allowed only on a destructive action and its confirmation
-dialog. `--chart-*` are for charts, graph nodes and mind-map topic colouring.
+dialog, and `--success` only on the outcome of a graded result (correct answer,
+passing check). Neither is decoration, and neither may be the only carrier of
+state: pair it with an icon or a label. `--chart-*` are for charts, graph nodes
+and mind-map topic colouring, and are used as small data dots rather than as
+text-bearing fills (they sit at one lightness in both themes, so no single text
+colour reads on them).
 
 State expressions (use these literal forms, they are the contract):
 
@@ -329,12 +338,20 @@ the same PR.
 
 ## Enforcement
 
-`npm run check:design` (`scripts/check-design-tokens.mjs`) fails on:
+`npm run check:design` (`scripts/check-design-tokens.mjs`) reads the renderer
+sources — no build, no dependencies — and fails on:
 
-- a radius utility outside the three allowed values;
-- a shadow utility other than `shadow-elevation` / `shadow-control`;
-- a background colour that is not a surface, `muted`, `transparent` or a
-  `--chart-*` token.
+| Rule         | Fails when                                                                                                          |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `radius`     | a radius utility other than `rounded-md`, `rounded-lg`, `rounded-full` and their `t/b/l/r` forms                    |
+| `shadow`     | an elevation utility other than `shadow-elevation`, `shadow-control`, `shadow-none`                                 |
+| `palette`    | a colour utility from the raw Tailwind palette (`bg-slate-100`, `text-gray-500`) or an arbitrary colour (`bg-[#…]`) |
+| `text-level` | alpha stacked on a text level (`text-muted-foreground/70`)                                                          |
+| `css-radius` | a raw CSS `border-radius` outside `0.375rem` / `0.5rem` / `9999px`                                                  |
 
-The check runs as part of the `Verify` workflow. It reads source text, so it is
-also the fastest way to audit a branch: `npm run check:design -- --list`.
+`npm run check:design -- --list` prints the rules and the allowlists. The check
+runs in the `Verify` workflow, before the build matrix.
+
+What it does **not** enforce, and therefore relies on review: the surface ladder
+(which surface a panel uses), accent discipline, spacing and density, and the
+four interaction states. Those are the rules a reviewer must hold the line on.

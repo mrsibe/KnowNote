@@ -27,7 +27,7 @@ export default function SettingsContentPanel({
   const { t } = useTranslation('settings')
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-background rounded-lg shadow-sm overflow-hidden">
+    <div className="flex-1 flex flex-col min-w-0 bg-surface-raised border border-border rounded-lg overflow-hidden">
       {/* 顶部标题栏 */}
       <div className="flex items-start justify-between gap-4 px-6 py-4">
         <div className="flex-1 min-w-0">

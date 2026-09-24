@@ -63,10 +63,10 @@ export default function QuizPage() {
   }, [resetQuiz])
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background">
+    <div className="h-screen flex flex-col overflow-hidden bg-surface-base">
       {/* 顶部可拖拽标题栏 */}
       <div
-        className="absolute top-0 left-0 right-0 h-10 z-10 flex items-center justify-between px-4 bg-background"
+        className="absolute top-0 left-0 right-0 h-11 z-10 flex items-center justify-between px-3 bg-surface-base border-b border-border"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         {/* macOS 左侧空白区域（留给窗口控制按钮） */}
@@ -74,7 +74,7 @@ export default function QuizPage() {
         {/* 非 macOS 左侧空白区域 */}
         {platform !== 'darwin' && <div style={{ width: '100px' }}></div>}
 
-        <span className="text-sm text-muted-foreground font-medium">{t('quiz')}</span>
+        <span className="text-sm font-medium text-foreground">{t('quiz')}</span>
 
         <div
           className="flex items-center gap-2"
@@ -94,7 +94,7 @@ export default function QuizPage() {
           display: 'flex',
           overflow: 'hidden',
           position: 'relative',
-          paddingTop: '40px'
+          paddingTop: '44px'
         }}
       >
         {isLoading ? (

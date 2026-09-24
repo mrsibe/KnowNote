@@ -141,13 +141,13 @@ export default function SettingsDialog(): ReactElement {
   return (
     <Dialog open={isSettingsOpen} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-5xl h-[80vh] p-0 flex flex-col bg-sidebar"
+        className="max-w-5xl h-[80vh] p-0 flex flex-col bg-surface-sunken"
         showCloseButton={false}
       >
         <SidebarProvider className="flex flex-1 min-h-0">
           <div className="flex flex-1 min-h-0 gap-3 p-3 w-full">
             {/* 使用 Shadcn Sidebar */}
-            <Sidebar className="w-40" collapsible="none">
+            <Sidebar className="w-40 bg-transparent" collapsible="none">
               <SidebarContent>
                 <SidebarMenu>
                   {menuItems.map((item) => {
@@ -160,8 +160,8 @@ export default function SettingsDialog(): ReactElement {
                           isActive={isActive}
                           className={
                             isActive
-                              ? 'bg-sidebar-primary! text-sidebar-primary-foreground!'
-                              : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                              ? 'bg-surface-selected! text-foreground! font-medium'
+                              : 'hover:bg-surface-hover hover:text-foreground'
                           }
                         >
                           <Icon className="w-4 h-4" />

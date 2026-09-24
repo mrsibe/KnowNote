@@ -24,11 +24,11 @@ export default function AnkiCardList({ cards }: AnkiCardListProps) {
 
   const getCardTypeColor = (type: string): string => {
     const colorMap: Record<string, string> = {
-      basic: 'bg-blue-500',
-      cloze: 'bg-green-500',
-      'fill-blank': 'bg-purple-500'
+      basic: 'bg-chart-1',
+      cloze: 'bg-chart-2',
+      'fill-blank': 'bg-chart-5'
     }
-    return colorMap[type] || 'bg-gray-500'
+    return colorMap[type] || 'bg-muted-foreground'
   }
 
   const renderCardContent = (card: AnkiCardItem): React.ReactNode => {
@@ -114,7 +114,7 @@ export default function AnkiCardList({ cards }: AnkiCardListProps) {
       <ScrollArea className="h-full">
         <div className="p-6 space-y-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold">{t('cardList')}</h2>
+            <h2 className="text-lg font-medium">{t('cardList')}</h2>
             <Badge variant="secondary" className="text-lg px-3 py-1">
               {cards.length} {t('cards')}
             </Badge>
@@ -125,12 +125,15 @@ export default function AnkiCardList({ cards }: AnkiCardListProps) {
           ) : (
             <div className="grid gap-4">
               {cards.map((card, index) => (
-                <Card key={card.id} className="hover:shadow-md transition-shadow">
+                <Card key={card.id}>
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">#{index + 1}</span>
-                        <Badge className={`${getCardTypeColor(card.type)} text-white`}>
+                        <span className="text-sm text-subtle-foreground">#{index + 1}</span>
+                        <Badge variant="outline" className="gap-1.5">
+                          <span
+                            className={`size-1.5 shrink-0 rounded-full ${getCardTypeColor(card.type)}`}
+                          />
                           {getCardTypeLabel(card.type)}
                         </Badge>
                         {card.tags && card.tags.length > 0 && (

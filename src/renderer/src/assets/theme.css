@@ -29,6 +29,9 @@
   /* Translucent state fills: they adapt to whatever surface they are drawn on. */
   --surface-hover: oklch(0.3496 0.0141 274.5028 / 0.05);
   --surface-selected: oklch(0.3496 0.0141 274.5028 / 0.09);
+  /* Scrim behind a modal layer. The one place a raw black is legitimate, so it
+     is a token instead of a literal. */
+  --scrim: oklch(0 0 0 / 0.5);
 
   /* Opaque quiet fill for nested containers (bubbles, icon tiles, code). */
   --muted: oklch(0.9551 0 0);
@@ -44,6 +47,7 @@
   --ring: oklch(0.6017 0.193 263.2461);
   --destructive: oklch(0.6058 0.1839 29.6718);
   --destructive-foreground: oklch(1 0 0);
+  --success: oklch(0.55 0.12 150);
 
   /* Hairline. --input is the neutral fill of unchecked controls, not a border. */
   --border: oklch(0.9067 0 0);
@@ -124,12 +128,18 @@
   --surface-overlay: oklch(0.365 0.011 260);
   --surface-hover: oklch(0.9 0.01 262 / 0.06);
   --surface-selected: oklch(0.9 0.01 262 / 0.1);
+  --scrim: oklch(0 0 0 / 0.65);
 
-  --muted: oklch(0.3863 0.0235 265.6941);
+  /* --muted is a *recessed* fill: below surface-raised in both modes
+     (light 0.9551 vs 1.0, dark 0.275 vs 0.325) so a bubble, icon tile or
+     inline code block reads as inset instead of flipping direction. */
+  --muted: oklch(0.275 0.014 260);
 
   --foreground: oklch(0.7621 0.0202 262.9873);
   --muted-foreground: oklch(0.68 0.02 262.9873);
   --subtle-foreground: oklch(0.58 0.02 262.9873);
+
+  --success: oklch(0.75 0.13 150);
 
   --primary: oklch(0.7304 0.1213 245.2972);
   --ring: oklch(0.7304 0.1213 245.2972);
@@ -175,6 +185,7 @@
   --color-surface-overlay: var(--surface-overlay);
   --color-surface-hover: var(--surface-hover);
   --color-surface-selected: var(--surface-selected);
+  --color-scrim: var(--scrim);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -193,6 +204,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

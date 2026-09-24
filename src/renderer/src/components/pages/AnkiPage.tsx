@@ -109,10 +109,10 @@ export default function AnkiPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-background">
+    <div className="h-screen flex flex-col overflow-hidden bg-surface-base">
       {/* 顶部可拖拽标题栏 */}
       <div
-        className="absolute top-0 left-0 right-0 h-10 z-10 flex items-center justify-between px-4 bg-background border-b"
+        className="absolute top-0 left-0 right-0 h-11 z-10 flex items-center justify-between px-3 bg-surface-base border-b border-border"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         {/* macOS 左侧空白区域（留给窗口控制按钮） */}
@@ -120,7 +120,7 @@ export default function AnkiPage() {
         {/* 非 macOS 左侧占位，保持标题居中 */}
         {platform !== 'darwin' && <div className="w-32"></div>}
 
-        <span className="text-sm text-muted-foreground font-medium">
+        <span className="text-sm font-medium text-foreground">
           {currentAnkiCards?.title || t('ankiCards')}
         </span>
 
@@ -129,8 +129,8 @@ export default function AnkiPage() {
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           {currentAnkiCards && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleExport}>
-              <Download className="w-3.5 h-3.5" />
+            <Button variant="ghost" size="icon" onClick={handleExport}>
+              <Download className="w-4 h-4" />
             </Button>
           )}
         </div>
@@ -146,7 +146,7 @@ export default function AnkiPage() {
           display: 'flex',
           overflow: 'hidden',
           position: 'relative',
-          paddingTop: '40px'
+          paddingTop: '44px'
         }}
       >
         {isLoading ? (

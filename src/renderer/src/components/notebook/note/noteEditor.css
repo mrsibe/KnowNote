@@ -54,9 +54,9 @@
 
 .ProseMirror code {
   background-color: var(--muted);
-  color: var(--primary);
+  color: var(--foreground);
   padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
+  border-radius: 0.375rem;
   font-size: 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }

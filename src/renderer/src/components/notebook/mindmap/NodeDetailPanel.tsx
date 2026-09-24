@@ -30,10 +30,10 @@ export default function NodeDetailPanel() {
   }
 
   return (
-    <div className="w-96 border-l border-border flex flex-col bg-background">
+    <div className="w-96 border-l border-border flex flex-col bg-surface-raised">
       <div className="p-4 border-b border-border flex items-center justify-between">
-        <h3 className="font-semibold text-sm">{t('nodeSource')}</h3>
-        <Button variant="ghost" size="icon" className="w-8 h-8" onClick={handleClose}>
+        <h3 className="text-sm font-medium text-foreground">{t('nodeSource')}</h3>
+        <Button variant="ghost" size="icon" onClick={handleClose}>
           <X className="w-4 h-4" />
         </Button>
       </div>
@@ -45,7 +45,7 @@ export default function NodeDetailPanel() {
           <div className="space-y-4">
             {nodeChunks.map((chunk) => (
               <div key={chunk.id} className="border border-border rounded-lg p-3 space-y-2">
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-subtle-foreground">
                   {t('source')}: {chunk.documentTitle}
                 </div>
                 <div className="text-sm prose prose-sm max-w-none dark:prose-invert">

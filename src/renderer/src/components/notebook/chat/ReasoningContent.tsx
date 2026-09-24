@@ -39,12 +39,12 @@ export default function ReasoningContent({
   }
 
   return (
-    <div className="border border-border rounded-lg overflow-hidden bg-muted/30 shadow-sm">
+    <div className="border border-border rounded-lg overflow-hidden bg-muted/30">
       {/* 头部：展开/折叠按钮 */}
       <Button
         onClick={() => setIsExpanded(!isExpanded)}
         variant="ghost"
-        className="w-full flex items-center justify-between px-3 py-1.5 text-xs h-auto hover:bg-muted/50"
+        className="w-full flex items-center justify-between px-3 py-1.5 text-xs h-auto hover:bg-surface-hover"
       >
         <div className="flex items-center gap-1.5">
           {/* 思考图标 */}
