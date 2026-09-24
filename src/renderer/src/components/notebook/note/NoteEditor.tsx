@@ -36,14 +36,9 @@ export default function NoteEditor({ content, onChange }: NoteEditorProps): Reac
     }
   })
 
-  // 清理编辑器实例
-  useEffect(() => {
-    return () => {
-      if (editor) {
-        editor.destroy()
-      }
-    }
-  }, [editor])
+  // 编辑器实例由 useEditor 管理生命周期（@tiptap/react v3 会在卸载时销毁），
+  // 这里不能手动 destroy：StrictMode 下 effect 会 mount → cleanup → mount，
+  // 手动销毁会让第二次挂载拿到已销毁的实例，editor.storage.markdown 为 undefined。
 
   // 当外部 content 变化时同步到编辑器
   useEffect(() => {
