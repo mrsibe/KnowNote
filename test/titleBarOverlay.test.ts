@@ -1,7 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { titleBarOverlayOptions, titleBarSymbolColor } from '../src/main/windows/titleBarOverlay.ts'
-import { TITLE_BAR_HEIGHT, WINDOW_CONTROLS_WIDTH } from '../src/shared/utils/windowChrome.ts'
+import {
+  TITLE_BAR_HEIGHT,
+  WINDOW_CONTROLS_WIDTH,
+  MAC_TRAFFIC_LIGHTS_WIDTH
+} from '../src/shared/utils/windowChrome.ts'
 
 /**
  * Issue #26: the custom title bar's window controls are drawn by the OS with
@@ -28,11 +32,12 @@ test('titleBarOverlay keeps the transparent fill and the title-bar height', () =
 
 /**
  * The overlay height is only correct if it matches the height the renderer
- * gives the title bar (`h-11` in TopNavigationBar). The two drifted apart once
+ * gives the title bar (`h-11` in WindowTitleBar). The two drifted apart once
  * already, which is why the number lives in a shared module and is asserted
  * here rather than being repeated as a literal.
  */
 test('the overlay matches the renderer title bar and reserves room for the controls', () => {
-  assert.equal(TITLE_BAR_HEIGHT, 44, 'h-11 in TopNavigationBar is 44px')
+  assert.equal(TITLE_BAR_HEIGHT, 44, 'h-11 in WindowTitleBar is 44px')
   assert.equal(WINDOW_CONTROLS_WIDTH, 3 * 46, 'three 46px caption buttons')
+  assert.equal(MAC_TRAFFIC_LIGHTS_WIDTH, 80, 'traffic lights at x=16 plus the standard gap')
 })

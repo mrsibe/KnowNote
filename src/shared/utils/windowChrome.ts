@@ -28,3 +28,14 @@ export const TITLE_BAR_HEIGHT = 44
  * reserves their space separately.
  */
 export const WINDOW_CONTROLS_WIDTH = 138
+
+/**
+ * Horizontal space macOS traffic lights occupy, reserved on the left.
+ *
+ * All four windows set `trafficLightPosition: { x: 16, y: 16 }`, so the three
+ * buttons occupy roughly x=16..72. 80px leaves the standard macOS gap after
+ * them; the main window already reserved exactly this and the three secondary
+ * windows reserved 64px, which put their leftmost content under the green
+ * button.
+ */
+export const MAC_TRAFFIC_LIGHTS_WIDTH = 80

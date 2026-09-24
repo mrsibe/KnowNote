@@ -6,8 +6,8 @@ import { useUIStore } from '../../store/uiStore'
 import { ReactElement, useState } from 'react'
 import { Button } from '../ui/button'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
-import { isMac, isLinux } from '../../lib/platform'
-import { WINDOW_CONTROLS_WIDTH } from '../../../../shared/utils/windowChrome'
+import { isLinux } from '../../lib/platform'
+import WindowTitleBar from './WindowTitleBar'
 
 interface TopNavigationBarProps {
   onCreateClick: () => void
@@ -74,36 +74,27 @@ export default function TopNavigationBar({
     openSettings()
   }
 
-  return (
-    <div
-      className="h-11 shrink-0 flex items-center justify-between px-2 gap-0.5"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+  const settingsButton = (
+    <Button
+      onClick={handleSettingsClick}
+      variant="ghost"
+      size="icon"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      className="w-7 h-7"
+      title={t('settings')}
     >
-      {/*
-        `h-11` is 44px and must stay equal to TITLE_BAR_HEIGHT in windowChrome.ts,
-        which is the height the OS is asked to draw the window controls at.
-      */}
-      {/* macOS 左侧空白区域（留给窗口控制按钮） */}
-      {isMac() && <div className="w-20"></div>}
+      <Settings className="w-4 h-4" />
+    </Button>
+  )
 
-      {/* Linux 左侧设置按钮区域 */}
-      {isLinux() && (
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={handleSettingsClick}
-            variant="ghost"
-            size="icon"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            className="w-7 h-7"
-            title={t('settings')}
-          >
-            <Settings className="w-4 h-4" />
-          </Button>
-        </div>
-      )}
-
-      {/* 导航标签 */}
-      <div className="flex items-center gap-2 flex-1">
+  return (
+    <WindowTitleBar
+      className="gap-0.5"
+      // Linux desktops put their window buttons in different places, so the
+      // settings entry point stays on the left there instead of next to
+      // minimize/maximize/close.
+      left={isLinux() ? settingsButton : undefined}
+      center={
         <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1">
           <TabsList
             className="bg-transparent border-0 gap-2 h-auto p-0 justify-start"
@@ -155,31 +146,8 @@ export default function TopNavigationBar({
             </Button>
           </TabsList>
         </Tabs>
-      </div>
-
-      {/* 非Linux平台的设置按钮（Windows和macOS保持在右侧） */}
-      {!isLinux() && (
-        <Button
-          onClick={handleSettingsClick}
-          variant="ghost"
-          size="icon"
-          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          className="w-7 h-7"
-          title={t('settings')}
-        >
-          <Settings className="w-4 h-4" />
-        </Button>
-      )}
-
-      {/*
-        Windows/Linux reserve room for the OS-drawn window controls so the tab
-        strip and the settings button cannot slide underneath them. The width is
-        the real caption-button footprint, not a round number: the old `w-32`
-        (128px) was 10px short of the 138px the three buttons occupy.
-      */}
-      {!isMac() && (
-        <div className="shrink-0" style={{ width: WINDOW_CONTROLS_WIDTH }} aria-hidden="true" />
-      )}
-    </div>
+      }
+      right={!isLinux() ? settingsButton : undefined}
+    />
   )
 }
