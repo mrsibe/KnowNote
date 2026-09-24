@@ -160,14 +160,14 @@ function SortableItemRow({
           onOpenAnki?.(ankiCard.id)
         }
       }}
-      className={`group grid grid-cols-[auto_1fr_auto] gap-2 items-start p-3 rounded-lg border ${isDragging ? 'cursor-grabbing opacity-75' : 'cursor-grab hover:cursor-grab'} ${
+      className={`group grid grid-cols-[auto_1fr_auto] gap-2 items-start rounded-md border px-2 py-2 ${isDragging ? 'cursor-grabbing opacity-75' : 'cursor-grab hover:cursor-grab'} ${
         isGenerating
           ? 'bg-chart-1/5 border-chart-1/30 animate-pulse cursor-wait'
           : isFailed
             ? 'bg-destructive/5 border-destructive/30'
             : isCurrentNote
-              ? 'bg-primary/10 border-primary/20'
-              : 'border-transparent hover:bg-muted'
+              ? 'bg-surface-selected border-transparent'
+              : 'border-transparent hover:bg-surface-hover'
       }`}
     >
       {/* 图标列 - 固定宽度 */}
@@ -203,7 +203,7 @@ function SortableItemRow({
                 <span className="text-xs text-destructive">{t('failed')}</span>
               )}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-subtle-foreground">
               {t('mindMapVersion', { version: mindMap.version })}
             </p>
           </>
@@ -219,7 +219,7 @@ function SortableItemRow({
                 <span className="text-xs text-destructive">{t('failed')}</span>
               )}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-subtle-foreground">
               {t('quizVersion', { version: quiz.version })}
             </p>
           </>
@@ -235,14 +235,14 @@ function SortableItemRow({
                 <span className="text-xs text-destructive">{t('failed')}</span>
               )}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-subtle-foreground">
               {ankiCard.status === 'generating'
                 ? t('generatingCards')
                 : t('ankiCards', { count: ankiCard.cardsData?.length || 0 })}
             </p>
           </>
         )}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-subtle-foreground">
           {new Date(item.updatedAt).toLocaleDateString(
             i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US'
           )}
@@ -258,7 +258,7 @@ function SortableItemRow({
         onPointerDown={(e) => e.stopPropagation()}
         variant="ghost"
         size="icon"
-        className="opacity-0 group-hover:opacity-100 w-8 h-8 mt-0.5 text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 mt-0.5 text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
         title={
           isNote
             ? t('deleteNote')

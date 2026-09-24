@@ -61,8 +61,9 @@ Rules:
 - Adjacent surfaces must differ in lightness; two neighbours at the same value
   mean you are expressing hierarchy through a shadow, which is not allowed.
 - Inside a panel, nested containers (a bubble, an inline code block, an icon
-  tile) use `bg-muted` — a quiet opaque fill — not another surface step. Do not
-  nest `surface-raised` inside `surface-raised`.
+  tile) use `bg-muted` — a quiet opaque fill that is _recessed_ relative to
+  `surface-raised` in both colour schemes. Do not nest `surface-raised` inside
+  `surface-raised`.
 
 Legacy aliases kept for compatibility while pages migrate:
 `--background`, `--card`, `--popover`, `--sidebar`, `--accent`,
@@ -132,6 +133,7 @@ Base rhythm is 4 / 8 / 12 / 16 (`gap-1,2,3,4`; `p-2,3,4,6`). Half steps
 | Input / Select trigger                     | `h-9`    | `px-3`                                 |
 | List row, compact                          | `h-8`    | `px-2`                                 |
 | List row, comfortable                      | `h-9`    | `px-3`                                 |
+| List row, multi-line (title + meta)        | —        | `px-2 py-2`, `rounded-md`              |
 | Sidebar nav item                           | `h-8`    | `px-2`                                 |
 | Card / panel body padding                  | —        | `p-4`                                  |
 | Dialog padding                             | —        | `p-5`                                  |

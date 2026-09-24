@@ -208,7 +208,7 @@ export default function ProcessPanel({
   }
 
   return (
-    <Card className="relative flex flex-col rounded-xl border-0 overflow-hidden h-full mx-0 shadow-md">
+    <Card className="relative flex h-full flex-col overflow-hidden">
       <PanelHeader
         draggable
         left={
@@ -295,7 +295,7 @@ export default function ProcessPanel({
 
       {/* 底部输入区域 - 绝对定位浮动在底部 */}
       <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none shrink-0 z-20">
-        <div className="relative bg-muted/95 backdrop-blur-md rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-lg pointer-events-auto select-none">
+        <div className="relative bg-surface-overlay/95 backdrop-blur-md rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-elevation pointer-events-auto select-none">
           {/* 多行输入框 */}
           <Textarea
             ref={textareaRef}

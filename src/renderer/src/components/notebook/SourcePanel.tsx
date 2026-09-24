@@ -435,7 +435,7 @@ export default function SourcePanel(): ReactElement {
   )
 
   return (
-    <Card className="flex flex-col rounded-xl border-0 overflow-hidden h-full shadow-md">
+    <Card className="flex h-full flex-col overflow-hidden">
       {selectedDocument ? (
         // 文档预览页面
         <DocumentViewerPanel
@@ -449,7 +449,7 @@ export default function SourcePanel(): ReactElement {
           <PanelHeader
             draggable
             left={
-              <span className="text-sm text-foreground truncate w-full select-none">
+              <span className="text-sm font-medium text-foreground truncate w-full select-none">
                 {t('knowledgeBase')}
               </span>
             }
@@ -471,11 +471,11 @@ export default function SourcePanel(): ReactElement {
 
                 {/* 添加菜单 */}
                 {showAddMenu && (
-                  <div className="absolute right-0 top-full mt-1 w-40 bg-popover border border-border rounded-lg shadow-lg overflow-hidden z-10">
+                  <div className="absolute right-0 top-full mt-1 w-44 bg-surface-overlay border border-border rounded-lg shadow-elevation overflow-hidden p-1 z-10">
                     <Button
                       onClick={handleFileUpload}
                       variant="ghost"
-                      className="w-full justify-start text-sm font-normal rounded-none"
+                      className="w-full justify-start text-sm font-normal"
                     >
                       <FileUp className="w-4 h-4" />
                       {t('uploadFile')}
@@ -486,7 +486,7 @@ export default function SourcePanel(): ReactElement {
                         setShowAddMenu(false)
                       }}
                       variant="ghost"
-                      className="w-full justify-start text-sm font-normal rounded-none"
+                      className="w-full justify-start text-sm font-normal"
                     >
                       <Globe className="w-4 h-4" />
                       {t('importUrl')}
@@ -497,7 +497,7 @@ export default function SourcePanel(): ReactElement {
                         setShowAddMenu(false)
                       }}
                       variant="ghost"
-                      className="w-full justify-start text-sm font-normal rounded-none"
+                      className="w-full justify-start text-sm font-normal"
                     >
                       <FileText className="w-4 h-4" />
                       {t('pasteText')}
@@ -508,7 +508,7 @@ export default function SourcePanel(): ReactElement {
                         setShowAddMenu(false)
                       }}
                       variant="ghost"
-                      className="w-full justify-start text-sm font-normal rounded-none"
+                      className="w-full justify-start text-sm font-normal"
                     >
                       <StickyNote className="w-4 h-4" />
                       {t('importNote')}

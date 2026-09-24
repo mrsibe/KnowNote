@@ -46,7 +46,7 @@ export default function TopNavigationBar({
     }
   }
 
-  const handleCloseOpenedNotebook = (id: string, e: React.MouseEvent): void => {
+  const handleCloseOpenedNotebook = (id: string, e: React.SyntheticEvent): void => {
     e.stopPropagation()
 
     // 如果关闭的是当前笔记本，需要跳转
@@ -75,7 +75,7 @@ export default function TopNavigationBar({
 
   return (
     <div
-      className="h-12 shrink-0 flex items-center justify-between px-2 gap-0.5"
+      className="h-11 shrink-0 flex items-center justify-between px-2 gap-0.5"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* macOS 左侧空白区域（留给窗口控制按钮） */}
@@ -107,7 +107,7 @@ export default function TopNavigationBar({
             {/* 首页标签 */}
             <TabsTrigger
               value="home"
-              className="h-7 gap-2 px-3 data-[state=active]:bg-muted/50 data-[state=active]:shadow-sm rounded-md border data-[state=active]:border-border/50 border-transparent hover:bg-accent/50 transition-all"
+              className="h-7 gap-2 px-3 rounded-md border border-transparent text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-surface-selected data-[state=active]:text-foreground data-[state=active]:font-medium"
             >
               <Home className="w-4 h-4" />
               <span>{t('home')}</span>
@@ -118,7 +118,7 @@ export default function TopNavigationBar({
               <TabsTrigger
                 key={notebook.id}
                 value={notebook.id}
-                className="h-7 gap-1 pr-2 pl-3 data-[state=active]:bg-muted/50 data-[state=active]:shadow-sm rounded-md border data-[state=active]:border-border/50 border-transparent hover:bg-accent/50 transition-all max-w-[200px]"
+                className="h-7 gap-1 pr-2 pl-3 rounded-md border border-transparent text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground data-[state=active]:border-border data-[state=active]:bg-surface-selected data-[state=active]:text-foreground data-[state=active]:font-medium max-w-[200px]"
               >
                 <span className="truncate">{notebook.title}</span>
                 <span
@@ -127,7 +127,7 @@ export default function TopNavigationBar({
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
-                      handleCloseOpenedNotebook(notebook.id, e as unknown as React.MouseEvent)
+                      handleCloseOpenedNotebook(notebook.id, e)
                     }
                   }}
                   className="ml-1 inline-flex items-center justify-center h-4 w-4 p-0.5 rounded hover:bg-destructive/20 hover:text-destructive transition-colors"

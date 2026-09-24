@@ -7,7 +7,7 @@ export interface DragHandleProps {
 export default function DragHandle({ onMouseDown }: DragHandleProps): ReactElement {
   return (
     <div
-      className="w-3 shrink-0 cursor-col-resize hover:bg-muted/30 transition-colors"
+      className="w-3 shrink-0 cursor-col-resize transition-colors hover:bg-surface-hover"
       onMouseDown={onMouseDown}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     />

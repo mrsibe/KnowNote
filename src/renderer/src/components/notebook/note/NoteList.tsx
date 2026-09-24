@@ -47,10 +47,8 @@ export default function NoteList({
           <div
             key={note.id}
             onClick={() => onSelectNote(note)}
-            className={`group grid grid-cols-[auto_1fr_auto] gap-2 items-start p-3 rounded-lg border transition-colors cursor-pointer ${
-              currentNote?.id === note.id
-                ? 'bg-primary/10 border-primary/20'
-                : 'border-transparent hover:bg-muted'
+            className={`group grid grid-cols-[auto_1fr_auto] gap-2 items-start rounded-md px-2 py-2 transition-colors cursor-pointer ${
+              currentNote?.id === note.id ? 'bg-surface-selected' : 'hover:bg-surface-hover'
             }`}
           >
             {/* 图标列 - 固定宽度 */}
@@ -62,7 +60,7 @@ export default function NoteList({
               <p className="text-xs text-muted-foreground line-clamp-2">
                 {note.content.replace(/^#.*\n/, '').slice(0, 100)}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-subtle-foreground">
                 {new Date(note.updatedAt).toLocaleDateString(
                   i18n.language === 'zh-CN' ? 'zh-CN' : 'en-US'
                 )}
@@ -78,7 +76,7 @@ export default function NoteList({
               }}
               variant="ghost"
               size="icon"
-              className="opacity-0 group-hover:opacity-100 w-8 h-8 mt-0.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 mt-0.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
               title={t('deleteNote')}
             >
               <Trash2 className="w-4 h-4" />

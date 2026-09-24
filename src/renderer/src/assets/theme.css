@@ -125,7 +125,10 @@
   --surface-hover: oklch(0.9 0.01 262 / 0.06);
   --surface-selected: oklch(0.9 0.01 262 / 0.1);
 
-  --muted: oklch(0.3863 0.0235 265.6941);
+  /* --muted is a *recessed* fill: below surface-raised in both modes
+     (light 0.9551 vs 1.0, dark 0.275 vs 0.325) so a bubble, icon tile or
+     inline code block reads as inset instead of flipping direction. */
+  --muted: oklch(0.275 0.014 260);
 
   --foreground: oklch(0.7621 0.0202 262.9873);
   --muted-foreground: oklch(0.68 0.02 262.9873);

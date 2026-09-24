@@ -118,7 +118,7 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
   return (
     <div
       onClick={() => onSelect(document)}
-      className="group grid grid-cols-[auto_1fr_auto] gap-2 items-start p-3 rounded-lg transition-colors cursor-pointer select-none hover:bg-muted"
+      className="group grid grid-cols-[auto_1fr_auto] gap-2 items-start rounded-md px-2 py-2 transition-colors cursor-pointer select-none hover:bg-surface-hover"
     >
       {/* 图标列 - 固定宽度 */}
       {getTypeIcon()}
@@ -126,7 +126,7 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
       {/* 内容列 - 可被压缩 */}
       <div className="min-w-0 flex flex-col gap-1">
         <h3 className="text-sm font-medium truncate">{document.title}</h3>
-        <p className="text-xs text-muted-foreground">{document.chunkCount} chunks</p>
+        <p className="text-xs text-subtle-foreground">{document.chunkCount} chunks</p>
         {document.status === 'processing' && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <Loader2 className="w-3 h-3 animate-spin" />
@@ -143,7 +143,7 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
         }}
         variant="ghost"
         size="icon"
-        className="opacity-0 group-hover:opacity-100 w-8 h-8 mt-0.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 mt-0.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
         title={t('deleteDocument')}
       >
         <Trash2 className="w-4 h-4" />
