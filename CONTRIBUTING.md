@@ -77,13 +77,12 @@ against the real `app.asar`, so it is the step that actually catches these.
 
 Two caveats:
 
-- **`lint` is not a gate.** `main` currently reports 4 pre-existing
-  `react-hooks` errors and 124 warnings. Don't fix them in an unrelated PR, and
-  don't add new ones.
+- **`lint` is not a gate.** `npm run lint` has no errors, but `main` still
+  reports ~118 pre-existing `@typescript-eslint/no-explicit-any` warnings.
+  Don't add new ones, and don't mass-refactor them in an unrelated PR.
 - **Don't run `npm run format` on the whole repository.** It rewrites every
-  file, and one pre-existing file (`src/main/services/FileParserService.ts`) is
-  not prettier-clean, so a repo-wide format pulls unrelated changes into your
-  diff. Format only what you touched:
+  file, and a repo-wide format pulls unrelated changes into your diff. Format
+  only what you touched:
 
   ```bash
   npx prettier --write <files>

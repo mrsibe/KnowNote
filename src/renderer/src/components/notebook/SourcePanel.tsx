@@ -285,10 +285,12 @@ export default function SourcePanel(): ReactElement {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notebookId])
 
-  // 当 notebook 切换时清空选中的文档
-  useEffect(() => {
+  // 当 notebook 切换时清空选中的文档（render 期间调整，避免 effect 级联渲染）
+  const [selectionNotebookId, setSelectionNotebookId] = useState(notebookId)
+  if (selectionNotebookId !== notebookId) {
+    setSelectionNotebookId(notebookId)
     setSelectedDocument(null)
-  }, [notebookId])
+  }
 
   // 处理文件上传
   const handleFileUpload = useCallback(async () => {

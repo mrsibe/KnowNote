@@ -1,4 +1,4 @@
-import { useState, useEffect, ReactElement } from 'react'
+import { useState, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Dialog,
@@ -29,9 +29,12 @@ export default function RenameDialog({
   const { t } = useTranslation(['common', 'notebook'])
   const [title, setTitle] = useState(currentTitle)
 
-  useEffect(() => {
+  // 当外部标题变化时重置输入框（React 推荐的 render 期间调整模式，避免 effect 级联渲染）
+  const [syncedTitle, setSyncedTitle] = useState(currentTitle)
+  if (syncedTitle !== currentTitle) {
+    setSyncedTitle(currentTitle)
     setTitle(currentTitle)
-  }, [currentTitle])
+  }
 
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
