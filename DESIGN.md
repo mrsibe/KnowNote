@@ -132,8 +132,9 @@ live only in component constants. These are the values; change them here first.
 | Container gutter     | `p-2` (`CONTAINER_PADDING_X`)          | The canvas gap around and between the panels               |
 | Initial side widths  | golden ratio of the free space         | `1 / (2 + 1.618)` each; the centre takes `1.618 / 3.618`   |
 | Minimum side panel   | `260px` (`MIN_SIDE_WIDTH`)             | A drag and a keyboard step both clamp here                 |
-| Minimum centre panel | `420px` (`MIN_CENTER_WIDTH`)           | Never traded away; the sides give up width first           |
-| Seam                 | `w-px` (`HANDLE_WIDTH`)                | 1px hairline, 12px invisible hit area, `z-10`              |
+| Minimum centre panel | `420px` (`MIN_CENTER_WIDTH`)           | The sides give up width first, down to their own minimum   |
+| Seam                 | `w-3` (`HANDLE_WIDTH`)                 | 12px canvas gutter; the gutter itself is the drag target   |
+| Fallback widths      | `320px` / `360px`                      | Used when the container has no measurable width yet        |
 | Keyboard step        | `10px` / `50px`                        | `Shift` for the larger step; `Home` / `End` for the limits |
 | Persistence          | `localStorage` `knownote:panel-widths` | Survives navigation, unlike the component's own lifetime   |
 
@@ -153,15 +154,67 @@ Rules:
   (`lib/dragLock.ts`: `user-select: none` + a forced cursor, ref-counted, Escape
   cancels). Without the lock, dragging past a panel's limit leaves the browser's
   native selection drag running and selects the text underneath.
+- **The seam is a gutter, and its width is layout.** The panels are separate
+  cards floating on `surface-base`; the canvas between them _is_ the handle.
+  That is why `HANDLE_WIDTH` is subtracted from the width the panels may occupy,
+  and why the handle paints nothing at rest. Painting it (`bg-border`) or
+  shrinking it toward `w-px` closes the gutter and makes the cards read as
+  adjacent surfaces sharing a divider. This is the one place a hairline is wrong —
+  do not "tidy" it.
 - **The seam is a real `separator`**: `role`, `aria-orientation`, `aria-valuenow`,
-  `tabIndex={0}`, arrow keys. Panel resizing is not mouse-only.
+  `aria-valuetext`, `tabIndex={0}`, arrow keys. Panel resizing is not mouse-only.
+- **Arrow keys move the seam, not the panel.** `ArrowLeft` shrinks the panel on the
+  left of the seam and grows the panel on the right of it; `ArrowRight` does the
+  opposite. `Home` / `End` go to the minimum and maximum of the value. The two
+  seams report the same kind of number (the panel width in px) under the same key
+  semantics — an earlier revision inverted one of them, so the same key raised the
+  reported value on one seam and lowered it on the other.
+- **Double-click a seam** restores that panel to its default share. Persistence
+  without a way back is a trap: one bad drag otherwise keeps a 260px reading pane
+  forever.
+- **The centre's minimum is not absolute.** `maxSideWidth` floors each side at
+  `MIN_SIDE_WIDTH`, so on a window too narrow for both minimums the centre absorbs
+  the shortfall rather than a side panel being clamped to something unusable. In
+  practice the window's own 1000px minimum keeps the two from colliding, but the
+  guarantee comes from the window, not from this layout.
 - A collapsed panel keeps its previous width in the session so expanding restores
   it; `0` is never persisted as a width.
 
 `MessageList` follows the transcript only while the reader is already at the
 bottom (within 48px). Scrolling up suspends the follow and reveals a
 `jumpToLatest` pill; the follow resumes when they return to the bottom. A stream
-that force-scrolls per token makes re-reading impossible.
+that force-scrolls per token makes re-reading impossible. The scroll itself is
+instant, never smooth: this effect runs per token, and an animation queued that
+often never settles.
+
+The transcript's empty state and its message list must share **one** `ScrollArea`.
+The scroll subscription runs once, so a viewport that only exists after messages
+arrive can never be observed — that is how the follow silently stopped working
+while looking correct in review.
+
+`ProcessPanel` floats the composer over the transcript and reserves `pb-32`
+(128px) for it; the scroll fade above it is `h-32` for the same reason. The fade
+is sized to the reserve, not to taste: a taller fade dims the last line of every
+answer, because the content scrolls under it.
+
+Two rules for the composer and for leaving the workspace:
+
+- **Enter sends; only the Stop button aborts.** Enter used to abort a running
+  generation while the composer was disabled during a stream, so the key you press
+  to send was the key that cancels — and the composer was unusable for composing
+  the next question while reading the current answer, which is the actual rhythm
+  of research. The textarea now stays enabled while a turn streams; `canSend` is
+  still false, so Enter is inert rather than destructive, and the Stop button is
+  the single abort affordance. Shift+Enter is still a newline.
+- **Sending always brings your own message into view.** `MessageList` exposes a
+  `pinToBottom` handle and `handleSend` calls it, so the follow state cannot hide
+  the message the user just wrote.
+- **Leaving the workspace asks first when the note editor is dirty.** Closing a
+  tab, switching tabs, the Home tab and `Cmd+W` all unmount it. `NotePanel`
+  publishes its dirty state to `uiStore` (only it knows), and `NotebookLayout`
+  owns the single `UnsavedChangesDialog` that every one of those paths goes
+  through. The in-panel Back button is not special-cased — it uses the same
+  state. A navigation path that skips this guard is a bug.
 
 ## Borders and elevation
 
@@ -367,7 +420,10 @@ Don't:
   `oklch(...)` in a component, `bg-card shadow-md` panels, `rounded-xl` cards,
   `shadow-sm` buttons or inputs, `rounded-sm` controls.
 - Gradients, glassmorphism (`backdrop-blur` except on a floating toolbar over
-  scrolling content), glow effects.
+  scrolling content), glow effects. **One sanctioned exception:** the scroll fade
+  between the transcript and the floating composer — a functional fade, sized to
+  the `pb-32` reserve it covers so it never dims the last line of an answer
+  (`ProcessPanel.tsx`).
 - Colour icons in neutral chrome; colour-coded sections chosen from `--chart-*`
   outside chart/graph surfaces.
 - Express hierarchy with `scale-*` transforms on chrome (allowed only inside
@@ -514,13 +570,28 @@ the same PR.
 `npm run check:design` (`scripts/check-design-tokens.mjs`) reads the renderer
 sources — no build, no dependencies — and fails on:
 
-| Rule         | Fails when                                                                                                          |
-| ------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `radius`     | a radius utility other than `rounded-md`, `rounded-lg`, `rounded-full` and their `t/b/l/r` forms                    |
-| `shadow`     | an elevation utility other than `shadow-elevation`, `shadow-control`, `shadow-none`                                 |
-| `palette`    | a colour utility from the raw Tailwind palette (`bg-slate-100`, `text-gray-500`) or an arbitrary colour (`bg-[#…]`) |
-| `text-level` | alpha stacked on a text level (`text-muted-foreground/70`)                                                          |
-| `css-radius` | a raw CSS `border-radius` outside `0.375rem` / `0.5rem` / `9999px`                                                  |
+| Rule                  | Fails when                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `radius`              | a radius utility other than `rounded-md`, `rounded-lg`, `rounded-full` and their `t/b/l/r` forms                    |
+| `shadow`              | an elevation utility other than `shadow-elevation`, `shadow-control`, `shadow-none`                                 |
+| `palette`             | a colour utility from the raw Tailwind palette (`bg-slate-100`, `text-gray-500`) or an arbitrary colour (`bg-[#…]`) |
+| `text-level`          | alpha stacked on a text level (`text-muted-foreground/70`)                                                          |
+| `chart-scope`         | `--chart-*` as a utility class or as `var(--chart-N)`, outside `CHART_SURFACES` in the script                       |
+| `raw-colour-in-style` | a colour function (`hsl(`, `rgb(`, `oklch(` …) inside an inline `style` object — including `hsl(var(--card))`       |
+| `css-radius`          | a raw CSS `border-radius` outside `0.375rem` / `0.5rem` / `9999px`                                                  |
+
+`chart-scope` and `raw-colour-in-style` were added after a rule-shaped defect
+reached `main` twice: chart colours on list rows and a `hsl(var(--card))` scroll
+fade. Neither was catchable before, because `--chart-*` is a semantic token rather
+than a raw palette colour, and this guard only looked at utility classes — not at
+inline style objects. `CHART_SURFACES` is the only allowlist, and it names one
+file: the mind-map node, which is a graph node.
+
+Known gap, stated rather than implied: a raw **hex** in an inline style
+(`style={{ background: '#fff' }}`) still passes. That is deliberate — the one
+current use is the mind-map PNG export, which needs a fixed background rather
+than a themed one (`MindMapPage.tsx`). Anything that wants a literal colour
+should be raised as a rule change, not smuggled through.
 
 `npm run check:design -- --list` prints the rules and the allowlists. The check
 runs in the `Verify` workflow, before the build matrix.

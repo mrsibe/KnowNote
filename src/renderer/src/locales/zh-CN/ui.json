@@ -36,7 +36,7 @@
   "importUrl": "导入网页",
   "importNote": "导入笔记",
   "noDocuments": "暂无文档",
-  "noDocumentsDesc": "添加文档以增强对话的知识背景",
+  "noDocumentsDesc": "添加文档，就可以针对它提问",
   "documents": "{{count}} 个文档",
   "chunks": "{{count}} 个片段",
   "indexing": "索引中...",
@@ -59,5 +59,9 @@
   "backToList": "返回列表",
   "openUrl": "打开网页",
   "openFile": "打开文件",
-  "cannotPreview": "无法预览此文件类型"
+  "cannotPreview": "无法预览此文件类型",
+  "onboardingTagline": "读你的文档。信每一个回答。",
+  "onboardingGetStarted": "开始使用",
+  "onboardingStarting": "正在启动...",
+  "selectLanguage": "选择语言"
 }

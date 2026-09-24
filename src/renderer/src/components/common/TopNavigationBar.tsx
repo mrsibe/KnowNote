@@ -12,11 +12,18 @@ import WindowTitleBar from './WindowTitleBar'
 interface TopNavigationBarProps {
   onCreateClick: () => void
   isHomePage?: boolean
+  /**
+   * Run a navigation that unmounts the workspace, after confirming when the note
+   * editor holds unsaved text. Supplied by `NotebookLayout`, which owns the one
+   * prompt so every path — tab close, tab switch, Home — asks the same question.
+   */
+  onConfirmDiscard?: (action: () => void) => void
 }
 
 export default function TopNavigationBar({
   onCreateClick,
-  isHomePage = false
+  isHomePage = false,
+  onConfirmDiscard
 }: TopNavigationBarProps): ReactElement {
   const { t } = useTranslation('ui')
   const navigate = useNavigate()
@@ -38,18 +45,30 @@ export default function TopNavigationBar({
   }
 
   const handleTabChange = (value: string): void => {
-    setActiveTab(value)
-    if (value === 'home') {
-      navigate('/')
-    } else {
-      setCurrentNotebook(value)
-      navigate(`/notebook/${value}`)
+    if (value === activeTab) return
+    // Switching tabs unmounts the whole workspace, so it discards the editor the
+    // same way closing does. The tab highlight only moves once the action runs, so
+    // cancelling the prompt leaves the strip where it was.
+    const go = (): void => {
+      setActiveTab(value)
+      if (value === 'home') {
+        navigate('/')
+      } else {
+        setCurrentNotebook(value)
+        navigate(`/notebook/${value}`)
+      }
     }
+    if (onConfirmDiscard) onConfirmDiscard(go)
+    else go()
   }
 
   const handleCloseOpenedNotebook = (id: string, e: React.SyntheticEvent): void => {
     e.stopPropagation()
+    if (onConfirmDiscard) onConfirmDiscard(() => closeOpenedNotebook(id))
+    else closeOpenedNotebook(id)
+  }
 
+  const closeOpenedNotebook = (id: string): void => {
     // 如果关闭的是当前笔记本，需要跳转
     if (currentNotebook?.id === id && !isHomePage) {
       // 找到当前笔记本在列表中的索引

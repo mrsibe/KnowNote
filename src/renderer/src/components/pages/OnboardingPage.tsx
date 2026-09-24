@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useOnboardingStore } from '../../store/onboardingStore'
 import { useI18nStore } from '../../store/i18nStore'
 import type { Language } from '../../store/i18nStore'
@@ -14,6 +15,7 @@ const languages = [
 
 export default function OnboardingPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation('ui')
   const { completeOnboarding } = useOnboardingStore()
   const { language, changeLanguage } = useI18nStore()
   const [selectedLanguage, setSelectedLanguage] = useState<Language>(language)
@@ -35,9 +37,11 @@ export default function OnboardingPage() {
         <div className="mb-8">
           <img src={logo} alt="KnowNote" className="w-24 h-24 mx-auto mb-4" />
           <h1 className="text-xl font-medium text-foreground mb-2">KnowNote</h1>
-          <p className="text-sm text-muted-foreground">
-            More convenient, more lightweight, and understands you better!
-          </p>
+          {/* The product's own sub-line from the README. It replaced a comparative
+              slogan ("more convenient, more lightweight, and understands you better")
+              that had no basis and was hardcoded in English for zh-CN users — the
+              product record forbids claims ahead of the evidence. */}
+          <p className="text-sm text-muted-foreground">{t('onboardingTagline')}</p>
         </div>
 
         {/* 语言选择 */}
@@ -47,7 +51,7 @@ export default function OnboardingPage() {
             onValueChange={(value) => setSelectedLanguage(value as Language)}
           >
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select Language">{selectedLangName}</SelectValue>
+              <SelectValue placeholder={t('selectLanguage')}>{selectedLangName}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {languages.map((lang) => (
@@ -61,7 +65,7 @@ export default function OnboardingPage() {
 
         {/* 确认按钮 */}
         <Button size="lg" onClick={handleComplete} disabled={isCompleting} className="w-full">
-          {isCompleting ? 'Starting...' : 'Get Started'}
+          {isCompleting ? t('onboardingStarting') : t('onboardingGetStarted')}
         </Button>
       </div>
     </div>

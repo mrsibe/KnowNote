@@ -13,6 +13,9 @@
  *
  *   npm run check:design          # report violations, exit 1 if any
  *   npm run check:design -- --list # print the rules and exit 0
+ *
+ * `scan` receives the line, a reporter, and the absolute file path — the last one
+ * so a rule can carry a narrow, named allowlist (`chart-scope`).
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -38,6 +41,14 @@ const ALLOWED_CSS_RADII = new Set(['0.375rem', '0.5rem', '9999px'])
 
 const PALETTE =
   'white|black|gray|slate|zinc|neutral|stone|blue|green|red|purple|amber|yellow|orange|pink|teal|cyan|emerald|indigo|violet|rose|sky|lime|fuchsia'
+
+/**
+ * The only surfaces allowed to use `--chart-*`. DESIGN.md bans chart colours
+ * outside chart and graph surfaces, and the mind-map node is a graph node in a
+ * separate window. Suffixes of the path, always with forward slashes — the rule
+ * normalises separators before matching.
+ */
+const CHART_SURFACES = ['/components/notebook/mindmap/CustomNode.tsx']
 
 const RULES = [
   {
@@ -85,6 +96,47 @@ const RULES = [
       const pattern = /\btext-(foreground|muted-foreground|subtle-foreground)\/\d+/g
       for (const match of line.matchAll(pattern)) {
         check(match[0], 'use a darker level (T1/T2/T3) instead of stacking alpha')
+      }
+    }
+  },
+  {
+    id: 'chart-scope',
+    describe: 'chart colours stay on chart and graph surfaces',
+    applies: ['.ts', '.tsx'],
+    scan(line, check, file) {
+      // Separators are normalised first: `file` is a platform path, so the
+      // allowlist below never matched on Windows and every legitimately allowed
+      // use was reported. CI caught it, not the local run.
+      const normalized = file ? file.replace(/\\/g, '/') : ''
+      if (CHART_SURFACES.some((allowed) => normalized.endsWith(allowed))) return
+      const patterns = [
+        /\b(bg|text|border|ring|fill|stroke|from|to|via)-chart-[1-5](?:\/\d+)?\b/g,
+        /var\(--chart-[1-5]\)/g
+      ]
+      for (const pattern of patterns) {
+        for (const match of line.matchAll(pattern)) {
+          check(match[0], 'chart colours are for chart/graph surfaces; use a surface or text token')
+        }
+      }
+    }
+  },
+  {
+    id: 'raw-colour-in-style',
+    describe: 'an inline style uses tokens, not raw colour functions',
+    applies: ['.ts', '.tsx'],
+    scan(line, check) {
+      // Only inline-style contexts: a raw colour function anywhere else is either
+      // a comment or plain CSS.
+      if (!/style=|background|backgroundColor|borderColor|\bcolor:/.test(line)) return
+      // A colour function is flagged whatever its argument: `hsl(var(--card))`
+      // wraps a token needlessly and, on an oklch() token, produces invalid CSS —
+      // which is exactly how the sidebar outline silently stopped rendering. A
+      // bare `var(--surface-raised)` matches no colour function and passes.
+      for (const match of line.matchAll(/\b(?:hsla?|rgba?|oklch|oklab|lab|lch)\(/g)) {
+        check(
+          match[0].trim(),
+          'use a token directly (var(--surface-*)); do not wrap it in a colour function'
+        )
       }
     }
   },
@@ -150,17 +202,21 @@ function main() {
       const column = line.length - line.trimStart().length + 1
       for (const rule of RULES) {
         if (!rule.applies.includes(extension)) continue
-        rule.scan(line, (token, hint) => {
-          violations.push({
-            file: relative(process.cwd(), path),
-            line: index + 1,
-            column,
-            rule: rule.id,
-            token,
-            hint,
-            context: trimmed
-          })
-        })
+        rule.scan(
+          line,
+          (token, hint) => {
+            violations.push({
+              file: relative(process.cwd(), path),
+              line: index + 1,
+              column,
+              rule: rule.id,
+              token,
+              hint,
+              context: trimmed
+            })
+          },
+          path
+        )
       }
     })
   }

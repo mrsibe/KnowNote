@@ -16,8 +16,8 @@ export interface ResizableLayoutProps {
 const MIN_SIDE_WIDTH = 260
 /** Minimum width of the centre panel, in CSS pixels. */
 const MIN_CENTER_WIDTH = 420
-/** The seam is `w-px`; its 12px hit area is a pseudo-element, so it costs no layout. */
-const HANDLE_WIDTH = 1
+/** The seam is `w-3`. The canvas gutter between two panels is the handle, so it costs layout. */
+const HANDLE_WIDTH = 12
 /** `p-2` on the container, both sides. */
 const CONTAINER_PADDING_X = 16
 const DEFAULT_LEFT_WIDTH = 320
@@ -298,12 +298,15 @@ export default function ResizableLayout({
       const current = side === 'left' ? leftWidthRef.current : rightWidthRef.current
       const other = side === 'left' ? rightWidthRef.current : leftWidthRef.current
       const max = maxSideWidth(other, containerWidthRef.current)
-      // ArrowLeft moves the seam left, which grows whichever panel sits left of it.
-      const grow = side === 'left' ? -1 : 1
+      // The seam moves in the direction of the arrow, so the panel it resizes moves
+      // the other way: ArrowLeft shrinks the panel on the left of the seam and
+      // grows the panel on the right of it. Getting this backwards made the two
+      // separators report opposite value changes for the same key.
+      const growsWithArrowRight = side === 'left'
 
       let next: number | null = null
-      if (event.key === 'ArrowLeft') next = current - step * grow
-      else if (event.key === 'ArrowRight') next = current + step * grow
+      if (event.key === 'ArrowLeft') next = current + (growsWithArrowRight ? -step : step)
+      else if (event.key === 'ArrowRight') next = current + (growsWithArrowRight ? step : -step)
       else if (event.key === 'Home') next = MIN_SIDE_WIDTH
       else if (event.key === 'End') next = max
 
@@ -311,6 +314,25 @@ export default function ResizableLayout({
       event.preventDefault()
 
       setPanelWidth(side, Math.max(MIN_SIDE_WIDTH, Math.min(max, next)))
+      lastSizeRef.current = { left: leftWidthRef.current, right: rightWidthRef.current }
+      writeStoredWidths(lastSizeRef.current)
+    },
+    [setPanelWidth]
+  )
+
+  /**
+   * Double-click restores this panel to its default share. Persistence without a
+   * way back is a trap: one bad drag kept a 260px reading pane forever.
+   */
+  const resetPanel = useCallback(
+    (side: DragHandleSide): void => {
+      const golden = calculateGoldenRatioWidths(containerWidthRef.current)
+      const other = side === 'left' ? rightWidthRef.current : leftWidthRef.current
+      const target = side === 'left' ? golden.left : golden.right
+      setPanelWidth(
+        side,
+        Math.max(MIN_SIDE_WIDTH, Math.min(maxSideWidth(other, containerWidthRef.current), target))
+      )
       lastSizeRef.current = { left: leftWidthRef.current, right: rightWidthRef.current }
       writeStoredWidths(lastSizeRef.current)
     },
@@ -369,6 +391,7 @@ export default function ResizableLayout({
           dragging={draggingSide === 'left'}
           onPointerDown={(event) => beginDrag('left', event)}
           onKeyDown={(event) => handleKeyDown('left', event)}
+          onDoubleClick={() => resetPanel('left')}
           label={t('resizeKnowledgeBase')}
         />
       )}
@@ -386,6 +409,7 @@ export default function ResizableLayout({
           dragging={draggingSide === 'right'}
           onPointerDown={(event) => beginDrag('right', event)}
           onKeyDown={(event) => handleKeyDown('right', event)}
+          onDoubleClick={() => resetPanel('right')}
           label={t('resizeCreativeSpace')}
         />
       )}

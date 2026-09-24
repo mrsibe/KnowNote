@@ -10,7 +10,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chatStore'
 import { useNotebookStore } from '../../store/notebookStore'
-import MessageList from './chat/MessageList'
+import MessageList, { type MessageListHandle } from './chat/MessageList'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
@@ -40,6 +40,7 @@ function ProcessPanel({
   const [editingTitle, setEditingTitle] = useState('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const messageListRef = useRef<MessageListHandle>(null)
 
   const currentNotebookId = currentSession?.notebookId
   const isCurrentNotebookStreaming = currentNotebookId
@@ -78,6 +79,9 @@ function ProcessPanel({
 
     sendMessage(currentSession.id, input.trim())
     setInput('')
+    // The reader may have scrolled up meanwhile: their own message must always
+    // land in view, regardless of the follow state.
+    messageListRef.current?.pinToBottom()
   }
 
   const handleStop = async (): Promise<void> => {
@@ -157,11 +161,11 @@ function ProcessPanel({
   const handleKeyDown = (e: React.KeyboardEvent): void => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      if (isCurrentNotebookStreaming) {
-        void handleStop()
-      } else {
-        handleSend()
-      }
+      // Send only. Enter used to abort the running generation, which made the key
+      // you press to send the key that cancels; the Stop button is the abort, and
+      // it is the only one. While a turn streams `canSend` is false, so Enter is
+      // simply inert and the composer stays usable for composing the next one.
+      if (canSend) handleSend()
     }
   }
 
@@ -281,12 +285,15 @@ function ProcessPanel({
 
       {/* 对话消息区域 - 使用 absolute 定位占满剩余空间 */}
       <div className="absolute top-14 bottom-0 left-0 right-0 overflow-hidden">
-        <MessageList messages={messages} />
+        <MessageList ref={messageListRef} messages={messages} />
       </div>
 
       {/* 底部渐变遮罩 - 独立于消息区域，避免堆叠上下文问题 */}
       <div
-        className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none rounded-b-lg z-10"
+        // Height must match the `pb-32` reserve in MessageList: the fade only needs
+        // to cover the space the composer floats over. At h-48 (192px) it reached
+        // ~64px higher than the reserve and dimmed the last line of every answer.
+        className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none rounded-b-lg z-10"
         style={{
           // A scroll fade, not decoration: it keeps the transcript readable as it
           // passes under the floating composer. Uses the surface token rather than
@@ -312,7 +319,7 @@ function ProcessPanel({
                   ? t('noProviderConfigured')
                   : t('inputMessage')
             }
-            disabled={!currentSession || isCurrentNotebookStreaming || !hasChatModel}
+            disabled={!currentSession || !hasChatModel}
             rows={1}
             className="w-full bg-transparent border-0 pl-4 pr-14 py-3 text-sm text-foreground placeholder-muted-foreground resize-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto min-h-[84px] max-h-[280px] themed-scrollbar select-text"
           />
