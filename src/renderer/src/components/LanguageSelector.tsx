@@ -18,10 +18,7 @@ export const LanguageSelector = ({ className = '' }: { className?: string }) => 
 
   return (
     <div className={`flex items-center space-x-2 ${className}`}>
-      <label
-        htmlFor="language-select"
-        className="text-sm font-medium text-foreground dark:text-foreground-dark"
-      >
+      <label htmlFor="language-select" className="text-sm font-medium text-foreground">
         {t('language', 'Language')}:
       </label>
       <Select value={language} onValueChange={(value) => handleLanguageChange(value as Language)}>
