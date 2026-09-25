@@ -11,6 +11,20 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   # Dev-only: test fixtures and build scripts are not part of the shipped app.
   - '!{test,scripts}/*'
+# PDF.js treats CMaps, standard fonts and the wasm image decoders as *external*
+# assets fetched by filename. They ship as real files under
+# `resources/pdfjs/`, outside app.asar, because both consumers need them there:
+# the main-process loader reads them with `fs` (pdfjs resolves its own optional
+# native peer that way), and the renderer reads them through the
+# `knownote-asset://` protocol. Chromium cannot read inside app.asar, so these
+# cannot ride along in the bundle. See `src/main/pdfjsAssetPaths.ts`.
+extraResources:
+  - from: node_modules/pdfjs-dist/cmaps
+    to: pdfjs/cmaps
+  - from: node_modules/pdfjs-dist/standard_fonts
+    to: pdfjs/standard_fonts
+  - from: node_modules/pdfjs-dist/wasm
+    to: pdfjs/wasm
 # Native modules must live outside the asar so they can be loaded by dlopen()
 # AND so electron-builder signs them individually. Keep these patterns explicit:
 # if a native module stays inside app.asar it cannot be signed or loaded.

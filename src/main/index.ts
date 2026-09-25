@@ -25,11 +25,16 @@ import {
   registerDocumentProtocolHandler,
   registerDocumentScheme
 } from './protocol/documentProtocol'
+import {
+  registerPdfjsAssetProtocolHandler,
+  registerPdfjsAssetScheme
+} from './protocol/pdfjsAssetProtocol'
 import Logger from '../shared/utils/logger'
 
 // Scheme privileges must be registered before the app is ready, so this is a
 // module-scope call rather than part of the whenReady sequence.
 registerDocumentScheme()
+registerPdfjsAssetScheme()
 
 let connectionManager: ConnectionManager | null = null
 let embeddingService: EmbeddingService | null = null
@@ -84,6 +89,9 @@ app.whenReady().then(async () => {
   registerDocumentProtocolHandler(
     (documentId) => knowledgeService?.getDocumentLocalFilePath(documentId) ?? null
   )
+  // PDF.js 的 CMap / 标准字体 / wasm 资源。它不依赖任何服务初始化顺序，只是把
+  // resources/pdfjs 暴露给渲染进程。
+  registerPdfjsAssetProtocolHandler()
   Logger.info('Main', 'Database initialized')
 
   // Initialize electron-store

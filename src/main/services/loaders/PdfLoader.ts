@@ -8,6 +8,7 @@ import { extname } from 'path'
 // 使用 legacy build for Node.js 环境
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentProxy, PDFPageProxy, TextItem } from 'pdfjs-dist/types/src/display/api'
+import { pdfjsNodeAssetUrls } from '../../pdfjsAssetPaths'
 import Logger from '../../../shared/utils/logger'
 import { layoutPageText, type PositionedTextItem } from './pdfTextLayout'
 import type {
@@ -74,7 +75,12 @@ export class PdfLoader implements IDocumentLoader {
       // 拉进来，那个测试会失败。
       const loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(buffer),
-        password: opts.password
+        password: opts.password,
+        // CMap / 标准字体 / wasm 是外部资源：缺了 `cMapUrl`，CJK 文档的
+        // `translateFont` 会抛 `Ensure that the cMapUrl API parameter is provided.`，
+        // 文本层随之取不到中文。Node 侧 pdfjs 直接 `fs.readFile` 这些目录。
+        ...pdfjsNodeAssetUrls(),
+        cMapPacked: true
       })
       const pdfDoc: PDFDocumentProxy = await loadingTask.promise
 

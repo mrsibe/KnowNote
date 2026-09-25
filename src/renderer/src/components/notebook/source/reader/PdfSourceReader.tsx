@@ -22,6 +22,7 @@ import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 import { useTranslation } from 'react-i18next'
 import { Minus, Plus, Loader2 } from 'lucide-react'
 import { documentUrl } from '../../../../../../shared/utils/documentUrl'
+import { pdfjsAssetUrl } from '../../../../../../shared/utils/pdfjsAssets'
 import type {
   ReaderAnchor,
   ReaderHandle,
@@ -223,7 +224,17 @@ const PdfSourceReader = forwardRef<ReaderHandle, PdfSourceReaderProps>(function 
       // 上，不在 `getDocument` 参数里，所以这里没有可以传的开关（#121 /
       // GHSA-hq66-cqwq-w95j）。也就是说**在当前检查过的调用点下漏洞路径不可达**，
       // 前提由 `test/pdfjsScriptingBoundary.test.ts` 守住。
-      const task = pdfjs.getDocument({ data })
+      // `cMapUrl` / `standardFontDataUrl` / `wasmUrl` 是 PDF.js 的外部资源入口。
+      // 缺了 `cMapUrl`，CJK 文档的 `translateFont` 会抛
+      // `Ensure that the cMapUrl API parameter is provided.`，中文整页画不出来；
+      // 两个 URL 都走 `knownote-asset://`，由主进程从 resources/pdfjs 只读服务。
+      const task = pdfjs.getDocument({
+        data,
+        cMapUrl: pdfjsAssetUrl('cmaps'),
+        cMapPacked: true,
+        standardFontDataUrl: pdfjsAssetUrl('standard_fonts'),
+        wasmUrl: pdfjsAssetUrl('wasm')
+      })
       loaded = task
       const doc = await task.promise
       if (cancelled) {
