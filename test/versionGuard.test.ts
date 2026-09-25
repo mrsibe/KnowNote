@@ -169,7 +169,17 @@ test('in CI, having no tags to compare against fails instead of passing', () => 
     copyFileSync('scripts/check-version.mjs', join(dir, 'check-version.mjs'))
     copyFileSync('package.json', join(dir, 'package.json'))
 
-    const local = spawnSync('node', ['check-version.mjs'], { cwd: dir, encoding: 'utf8' })
+    // The environment has to be controlled explicitly: CI sets GITHUB_ACTIONS, so
+    // inheriting it here would run the "not in CI" case in CI mode and the test
+    // would assert the wrong branch (which is how this first failed).
+    const withoutActions = { ...process.env }
+    delete withoutActions.GITHUB_ACTIONS
+
+    const local = spawnSync('node', ['check-version.mjs'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: withoutActions
+    })
     assert.equal(local.status, 0, 'outside CI a missing tag list is tolerated')
 
     const ci = spawnSync('node', ['check-version.mjs'], {
