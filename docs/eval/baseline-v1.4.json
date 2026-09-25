@@ -12,18 +12,18 @@
     "retrieval": "dense",
     "topK": 10,
     "threshold": 0,
-    "citationK": 5,
+    "evidenceK": 5,
     "corpus": "eval/corpus",
-    "documents": 6,
-    "questions": 13
+    "documents": 13,
+    "questions": 30
   },
   "metrics": {
-    "recallAt1": 0.923077,
-    "recallAt5": 1,
+    "recallAt1": 0.766667,
+    "recallAt5": 0.933333,
     "recallAt10": 1,
-    "mrr": 0.948718,
-    "ndcgAt10": 0.961538,
-    "citationRecall": 0.2
+    "mrr": 0.849206,
+    "ndcgAt10": 0.889891,
+    "evidencePrecisionAt5": 0.2
   },
   "perQuestion": [
     {
@@ -281,8 +281,241 @@
     {
       "id": "q013",
       "question": "What is the main environmental concern for tidal energy installations?",
-      "firstRelevantRank": 3,
+      "firstRelevantRank": 6,
       "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q014",
+      "question": "In lake monitoring, how is the sampling depth actually recorded?",
+      "firstRelevantRank": 2,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [],
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q015",
+      "question": "Why does deep-water oxygen fall while a lake remains stratified?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q016",
+      "question": "How do supercapacitors hold their charge?",
+      "firstRelevantRank": 2,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [],
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q017",
+      "question": "Why can solitary bees pollinate a bloom week that is too cold for honeybee hives?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q018",
+      "question": "Why is one continuous planted roof layer better than several isolated planted beds?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q019",
+      "question": "Where do acetic acid bacteria sit in a vinegar culture?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q020",
+      "question": "What happens if a vinegar culture is sealed airtight?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q021",
+      "question": "Why is wave energy harder to schedule ahead than tidal energy?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q022",
+      "question": "Where does siting for wave energy devices concentrate, and where does it not?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q023",
+      "question": "How does the river sampling protocol differ from the lake sampling protocol?",
+      "firstRelevantRank": 3,
+      "relevantCount": 2,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [],
+        [],
+        [
+          1
+        ],
+        [],
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q024",
+      "question": "A street canopy and a green roof are both said to cool; what surface does each one shade?",
+      "firstRelevantRank": 3,
+      "relevantCount": 2,
       "retrievedCount": 10,
       "matchesByRank": [
         [],
@@ -290,6 +523,134 @@
         [
           0
         ],
+        [
+          1
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q025",
+      "question": "Which preservation method depends on keeping air away from the food?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q026",
+      "question": "Why can one cold morning cost a grower the whole crop even when colonies are brought in?",
+      "firstRelevantRank": 7,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [
+          0
+        ],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q027",
+      "question": "绿茶应该怎样保存才能减缓氧化？",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q028",
+      "question": "茶叶储存的相对湿度上限是多少？",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q029",
+      "question": "为什么冷冻保存的茶叶取出后不能立刻打开包装？",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q030",
+      "question": "为什么潮汐能比风能和太阳能更容易提前安排发电？",
+      "firstRelevantRank": 2,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [],
+        [
+          0
+        ],
+        [],
         [],
         [],
         [],

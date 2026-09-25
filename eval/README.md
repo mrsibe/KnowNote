@@ -65,6 +65,22 @@ Runtime `documentId`s are random and `blockId`s embed them, so neither may appea
 This is what lets #78 change chunking without invalidating the dataset: the ground truth
 describes the source, and the runner maps it to whatever ids that run produced.
 
+### Dataset design
+
+The dataset is built to avoid saturation, not to produce low scores. A benchmark whose
+metric is already 1.0 cannot tell a better retriever from the current one. So the corpus
+pairs near-duplicate documents (river vs lake monitoring, street canopy vs green roofs,
+tidal vs wave energy), and the questions include:
+
+- questions that distinguish two similar documents by one detail,
+- multi-location ground truth that requires several passages at once,
+- paraphrases whose wording does not overlap the source,
+- Chinese questions, including over English sources, because the local model is
+  multilingual.
+
+Every question is answerable from the corpus; difficulty comes from discrimination, not
+from unanswerable queries.
+
 ## What it does
 
 1. Creates a throwaway database (a temp profile; the developer's own DB is never opened).
@@ -79,8 +95,11 @@ describes the source, and the runner maps it to whatever ids that run produced.
 - **Recall@1/5/10** — share of ground-truth blocks covered by the first k passages.
 - **MRR** — reciprocal rank of the first relevant passage.
 - **nDCG@10** — binary-gain discounted cumulative gain.
-- **Citation recall** — share of the first `citationK` passages that resolve into ground
-  truth. This is the answer-level metric: the failure it catches is a *wrong* citation.
+- **Evidence precision@5** — of the first 5 retrieved passages, the share that cover a
+  ground-truth block. This is **retrieval precision, not answer citation recall**: the
+  harness runs no model and produces no answer. Answer-level citation correctness is
+  covered by the resolver (#70); a model-driven answer eval would be a separate
+  deliverable.
 - **Latency p50/p95** — informational only. Timing is **not** frozen, and the committed
   JSON excludes it so two runs diff cleanly.
 

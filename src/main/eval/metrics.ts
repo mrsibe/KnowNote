@@ -53,19 +53,24 @@ export function ndcgAtK(matchesByRank: MatchMatrix, groundTruthCount: number, k:
 }
 
 /**
- * Citation recall: of the citations an answer would carry (the first `k`
- * retrieved passages), the share that resolves into ground truth.
+ * Evidence precision@k: of the first `k` retrieved passages, the share that cover
+ * a ground-truth block.
  *
- * This is the one metric here that is about precision-shaped behaviour, because
- * the failure it catches is a *wrong* citation, not a missing one. It is
- * reported as a share of the citations actually retrieved, so a question that
- * retrieved nothing contributes 0 rather than being skipped.
+ * This is retrieval precision, **not** answer citation recall. No model runs in
+ * this harness and no answer is produced, so a metric that claims to be about an
+ * answer's citations would be a false claim. Answer-level citation correctness is
+ * the resolver's job (#70); a model-driven answer eval is a separate deliverable.
+ *
+ * Each retrieved passage is counted once, however many ground-truth blocks it
+ * covers. Overlapping chunks can cover the same block, and each still counts as a
+ * separate retrieved passage — a reader would see two citations there, and this
+ * metric describes what they would be shown.
  */
-export function citationRecall(matchesByRank: MatchMatrix, k: number): number {
-  const cited = matchesByRank.slice(0, k)
-  if (cited.length === 0) return 0
-  const grounded = cited.filter((matches) => matches.length > 0).length
-  return grounded / cited.length
+export function evidencePrecisionAtK(matchesByRank: MatchMatrix, k: number): number {
+  const retrieved = matchesByRank.slice(0, k)
+  if (retrieved.length === 0) return 0
+  const grounded = retrieved.filter((matches) => matches.length > 0).length
+  return grounded / retrieved.length
 }
 
 export function mean(values: number[]): number {

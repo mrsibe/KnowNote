@@ -41,8 +41,14 @@ export interface EvalMetrics {
   recallAt10: number
   mrr: number
   ndcgAt10: number
-  /** Share of the top-k citations that resolve into ground truth. */
-  citationRecall: number
+  /**
+   * Share of the first `evidenceK` retrieved passages that cover ground truth.
+   *
+   * This is **retrieval precision**, not answer citation recall: no model runs in
+   * this harness and no answer is produced. Answer-level citation correctness is
+   * the resolver's job (#70) and would need a separate, model-driven eval.
+   */
+  evidencePrecisionAt5: number
 }
 
 export interface QuestionReport {
@@ -69,7 +75,8 @@ export interface EvalReport {
     retrieval: string
     topK: number
     threshold: number
-    citationK: number
+    /** How many retrieved passages the evidence-precision metric looks at. */
+    evidenceK: number
     corpus: string
     documents: number
     questions: number

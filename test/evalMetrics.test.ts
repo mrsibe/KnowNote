@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  citationRecall,
+  evidencePrecisionAtK,
   firstRelevantRank,
   mean,
   ndcgAtK,
@@ -53,10 +53,12 @@ test('nDCG@k discounts a later hit and is 1 when the hit is first', () => {
   assert.equal(ndcgAtK([[], []], 1, 10), 0)
 })
 
-test('citation recall counts grounded citations over citations retrieved', () => {
-  // 2 of 3 retrieved citations are grounded
-  assert.equal(citationRecall([[0], [], [1]], 3), 2 / 3)
-  assert.equal(citationRecall([], 5), 0)
+test('evidence precision counts grounded passages over retrieved passages', () => {
+  // 2 of 3 retrieved passages cover a ground-truth block
+  assert.equal(evidencePrecisionAtK([[0], [], [1]], 3), 2 / 3)
+  assert.equal(evidencePrecisionAtK([], 5), 0)
+  // Each retrieved passage counts once, even when several cover the same block
+  assert.equal(evidencePrecisionAtK([[0], [0], [0]], 3), 1)
 })
 
 test('mean and percentile handle the empty and single cases', () => {

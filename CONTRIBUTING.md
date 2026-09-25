@@ -39,20 +39,20 @@ npm run dev
 
 ## Commands
 
-| Command                  | What it does                                                  |
-| ------------------------ | ------------------------------------------------------------- |
-| `npm run dev`            | Start the app in development with HMR.                        |
-| `npm run typecheck`      | Typecheck the main/preload, renderer and test projects.       |
-| `npm test`               | Run the Node test suite (`test/**/*.test.ts`).                |
-| `npm run lint`           | ESLint (see the note on the current baseline below).          |
-| `npm run format`         | Prettier over the whole repository.                           |
-| `npm run build`          | Typecheck, then bundle with electron-vite.                    |
-| `npm run build:unpack`   | `build`, then produce an unpacked app in `dist/`.             |
-| `npm run smoke:packaged` | Launch the packaged app's `--smoke-test` and check it starts. |
+| Command                  | What it does                                                   |
+| ------------------------ | -------------------------------------------------------------- |
+| `npm run dev`            | Start the app in development with HMR.                         |
+| `npm run typecheck`      | Typecheck the main/preload, renderer and test projects.        |
+| `npm test`               | Run the Node test suite (`test/**/*.test.ts`).                 |
+| `npm run lint`           | ESLint (see the note on the current baseline below).           |
+| `npm run format`         | Prettier over the whole repository.                            |
+| `npm run build`          | Typecheck, then bundle with electron-vite.                     |
+| `npm run build:unpack`   | `build`, then produce an unpacked app in `dist/`.              |
+| `npm run smoke:packaged` | Launch the packaged app's `--smoke-test` and check it starts.  |
 | `npm run eval:prepare`   | One-time, networked: download the pinned eval embedding model. |
 | `npm run eval`           | Run the RAG eval harness offline; rewrites `docs/eval/`.       |
-| `npm run db:generate`    | Generate a Drizzle migration from `src/main/db/schema.ts`.    |
-| `npm run db:studio`      | Inspect the development database.                             |
+| `npm run db:generate`    | Generate a Drizzle migration from `src/main/db/schema.ts`.     |
+| `npm run db:studio`      | Inspect the development database.                              |
 
 ## Before you open a pull request
 

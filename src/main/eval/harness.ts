@@ -20,7 +20,7 @@ import type { KnowledgeService } from '../services/KnowledgeService'
 import { DEFAULT_CHUNK_OPTIONS } from '../services/ChunkingService'
 import { LOCAL_EMBEDDING_MODEL } from '../embedding/localModel'
 import {
-  citationRecall,
+  evidencePrecisionAtK,
   firstRelevantRank,
   mean,
   ndcgAtK,
@@ -50,8 +50,8 @@ export interface EvalHarnessOptions {
   topK: number
   /** Similarity floor; 0 keeps the ranking intact for ranking metrics. */
   threshold: number
-  /** How many retrieved passages an answer would cite. */
-  citationK: number
+  /** How many retrieved passages the evidence-precision metric looks at. */
+  evidenceK: number
 }
 
 const NOTEBOOK_ID = 'eval-notebook'
@@ -197,7 +197,9 @@ export async function runEvalHarness(
     recallAt10: mean(perQuestion.map((q) => recallAtK(q.matchesByRank, q.relevantCount, 10))),
     mrr: mean(perQuestion.map((q) => reciprocalRank(q.matchesByRank))),
     ndcgAt10: mean(perQuestion.map((q) => ndcgAtK(q.matchesByRank, q.relevantCount, 10))),
-    citationRecall: mean(perQuestion.map((q) => citationRecall(q.matchesByRank, options.citationK)))
+    evidencePrecisionAt5: mean(
+      perQuestion.map((q) => evidencePrecisionAtK(q.matchesByRank, options.evidenceK))
+    )
   }
 
   const chunking = DEFAULT_CHUNK_OPTIONS
@@ -215,7 +217,7 @@ export async function runEvalHarness(
       retrieval: 'dense',
       topK: options.topK,
       threshold: options.threshold,
-      citationK: options.citationK,
+      evidenceK: options.evidenceK,
       corpus: options.corpusLabel,
       documents: documentIds.size,
       questions: questions.length
@@ -240,7 +242,7 @@ export function stabilize(report: EvalReport): EvalReport {
       recallAt10: round(report.metrics.recallAt10),
       mrr: round(report.metrics.mrr),
       ndcgAt10: round(report.metrics.ndcgAt10),
-      citationRecall: round(report.metrics.citationRecall)
+      evidencePrecisionAt5: round(report.metrics.evidencePrecisionAt5)
     },
     timing: {
       latencyP50Ms: round(report.timing.latencyP50Ms),

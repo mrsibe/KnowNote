@@ -112,7 +112,7 @@ export async function runEvalCli(argv: readonly string[] = process.argv): Promis
       baseline: 'v1.4',
       topK: 10,
       threshold: 0,
-      citationK: 5
+      evidenceK: 5
     }
 
     const report = stabilize(await runEvalHarness(getDatabase(), knowledgeService, options))
