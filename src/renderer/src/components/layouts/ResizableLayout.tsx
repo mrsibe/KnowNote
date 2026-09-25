@@ -11,6 +11,7 @@ import {
   isResizeKey,
   maxSideWidth,
   nextPanelWidth,
+  planZoneEntry,
   readStoredWidths,
   writeStoredWidths,
   type PanelSide,
@@ -313,8 +314,9 @@ export default function ResizableLayout({
   useEffect(() => {
     const enterLibrary = (): void => {
       setIsLeftCollapsed((collapsed) => {
-        if (collapsed) setPanelWidth('left', lastSizeRef.current.left || DEFAULT_LEFT_WIDTH)
-        return false
+        const entry = planZoneEntry(collapsed, lastSizeRef.current.left, DEFAULT_LEFT_WIDTH)
+        if (entry.width !== null) setPanelWidth('left', entry.width)
+        return entry.collapsed
       })
       // The wrapper mounts on this tick when it was collapsed, so focus after the
       // commit rather than on an unmounted node.
@@ -323,8 +325,9 @@ export default function ResizableLayout({
 
     const enterNotes = (): void => {
       setIsRightCollapsed((collapsed) => {
-        if (collapsed) setPanelWidth('right', lastSizeRef.current.right || DEFAULT_RIGHT_WIDTH)
-        return false
+        const entry = planZoneEntry(collapsed, lastSizeRef.current.right, DEFAULT_RIGHT_WIDTH)
+        if (entry.width !== null) setPanelWidth('right', entry.width)
+        return entry.collapsed
       })
       requestAnimationFrame(() => rightZoneRef.current?.focus())
     }
