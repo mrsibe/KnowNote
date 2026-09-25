@@ -229,6 +229,15 @@
   opacity: 0.55;
 }
 
+/* The reader is currently at this citation's anchor (#65). Declared after hover
+   so the selected fill survives a hover, and paired with `aria-current` so the
+   state is announced, not carried by colour alone. */
+.markdown-content .citation-chip--selected {
+  border-color: var(--primary);
+  background-color: var(--surface-selected);
+  color: var(--foreground);
+}
+
 /* 没有对应 citation 的标记退化成普通文本，不伪装成可点击的入口。 */
 .markdown-content .citation-chip--plain {
   border: 0;

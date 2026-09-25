@@ -10,6 +10,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chatStore'
 import { useNotebookStore } from '../../store/notebookStore'
+import { FOCUS_CHAT_EVENT } from '../../lib/workspaceEvents'
 import MessageList, { type MessageListHandle } from './chat/MessageList'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -110,26 +111,26 @@ function ProcessPanel({
     }
   }, [])
 
-  // 监听面板切换快捷键（与顶部按钮共用逻辑）
+  /**
+   * Focus-return fallback (#65).
+   *
+   * Closing the reader normally returns focus to whatever opened it (a citation
+   * chip, a note excerpt link). When there is no such origin — a deep link, a
+   * restored session — `SourcePanel` asks the composer to take focus instead of
+   * letting it fall to `<body>`. A custom event rather than a store field: it is
+   * a one-shot instruction to the mounted composer, not UI state.
+   */
   useEffect(() => {
-    if (!onToggleLeft && !onToggleRight) return
-
-    const handleToggleKnowledgeBase = () => {
-      onToggleLeft?.()
+    const focusComposer = (): void => {
+      textareaRef.current?.focus()
     }
+    window.addEventListener(FOCUS_CHAT_EVENT, focusComposer)
+    return () => window.removeEventListener(FOCUS_CHAT_EVENT, focusComposer)
+  }, [])
 
-    const handleToggleCreativeSpace = () => {
-      onToggleRight?.()
-    }
-
-    window.addEventListener('shortcut:toggle-knowledge-base', handleToggleKnowledgeBase)
-    window.addEventListener('shortcut:toggle-creative-space', handleToggleCreativeSpace)
-
-    return () => {
-      window.removeEventListener('shortcut:toggle-knowledge-base', handleToggleKnowledgeBase)
-      window.removeEventListener('shortcut:toggle-creative-space', handleToggleCreativeSpace)
-    }
-  }, [onToggleLeft, onToggleRight])
+  // 面板切换快捷键（`shortcut:toggle-*`）现在由 `ResizableLayout` 处理：它拥有侧栏
+  // 的折叠状态与 zone focus target，并且快捷键的语义已从「显示/隐藏面板」变成
+  // 「进入该工作区」（#65）。顶部按钮仍然走 `onToggleLeft` / `onToggleRight`。
 
   // Auto-resize textarea based on content
   const adjustTextareaHeight = (): void => {
@@ -223,7 +224,7 @@ function ProcessPanel({
               size="icon"
               className="w-8 h-8 shrink-0"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              title={isLeftCollapsed ? t('expandKnowledgeBase') : t('collapseKnowledgeBase')}
+              title={isLeftCollapsed ? t('expandLibrary') : t('collapseLibrary')}
             >
               {isLeftCollapsed ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -271,7 +272,7 @@ function ProcessPanel({
               size="icon"
               className="w-8 h-8 shrink-0"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              title={isRightCollapsed ? t('expandCreativeSpace') : t('collapseCreativeSpace')}
+              title={isRightCollapsed ? t('expandNotes') : t('collapseNotes')}
             >
               {isRightCollapsed ? (
                 <PanelRightOpen className="w-4 h-4" />

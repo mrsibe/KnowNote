@@ -358,7 +358,7 @@ export default function NotePanel(): ReactElement {
             draggable
             left={
               <span className="text-sm font-medium text-foreground truncate w-full select-none">
-                {t('creativeSpace')}
+                {t('notes')}
               </span>
             }
             right={

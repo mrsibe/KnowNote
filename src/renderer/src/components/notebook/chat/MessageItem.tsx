@@ -15,9 +15,13 @@ import { useItemStore } from '../../../store/itemStore'
 import { useKnowledgeStore } from '../../../store/knowledgeStore'
 import { useNotebookStore } from '../../../store/notebookStore'
 import { useSourceAnchorNavigation } from '../../../hooks/useSourceAnchorNavigation'
+import { useUIStore } from '../../../store/uiStore'
 import { parseRetrievalStatus, sourcesForDisplay } from '../../../../../shared/utils/answerSources'
 import { parseCitations, sourceDocumentExists } from '../../../../../shared/utils/citations'
-import { citationToSourceAnchor } from '../../../../../shared/utils/sourceAnchor'
+import {
+  citationToSourceAnchor,
+  sourceAnchorsEqual
+} from '../../../../../shared/utils/sourceAnchor'
 import { Button } from '../../ui/button'
 import { ScrollArea, ScrollBar } from '../../ui/scroll-area'
 import 'highlight.js/styles/github-dark.css'
@@ -39,6 +43,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   const { createNote } = useItemStore()
   const { currentNotebook } = useNotebookStore()
   const { openSourceAnchor } = useSourceAnchorNavigation()
+  const focusedSource = useUIStore((state) => state.focusedSource)
   const documents = useKnowledgeStore((state) => state.documents)
   const documentsLoaded = useKnowledgeStore((state) => state.documentsLoaded)
 
@@ -57,8 +62,8 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   const documentExists = (documentId: string): boolean =>
     sourceDocumentExists(documents, documentsLoaded, documentId)
 
-  const handleOpenCitation = (citation: (typeof citations)[number]): void => {
-    openSourceAnchor(citationToSourceAnchor(citation))
+  const handleOpenCitation = (citation: (typeof citations)[number], origin: HTMLElement): void => {
+    openSourceAnchor(citationToSourceAnchor(citation), origin)
   }
 
   // Copy message content
@@ -196,6 +201,10 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
                         index={marker}
                         citation={citation}
                         documentExists={!citation || documentExists(citation.documentId)}
+                        selected={
+                          citation !== undefined &&
+                          sourceAnchorsEqual(citationToSourceAnchor(citation), focusedSource)
+                        }
                         onOpen={handleOpenCitation}
                       />
                     )
@@ -238,8 +247,8 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
           <AnswerSources
             sources={answerSources}
             retrieval={retrieval}
-            onShowDocument={(documentId) =>
-              openSourceAnchor({ documentId, location: { documentId } })
+            onShowDocument={(documentId, origin) =>
+              openSourceAnchor({ documentId, location: { documentId } }, origin)
             }
           />
         )}

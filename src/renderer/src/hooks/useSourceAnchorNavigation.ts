@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import type { SourceAnchor } from '../../../shared/types/source'
 import { withSourceAnchor } from '../../../shared/utils/sourceAnchor'
 import { useUIStore } from '../store/uiStore'
+import { rememberSourceOrigin, type FocusableOrigin } from './sourceFocusReturn'
 
 /**
  * 打开 / 关闭一个来源定位（#72）。
@@ -18,7 +19,14 @@ import { useUIStore } from '../store/uiStore'
  * 关闭时只删掉来源定位那几个 key，保留 route 上其它 query。
  */
 export function useSourceAnchorNavigation(): {
-  openSourceAnchor: (anchor: SourceAnchor) => void
+  /**
+   * `origin` is the element that opened the reader (a citation chip, a note
+   * excerpt link). It is remembered so the reader's back action can return focus
+   * to it (#65). Defaults to `document.activeElement`, which is the clicked
+   * control in a mouse or keyboard activation; pass it explicitly only when the
+   * click target is not itself focusable.
+   */
+  openSourceAnchor: (anchor: SourceAnchor, origin?: FocusableOrigin | null) => void
   closeSourceAnchor: () => void
 } {
   const navigate = useNavigate()
@@ -35,7 +43,12 @@ export function useSourceAnchorNavigation(): {
   )
 
   const openSourceAnchor = useCallback(
-    (anchor: SourceAnchor): void => {
+    (anchor: SourceAnchor, origin?: FocusableOrigin | null): void => {
+      // Captured before the store write and the navigation, so the remembered
+      // element is still the one the user activated.
+      rememberSourceOrigin(
+        origin ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+      )
       setFocusedSource(anchor)
       navigateTo(anchor)
     },
