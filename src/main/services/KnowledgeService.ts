@@ -13,13 +13,29 @@ import {
   getNotebookVectorTable,
   rebuildNotebookVectorTable
 } from '../db'
-import { documents, chunks, embeddings, notes, notebookEmbeddingSpaces } from '../db/schema'
-import type { Document, Chunk, NewDocument, NewChunk, NewEmbedding } from '../db/schema'
+import {
+  documents,
+  chunks,
+  embeddings,
+  notes,
+  notebookEmbeddingSpaces,
+  documentBlocks
+} from '../db/schema'
+import type {
+  Document,
+  Chunk,
+  DocumentBlock,
+  NewDocument,
+  NewChunk,
+  NewEmbedding,
+  NewDocumentBlock
+} from '../db/schema'
 import { eq, desc, inArray, sql } from 'drizzle-orm'
 import { EmbeddingService } from './EmbeddingService'
 import type { EmbeddingSpace } from '../../shared/types'
 import { ChunkingService, type ChunkOptions } from './ChunkingService'
 import { FileParserService } from './FileParserService'
+import { buildDocumentBlocks, type DocumentBlockDraft } from './blocks/documentBlocks'
 import { WebFetchService } from './WebFetchService'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
@@ -179,6 +195,9 @@ export class KnowledgeService {
       }
 
       db.insert(documents).values(newDoc).run()
+
+      // 1b. 持久化文档块（文本/URL/笔记没有结构，按段落平铺）
+      this.persistDocumentBlocks(documentId, buildDocumentBlocks({ content: options.content }))
 
       // 2. 分块
       onProgress?.('chunking', 10)
@@ -364,6 +383,12 @@ export class KnowledgeService {
 
       db.insert(documents).values(newDoc).run()
 
+      // 1b. 持久化文档块，保留解析器给出的页/标题结构
+      this.persistDocumentBlocks(
+        documentId,
+        buildDocumentBlocks({ content: parseResult.content, structure: parseResult.structure })
+      )
+
       // 2. 分块
       onProgress?.('chunking', 10)
       const chunkResults = this.chunkingService.chunk(parseResult.content)
@@ -497,6 +522,43 @@ export class KnowledgeService {
       Logger.error('KnowledgeService', 'Failed to add document from file:', error)
       throw error
     }
+  }
+
+  /**
+   * 持久化文档块。块 id 由 documentId 与顺序确定，天然唯一且可读；
+   * 重新索引会换新 documentId，不会与旧块冲突。
+   */
+  private persistDocumentBlocks(documentId: string, drafts: DocumentBlockDraft[]): void {
+    if (drafts.length === 0) return
+
+    const rows: NewDocumentBlock[] = drafts.map((draft) => ({
+      id: `blk_${documentId}_${draft.order}`,
+      documentId,
+      kind: draft.kind,
+      order: draft.order,
+      page: draft.page,
+      level: draft.level,
+      text: draft.text,
+      startOffset: draft.startOffset,
+      endOffset: draft.endOffset,
+      bbox: draft.bbox,
+      metadata: draft.metadata
+    }))
+
+    getDatabase().insert(documentBlocks).values(rows).run()
+    Logger.debug('KnowledgeService', `Document ${documentId}: ${rows.length} blocks`)
+  }
+
+  /**
+   * 获取文档的所有块，按阅读顺序返回。
+   */
+  getDocumentBlocks(documentId: string): DocumentBlock[] {
+    return getDatabase()
+      .select()
+      .from(documentBlocks)
+      .where(eq(documentBlocks.documentId, documentId))
+      .orderBy(documentBlocks.order)
+      .all()
   }
 
   /**
@@ -800,6 +862,9 @@ export class KnowledgeService {
     if (doc.localFilePath) {
       await this.deleteLocalFile(doc.localFilePath)
     }
+
+    // 块没有依赖向量表，显式删除而不依赖外键级联（连接上 foreign_keys 默认是关的）
+    db.delete(documentBlocks).where(eq(documentBlocks.documentId, documentId)).run()
 
     // 级联删除会自动清理 chunks 和 embeddings
     db.delete(documents).where(eq(documents.id, documentId)).run()

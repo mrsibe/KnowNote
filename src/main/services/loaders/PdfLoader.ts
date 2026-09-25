@@ -7,9 +7,15 @@ import { readFile } from 'fs/promises'
 import { extname } from 'path'
 // 使用 legacy build for Node.js 环境
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
-import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api'
+import type { PDFDocumentProxy, PDFPageProxy, TextItem } from 'pdfjs-dist/types/src/display/api'
 import Logger from '../../../shared/utils/logger'
-import type { IDocumentLoader, DocumentLoadResult, LoadOptions, PageInfo } from './types'
+import type {
+  IDocumentLoader,
+  DocumentLoadResult,
+  LoadOptions,
+  PageInfo,
+  NormalizedBox
+} from './types'
 
 /**
  * PDF 文档加载器
@@ -81,10 +87,8 @@ export class PdfLoader implements IDocumentLoader {
         const viewport = page.getViewport({ scale: 1.0 })
 
         // 提取页面文本
-        const pageText = textContent.items
-          .filter((item): item is TextItem => 'str' in item)
-          .map((item) => item.str)
-          .join(' ')
+        const textItems = textContent.items.filter((item): item is TextItem => 'str' in item)
+        const pageText = textItems.map((item) => item.str).join(' ')
 
         // 清理文本
         const cleanedText = this.cleanPDFText(pageText)
@@ -97,6 +101,7 @@ export class PdfLoader implements IDocumentLoader {
             content: cleanedText,
             startOffset: currentOffset,
             endOffset: currentOffset + cleanedText.length,
+            bbox: this.computeNormalizedBBox(textItems, viewport),
             metadata: {
               width: viewport.width,
               height: viewport.height
@@ -138,6 +143,49 @@ export class PdfLoader implements IDocumentLoader {
     } catch (error) {
       Logger.error('PdfLoader', 'Failed to parse PDF:', error)
       throw new Error(`Failed to parse PDF: ${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * 把页面上所有文本项映射到页面空间,取并集后归一化到 0..1。
+   *
+   * 用 viewport.transform 把 PDF 用户空间（原点在左下）转成视口空间（原点在左上），
+   * 这样渲染层不需要知道缩放比例。没有任何文本项时返回 undefined。
+   */
+  private computeNormalizedBBox(
+    items: TextItem[],
+    viewport: ReturnType<PDFPageProxy['getViewport']>
+  ): NormalizedBox | undefined {
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+
+    for (const item of items) {
+      const textTransform = pdfjsLib.Util.transform(viewport.transform, item.transform)
+      const fontHeight = Math.hypot(textTransform[2], textTransform[3])
+      const left = textTransform[4]
+      const right = left + Math.abs(item.width)
+      const top = textTransform[5] - fontHeight
+      const bottom = textTransform[5]
+
+      minX = Math.min(minX, left, right)
+      maxX = Math.max(maxX, left, right)
+      minY = Math.min(minY, top, bottom)
+      maxY = Math.max(maxY, top, bottom)
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return undefined
+
+    const clamp = (value: number): number => Math.min(1, Math.max(0, value))
+    const width = viewport.width || 1
+    const height = viewport.height || 1
+
+    return {
+      x: clamp(minX / width),
+      y: clamp(minY / height),
+      w: clamp((maxX - minX) / width),
+      h: clamp((maxY - minY) / height)
     }
   }
 
