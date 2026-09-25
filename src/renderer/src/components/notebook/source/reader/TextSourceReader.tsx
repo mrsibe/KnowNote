@@ -14,7 +14,7 @@ import type {
   ReaderSelection,
   SourceBlock
 } from '../../../../../../shared/types/source'
-import { blockById, resolveSelection } from './anchor'
+import { resolveAnchor, resolveSelection } from './anchor'
 import './reader.css'
 
 interface TextSourceReaderProps {
@@ -48,13 +48,17 @@ const TextSourceReader = forwardRef<ReaderHandle, TextSourceReaderProps>(functio
 
   const applyAnchor = useCallback(
     (target: ReaderAnchor): void => {
-      const block = blockById(blocks, target.blockId)
+      const { block } = resolveAnchor(blocks, target)
       const start = target.startOffset ?? block?.startOffset ?? null
       const end = target.endOffset ?? block?.endOffset ?? null
 
       const node = contentRef.current?.firstChild
       const container = scrollRef.current
-      if (!node || start === null || !container) return
+      if (!node || start === null || !container) {
+        // 定位不到就清掉上一次的高亮，不要让旧高亮留在屏幕上。
+        setHighlightRects([])
+        return
+      }
 
       const limit = node.textContent?.length ?? 0
       const range = window.document.createRange()

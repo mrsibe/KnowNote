@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, ReactElement } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Plus, FileText, Globe, FileUp, Loader2, StickyNote, ArrowLeft } from 'lucide-react'
 import { useKnowledgeStore, setupKnowledgeListeners } from '../../store/knowledgeStore'
@@ -16,6 +16,12 @@ import { PanelHeader } from '../ui/panel-header'
 import DocumentList from './source/DocumentList'
 import SourceReader from './source/reader/SourceReader'
 import type { KnowledgeDocument } from '../../../../shared/types/knowledge'
+import type { ReaderAnchor } from '../../../../shared/types/source'
+import {
+  sourceAnchorFromSearchParams,
+  sourceAnchorsEqual
+} from '../../../../shared/utils/sourceAnchor'
+import { useSourceAnchorNavigation } from '../../hooks/useSourceAnchorNavigation'
 
 // 添加来源类型
 type AddSourceType = 'file' | 'url' | 'text' | 'note'
@@ -164,11 +170,24 @@ function IndexingProgress() {
 // 文档预览面板组件
 interface DocumentViewerPanelProps {
   document: KnowledgeDocument
+  anchor?: ReaderAnchor | null
   onBack: () => void
 }
 
-function DocumentViewerPanel({ document, onBack }: DocumentViewerPanelProps) {
+function DocumentViewerPanel({ document, anchor, onBack }: DocumentViewerPanelProps) {
   const { t } = useTranslation('ui')
+
+  // Esc 是返回按钮的键盘等价物。它不是「关闭笔记本」快捷键（那个已经刻意不再绑到裸
+  // Escape），并且会先把 Escape 让给已经打开的对话框。
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      if (window.document.querySelector('[role="dialog"][data-state="open"]')) return
+      onBack()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onBack])
 
   return (
     <>
@@ -189,9 +208,10 @@ function DocumentViewerPanel({ document, onBack }: DocumentViewerPanelProps) {
         center={<span className="text-sm font-medium truncate">{document.title}</span>}
       />
 
-      {/* 来源阅读器（#71）：PDF 渲染原页，其余格式走文本回退，两者同一契约。 */}
+      {/* 来源阅读器（#71）：PDF 渲染原页，其余格式走文本回退，两者同一契约。
+          `anchor`（#72）把引用定位传进来，reader 自己决定页/块/偏移的优先级。 */}
       <div className="flex min-h-0 flex-1 flex-col">
-        <SourceReader document={document} />
+        <SourceReader document={document} anchor={anchor} />
       </div>
     </>
   )
@@ -207,6 +227,7 @@ export default function SourcePanel(): ReactElement {
 
   const {
     documents,
+    documentsLoaded,
     isLoading,
     isIndexing,
     loadDocuments,
@@ -274,19 +295,41 @@ export default function SourcePanel(): ReactElement {
     setSelectedDocument(null)
   }
 
-  // 对话里的来源被点击时，在这里把对应文档打开。
-  // 右栏的对话和左栏的知识库是兄弟节点，所以这个请求走 uiStore 而不是 props。
-  //
-  // 纯派生，不用 effect：在 effect 里同步 setState 会引发级联渲染（本文件上面
-  // 那个 notebook 切换的复位用的是同一套“render 期间运算”的思路），而在 render
-  // 里写 store 会更糟。列表里的点击会把 store 里这个请求清掉，所以两者不会打架。
-  const focusedSourceDocumentId = useUIStore((state) => state.focusedSourceDocumentId)
-  const focusSourceDocument = useUIStore((state) => state.focusSourceDocument)
+  // 对话里的引用/来源被点击时，在这里把对应文档与定位打开。
+  // 右栏的对话和左栏的知识库是兄弟节点，所以请求走 uiStore；URL query 是它的持久副本。
+  const focusedSource = useUIStore((state) => state.focusedSource)
+  const setFocusedSource = useUIStore((state) => state.openSourceAnchor)
+  const { closeSourceAnchor } = useSourceAnchorNavigation()
+  const [searchParams] = useSearchParams()
 
-  const focusedDocument = focusedSourceDocumentId
-    ? (documents.find((doc) => doc.id === focusedSourceDocumentId) ?? null)
+  // reload / 冷启动：把 URL 里的定位水合进 store。这是「持久化的一份」与「运行时的一份」
+  // 之间唯一的同步点；`sourceAnchorsEqual` 保证不会因为 query 重渲染而反复写入。
+  useEffect(() => {
+    const fromUrl = sourceAnchorFromSearchParams(searchParams)
+    if (!fromUrl) return
+    if (sourceAnchorsEqual(useUIStore.getState().focusedSource, fromUrl)) return
+    setFocusedSource(fromUrl)
+  }, [searchParams, setFocusedSource])
+
+  const focusedDocument = focusedSource
+    ? (documents.find((doc) => doc.id === focusedSource.documentId) ?? null)
     : null
-  const openDocument = selectedDocument ?? focusedDocument
+
+  // deep-link 指向已删除来源：列表读完后仍找不到文档就回到列表，并清掉失效 query，
+  // 而不是停在一个永远打不开的阅读器上。
+  const focusedDocumentMissing =
+    focusedSource !== null && documentsLoaded && focusedDocument === null
+  useEffect(() => {
+    if (focusedDocumentMissing) closeSourceAnchor()
+  }, [focusedDocumentMissing, closeSourceAnchor])
+
+  // 引用/来源请求优先于列表里选中的文档：列表选择会调 `closeSourceAnchor()` 把它清掉，
+  // 所以两者不会同时有效；反过来点引用时，它必须能覆盖仍然打开着的上一份文档。
+  const openDocument = focusedDocument ?? selectedDocument
+  const readerAnchor =
+    focusedSource && openDocument && focusedSource.documentId === openDocument.id
+      ? focusedSource.location
+      : null
 
   // 处理文件上传
   const handleFileUpload = useCallback(async () => {
@@ -403,21 +446,21 @@ export default function SourcePanel(): ReactElement {
       // 文本和笔记类型可以预览，直接显示预览页面
       if (document.type === 'text' || document.type === 'note') {
         setSelectedDocument(document)
-        // 列表里的选择优先，清掉对话那边可能还挂着的请求
-        focusSourceDocument(null)
+        // 列表里的选择优先，清掉对话/URL 那边可能还挂着的请求
+        closeSourceAnchor()
       } else {
         // 其他类型（文件、URL）直接打开
         handleOpenSource(document.id)
       }
     },
-    [handleOpenSource, focusSourceDocument]
+    [handleOpenSource, closeSourceAnchor]
   )
 
   // 返回列表
   const handleBack = useCallback(() => {
     setSelectedDocument(null)
-    focusSourceDocument(null)
-  }, [focusSourceDocument])
+    closeSourceAnchor()
+  }, [closeSourceAnchor])
 
   // 处理弹窗提交
   const handleModalSubmit = useCallback(
@@ -437,7 +480,12 @@ export default function SourcePanel(): ReactElement {
     <Card className="flex h-full flex-col overflow-hidden">
       {openDocument ? (
         // 文档预览页面
-        <DocumentViewerPanel key={openDocument.id} document={openDocument} onBack={handleBack} />
+        <DocumentViewerPanel
+          key={openDocument.id}
+          document={openDocument}
+          anchor={readerAnchor}
+          onBack={handleBack}
+        />
       ) : (
         // 文档列表页面
         <>

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { SourceAnchor } from '../../../shared/types/source'
 
 interface UIStore {
   isSettingsOpen: boolean
@@ -17,15 +18,16 @@ interface UIStore {
   setHasUnsavedNoteChanges: (dirty: boolean) => void
 
   /**
-   * A document the reader asked to see, set when a source in the transcript is
+   * The source the reader asked to see, set when a citation in the transcript is
    * clicked. The transcript (centre panel) and the library (left panel) are
    * siblings, so the request travels through the store rather than through props.
    *
-   * `SourcePanel` consumes it once the document is in its list, so returning to
-   * the library later does not re-open it.
+   * It carries the whole `SourceAnchor` — not just the document id — because a
+   * citation jump needs the target page/block. `SourcePanel` consumes it, and it is
+   * rehydrated from the route query on reload so a deep link survives a restart.
    */
-  focusedSourceDocumentId: string | null
-  focusSourceDocument: (documentId: string | null) => void
+  focusedSource: SourceAnchor | null
+  openSourceAnchor: (anchor: SourceAnchor | null) => void
 }
 
 export const useUIStore = create<UIStore>()((set) => ({
@@ -36,6 +38,6 @@ export const useUIStore = create<UIStore>()((set) => ({
   hasUnsavedNoteChanges: false,
   setHasUnsavedNoteChanges: (dirty) => set({ hasUnsavedNoteChanges: dirty }),
 
-  focusedSourceDocumentId: null,
-  focusSourceDocument: (documentId) => set({ focusedSourceDocumentId: documentId })
+  focusedSource: null,
+  openSourceAnchor: (anchor) => set({ focusedSource: anchor })
 }))

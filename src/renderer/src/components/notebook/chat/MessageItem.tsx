@@ -9,10 +9,15 @@ import { useTranslation } from 'react-i18next'
 import type { ChatMessage } from '../../../types/notebook'
 import ReasoningContent from './ReasoningContent'
 import AnswerSources from './AnswerSources'
+import CitationChip from './CitationChip'
+import remarkCitationMarkers, { parseCitationHref } from './citationMarkers'
 import { useItemStore } from '../../../store/itemStore'
+import { useKnowledgeStore } from '../../../store/knowledgeStore'
 import { useNotebookStore } from '../../../store/notebookStore'
-import { useUIStore } from '../../../store/uiStore'
+import { useSourceAnchorNavigation } from '../../../hooks/useSourceAnchorNavigation'
 import { parseRetrievalStatus, sourcesForDisplay } from '../../../../../shared/utils/answerSources'
+import { parseCitations } from '../../../../../shared/utils/citations'
+import { citationToSourceAnchor } from '../../../../../shared/utils/sourceAnchor'
 import { Button } from '../../ui/button'
 import { ScrollArea, ScrollBar } from '../../ui/scroll-area'
 import 'highlight.js/styles/github-dark.css'
@@ -33,12 +38,27 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
 
   const { createNote } = useItemStore()
   const { currentNotebook } = useNotebookStore()
-  const focusSourceDocument = useUIStore((state) => state.focusSourceDocument)
+  const { openSourceAnchor } = useSourceAnchorNavigation()
+  const documents = useKnowledgeStore((state) => state.documents)
 
   // What this answer was built from. Read defensively: the metadata comes from the
   // database and may predate the shape (see shared/utils/answerSources.ts).
   const answerSources = sourcesForDisplay(message.metadata)
   const retrieval = parseRetrievalStatus(message.metadata)
+
+  // Structured citations (#69) mapped back to the `[n]` markers in the answer.
+  const citations = parseCitations(message.metadata)
+  const citationByIndex = new Map(citations.map((citation) => [citation.index, citation]))
+
+  // A chip is disabled only when the document is provably gone. An empty list is
+  // "not loaded / nothing imported yet", not "deleted", so it stays clickable and
+  // the reader falls back gracefully instead.
+  const documentExists = (documentId: string): boolean =>
+    documents.length === 0 || documents.some((document) => document.id === documentId)
+
+  const handleOpenCitation = (citation: (typeof citations)[number]): void => {
+    openSourceAnchor(citationToSourceAnchor(citation))
+  }
 
   // Copy message content
   const handleCopy = async () => {
@@ -161,15 +181,30 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
         {message.content ? (
           <div className="markdown-content text-foreground px-2">
             <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
+              remarkPlugins={[remarkGfm, remarkMath, remarkCitationMarkers]}
               rehypePlugins={[rehypeHighlight, rehypeKatex]}
               components={{
-                // Links: open in new tab
-                a: ({ children, ...props }) => (
-                  <a target="_blank" rel="noopener noreferrer" {...props}>
-                    {children}
-                  </a>
-                ),
+                // Citation markers become chips (#72); every other link keeps the
+                // "open externally" behaviour.
+                a: ({ href, children, ...props }) => {
+                  const marker = parseCitationHref(href)
+                  if (marker !== null) {
+                    const citation = citationByIndex.get(marker)
+                    return (
+                      <CitationChip
+                        index={marker}
+                        citation={citation}
+                        documentExists={!citation || documentExists(citation.documentId)}
+                        onOpen={handleOpenCitation}
+                      />
+                    )
+                  }
+                  return (
+                    <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                      {children}
+                    </a>
+                  )
+                },
                 // Table: wrap in scrollable container
                 table: ({ children, ...props }) => (
                   <ScrollArea className="w-full">
@@ -202,7 +237,9 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
           <AnswerSources
             sources={answerSources}
             retrieval={retrieval}
-            onShowDocument={focusSourceDocument}
+            onShowDocument={(documentId) =>
+              openSourceAnchor({ documentId, location: { documentId } })
+            }
           />
         )}
         {/* Action buttons - only shown when reply is complete and has content */}
