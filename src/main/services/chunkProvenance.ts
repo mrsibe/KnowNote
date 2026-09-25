@@ -11,6 +11,7 @@ import { chunks, documentBlocks, chunkBlocks } from '../db/schema'
 import type { getDatabase } from '../db'
 import type { ChunkBlockSpan } from './ChunkingService'
 import type { BlockKind } from './blocks/documentBlocks'
+import type { NormalizedBox } from './loaders/types'
 
 /** drizzle 实例类型（与 `getDatabase()` 的返回一致）。 */
 type Db = ReturnType<typeof getDatabase>
@@ -21,6 +22,8 @@ export interface ChunkProvenanceBlock {
   kind: BlockKind
   level: number | null
   page: number | null
+  /** 归一化页面坐标（仅分页格式）；引用要高亮到段落就需要它。 */
+  bbox: NormalizedBox | null
   text: string
   startOffset: number
   endOffset: number
@@ -60,6 +63,7 @@ export function projectChunkProvenance(
       kind: row.kind,
       level: row.level,
       page: row.page,
+      bbox: row.bbox,
       text: row.text,
       startOffset: row.startOffset,
       endOffset: row.endOffset,
@@ -102,6 +106,7 @@ export function resolveChunksProvenance(db: Db, chunkIds: string[]): Map<string,
       kind: documentBlocks.kind,
       level: documentBlocks.level,
       page: documentBlocks.page,
+      bbox: documentBlocks.bbox,
       text: documentBlocks.text,
       startOffset: documentBlocks.startOffset,
       endOffset: documentBlocks.endOffset,
@@ -145,6 +150,7 @@ export function resolveChunksProvenance(db: Db, chunkIds: string[]): Map<string,
       kind: row.kind as BlockKind,
       level: row.level,
       page: row.page,
+      bbox: row.bbox,
       text: row.text ?? '',
       startOffset: row.startOffset ?? 0,
       endOffset: row.endOffset ?? 0,

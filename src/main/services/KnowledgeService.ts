@@ -768,7 +768,10 @@ export class KnowledgeService {
     }
 
     // 1. 检索（向量 → 批量补齐来源/定位信息）
-    const evidence = await this.retriever.search(notebookId, query, options)
+    const evidence = await this.retriever.search(notebookId, query, {
+      topK: options.topK,
+      threshold: options.threshold
+    })
 
     // 2. 映射回兼容的 SearchResult 形状
     return evidence.map((item) => {

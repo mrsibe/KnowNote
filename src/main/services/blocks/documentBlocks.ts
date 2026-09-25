@@ -36,8 +36,8 @@ export interface IdentifiedBlockDraft extends DocumentBlockDraft {
 }
 
 /**
- * 给块分配 id。id 由 documentId 与顺序确定，天然唯一且可读；重新索引会换新
- * documentId，不会与旧块冲突。
+ * 给块分配 id。id 由 documentId 与顺序确定，天然唯一且可读。重新索引复用同一个
+ * documentId，但会先删除该文档的旧块，所以顺序 id 不会与旧块冲突。
  */
 export function assignBlockIds(
   documentId: string,

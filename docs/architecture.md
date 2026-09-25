@@ -39,11 +39,7 @@ RAG path.
 
 ```ts
 interface Retriever {
-  search(
-    notebookId: string,
-    query: string,
-    options?: RetrieveOptions
-  ): Promise<RetrievedEvidence[]>
+  search(notebookId: string, query: string, options?: RetrieveOptions): Promise<RetrievedEvidence[]>
 }
 ```
 

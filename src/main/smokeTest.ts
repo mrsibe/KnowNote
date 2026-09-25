@@ -522,6 +522,10 @@ async function runChecks(): Promise<string[]> {
     first.locator.blocks.every((block) => block.page === 1),
     'an evidence block lost its page'
   )
+  assert(
+    first.locator.blocks.some((block) => block.bbox && block.bbox.w > 0 && block.bbox.h > 0),
+    'evidence lost the paragraph bbox needed to highlight it (#72)'
+  )
   pass('DenseRetriever returns retrieved evidence with a page/block locator')
 
   await knowledge.deleteDocument(reindexDocId)

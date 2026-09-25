@@ -36,6 +36,7 @@ const provenance: ChunkProvenance = {
       kind: 'paragraph',
       level: null,
       page: 12,
+      bbox: { x: 0.5, y: 0.25, w: 0.4, h: 0.05 },
       text: 'the extracted passage',
       startOffset: 100,
       endOffset: 121,
@@ -68,6 +69,14 @@ test('a chunk without a provenance row still produces a valid locator', () => {
   const evidence = assembleEvidence(hit, chunk, document, undefined)
 
   assert.deepEqual(evidence.locator, { pageStart: null, pageEnd: null, blocks: [] })
+})
+
+test('block geometry survives so a citation can highlight the paragraph (#72)', () => {
+  const evidence = assembleEvidence(hit, chunk, document, provenance)
+  const [block] = evidence.locator.blocks
+
+  assert.equal(block.page, 12)
+  assert.deepEqual(block.bbox, { x: 0.5, y: 0.25, w: 0.4, h: 0.05 })
 })
 
 test('chunk metadata survives the mapping', () => {

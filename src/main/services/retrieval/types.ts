@@ -39,11 +39,13 @@ export interface RetrievedEvidence {
   metadata?: Record<string, unknown>
 }
 
-/** 检索选项。 */
+/**
+ * 检索选项。`includeContent` 不在这里：截断内容由 legacy `SearchResult` 映射决定，
+ * 不是检索策略的事（策略应当总是返回真实内容）。
+ */
 export interface RetrieveOptions {
   topK?: number
   threshold?: number
-  includeContent?: boolean
 }
 
 /**
