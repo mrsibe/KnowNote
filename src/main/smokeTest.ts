@@ -267,6 +267,44 @@ async function runChecks(): Promise<string[]> {
   )
   pass(`sqlite-vec reports version ${version}`)
 
+  // #77 wants BM25 / hybrid retrieval, and SQLite's BM25 lives in the FTS5 module:
+  // whether it exists is a property of the SQLite that better-sqlite3 bundles, not
+  // of anything this app compiles or enables. Asking the *shipped* build is the
+  // only answer that means anything - better-sqlite3 is rebuilt against the Electron
+  // ABI, so it cannot even be loaded from plain Node to answer this off to the side.
+  //
+  // The check inserts and ranks rather than only reporting a compile flag: a flag is
+  // not proof that MATCH and bm25() work in the build users actually run.
+  const sqliteVersion = database.prepare('SELECT sqlite_version() AS version').get() as {
+    version: string
+  }
+  const compileOptions = database.prepare('PRAGMA compile_options').all() as {
+    compile_options: string
+  }[]
+  const fts5Flag = compileOptions.some((row) => /ENABLE_FTS5/i.test(row.compile_options))
+
+  database.exec(`
+    CREATE VIRTUAL TABLE fts_smoke USING fts5(body);
+    INSERT INTO fts_smoke(body) VALUES ('the quick brown fox'), ('lazy dogs sleeping');
+  `)
+  const ranked = database
+    .prepare(
+      'SELECT body, bm25(fts_smoke) AS score FROM fts_smoke WHERE fts_smoke MATCH ? ORDER BY score LIMIT 1'
+    )
+    .get('brown') as { body: string; score: number } | undefined
+  assert(
+    ranked?.body === 'the quick brown fox',
+    `FTS5 MATCH did not return the expected row (got ${JSON.stringify(ranked)})`
+  )
+  assert(
+    typeof ranked.score === 'number' && Number.isFinite(ranked.score),
+    'bm25() did not produce a usable rank, so BM25 retrieval is not available'
+  )
+  database.exec('DROP TABLE fts_smoke')
+  pass(
+    `FTS5 is available and ranks: sqlite ${sqliteVersion.version}, ENABLE_FTS5 flag ${fts5Flag ? 'present' : 'absent'}, bm25() = ${ranked.score}`
+  )
+
   // Full round trip through the app's own vector store: loading an extension is
   // not the same as being able to use it.
   const store = new SQLiteVectorStore()
