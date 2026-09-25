@@ -9,7 +9,13 @@ interface CitationChipProps {
   citation?: Citation
   /** 来源文档是否还在。已经删除的来源只禁用跳转，不隐藏这条引用。 */
   documentExists: boolean
-  onOpen: (citation: Citation) => void
+  /**
+   * The reader is currently showing this citation's anchor. Derived from
+   * `uiStore.focusedSource` by the caller (#65) — there is no separate selection
+   * store to keep in sync.
+   */
+  selected?: boolean
+  onOpen: (citation: Citation, origin: HTMLElement) => void
 }
 
 /**
@@ -23,11 +29,15 @@ interface CitationChipProps {
  * - 没有对应 citation —— 渲染成普通文本 `[n]`，与未被解析的标记保持一致；
  * - 来源已删除 —— 芯片存在但禁用，让「这里曾经有一条引用」这件事仍然可见；
  * - 正常 —— 点击跳到原文的对应页 / 段落。
+ *
+ * `selected` 是第四种状态但不是第四种形态：它表示阅读器此刻正停在同一个定位上，
+ * 由 `citationToSourceAnchor` 与 `focusedSource` 比较得出（#65）。
  */
 export default function CitationChip({
   index,
   citation,
   documentExists,
+  selected = false,
   onOpen
 }: CitationChipProps): ReactElement {
   const { t } = useTranslation('chat')
@@ -43,8 +53,9 @@ export default function CitationChip({
   return (
     <button
       type="button"
-      className="citation-chip"
+      className={`citation-chip${selected ? ' citation-chip--selected' : ''}`}
       disabled={disabled}
+      aria-current={selected ? 'true' : undefined}
       title={disabled ? t('citationUnavailable') : citation.documentTitle}
       aria-label={
         disabled
@@ -53,7 +64,7 @@ export default function CitationChip({
             ? t('citationOpenAtPage', { title: citation.documentTitle, page: citation.page })
             : t('citationOpen', { title: citation.documentTitle })
       }
-      onClick={() => onOpen(citation)}
+      onClick={(event) => onOpen(citation, event.currentTarget)}
     >
       <span className="citation-chip__marker">{label}</span>
       <span className="citation-chip__title">{citation.documentTitle}</span>

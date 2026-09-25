@@ -11,6 +11,7 @@ import {
   isResizeKey,
   maxSideWidth,
   nextPanelWidth,
+  planZoneEntry,
   readStoredWidths,
   writeStoredWidths,
   type PanelSide,
@@ -299,6 +300,46 @@ export default function ResizableLayout({
     })
   }, [setPanelWidth])
 
+  const leftZoneRef = useRef<HTMLDivElement>(null)
+  const rightZoneRef = useRef<HTMLDivElement>(null)
+
+  /**
+   * Zone shortcuts enter the workspace (#65).
+   *
+   * The persisted action IDs are unchanged, but the behaviour is “go to the
+   * zone”, not “toggle the panel”: reveal a collapsed zone, then move focus into
+   * it. Collapsing stays on the panel-header buttons. Listening to the same
+   * `shortcut:toggle-*` events keeps the shortcut IDs stable.
+   */
+  useEffect(() => {
+    const enterLibrary = (): void => {
+      setIsLeftCollapsed((collapsed) => {
+        const entry = planZoneEntry(collapsed, lastSizeRef.current.left, DEFAULT_LEFT_WIDTH)
+        if (entry.width !== null) setPanelWidth('left', entry.width)
+        return entry.collapsed
+      })
+      // The wrapper mounts on this tick when it was collapsed, so focus after the
+      // commit rather than on an unmounted node.
+      requestAnimationFrame(() => leftZoneRef.current?.focus())
+    }
+
+    const enterNotes = (): void => {
+      setIsRightCollapsed((collapsed) => {
+        const entry = planZoneEntry(collapsed, lastSizeRef.current.right, DEFAULT_RIGHT_WIDTH)
+        if (entry.width !== null) setPanelWidth('right', entry.width)
+        return entry.collapsed
+      })
+      requestAnimationFrame(() => rightZoneRef.current?.focus())
+    }
+
+    window.addEventListener('shortcut:toggle-knowledge-base', enterLibrary)
+    window.addEventListener('shortcut:toggle-creative-space', enterNotes)
+    return () => {
+      window.removeEventListener('shortcut:toggle-knowledge-base', enterLibrary)
+      window.removeEventListener('shortcut:toggle-creative-space', enterNotes)
+    }
+  }, [setPanelWidth])
+
   // Stable, so a drag frame does not hand the centre panel a new element.
   const centerPanelProps = useMemo(
     () => ({
@@ -313,7 +354,14 @@ export default function ResizableLayout({
   return (
     <div ref={containerRef} className="flex flex-1 overflow-hidden p-2">
       {!isLeftCollapsed && (
-        <div className="h-full min-w-0 shrink-0 overflow-hidden" style={{ width: leftWidth }}>
+        <div
+          ref={leftZoneRef}
+          tabIndex={-1}
+          role="region"
+          aria-label={t('library')}
+          className="h-full min-w-0 shrink-0 overflow-hidden outline-none"
+          style={{ width: leftWidth }}
+        >
           {leftPanel}
         </div>
       )}
@@ -328,7 +376,7 @@ export default function ResizableLayout({
           onPointerDown={(event) => beginDrag('left', event)}
           onKeyDown={(event) => handleKeyDown('left', event)}
           onDoubleClick={() => resetPanel('left')}
-          label={t('resizeKnowledgeBase')}
+          label={t('resizeLibrary')}
         />
       )}
 
@@ -346,12 +394,19 @@ export default function ResizableLayout({
           onPointerDown={(event) => beginDrag('right', event)}
           onKeyDown={(event) => handleKeyDown('right', event)}
           onDoubleClick={() => resetPanel('right')}
-          label={t('resizeCreativeSpace')}
+          label={t('resizeNotes')}
         />
       )}
 
       {!isRightCollapsed && (
-        <div className="h-full min-w-0 shrink-0 overflow-hidden" style={{ width: rightWidth }}>
+        <div
+          ref={rightZoneRef}
+          tabIndex={-1}
+          role="region"
+          aria-label={t('notes')}
+          className="h-full min-w-0 shrink-0 overflow-hidden outline-none"
+          style={{ width: rightWidth }}
+        >
           {rightPanel}
         </div>
       )}

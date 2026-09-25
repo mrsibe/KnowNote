@@ -8,7 +8,7 @@ interface AnswerSourcesProps {
   sources: AnswerSource[]
   /** `null` for a message written before this was recorded — claim nothing. */
   retrieval: RetrievalStatus | null
-  onShowDocument: (documentId: string) => void
+  onShowDocument: (documentId: string, origin: HTMLElement) => void
 }
 
 /**
@@ -71,7 +71,7 @@ export default function AnswerSources({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onShowDocument(source.documentId)}
+                  onClick={(event) => onShowDocument(source.documentId, event.currentTarget)}
                   className="h-auto shrink-0 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
                 >
                   {t('showDocument')}

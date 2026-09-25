@@ -1,7 +1,17 @@
-import { useState, useEffect, useCallback, ReactElement } from 'react'
+import { useState, useEffect, useCallback, useRef, ReactElement } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, FileText, Globe, FileUp, Loader2, StickyNote, ArrowLeft, Quote } from 'lucide-react'
+import {
+  Plus,
+  FileText,
+  Globe,
+  FileUp,
+  Loader2,
+  StickyNote,
+  ArrowLeft,
+  Quote,
+  ExternalLink
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { useKnowledgeStore, setupKnowledgeListeners } from '../../store/knowledgeStore'
 import { useItemStore } from '../../store/itemStore'
@@ -25,6 +35,8 @@ import {
 } from '../../../../shared/utils/sourceAnchor'
 import { buildExcerptMarkdown } from '../../../../shared/utils/excerpt'
 import { useSourceAnchorNavigation } from '../../hooks/useSourceAnchorNavigation'
+import { restoreSourceOriginFocus } from '../../hooks/sourceFocusReturn'
+import { FOCUS_CHAT_EVENT } from '../../lib/workspaceEvents'
 import { requestAppendExcerpt } from './note/appendExcerptCommand'
 
 // 添加来源类型
@@ -177,13 +189,16 @@ interface DocumentViewerPanelProps {
   anchor?: ReaderAnchor | null
   onBack: () => void
   onSaveExcerpt: (excerptMarkdown: string, sourceTitle: string) => void
+  /** Explicit “open in the system application”, the action the list click used to be. */
+  onOpenSource: (documentId: string) => void
 }
 
 function DocumentViewerPanel({
   document,
   anchor,
   onBack,
-  onSaveExcerpt
+  onSaveExcerpt,
+  onOpenSource
 }: DocumentViewerPanelProps) {
   const { t } = useTranslation('ui')
 
@@ -242,18 +257,36 @@ function DocumentViewerPanel({
         }
         center={<span className="text-sm font-medium truncate">{document.title}</span>}
         right={
-          selection && (
-            <Button
-              onClick={handleSaveExcerpt}
-              variant="ghost"
-              size="sm"
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              title={t('saveExcerpt')}
-            >
-              <Quote className="w-4 h-4" />
-              {t('saveExcerpt')}
-            </Button>
-          )
+          <>
+            {/* Opening the original in the OS application used to be what a list
+                click did. Now that the list click reads in-app (#65), this is the
+                explicit, secondary way to reach the stored file / URL. Only file
+                and URL sources have something outside the app to open. */}
+            {(document.type === 'file' || document.type === 'url') && (
+              <Button
+                onClick={() => onOpenSource(document.id)}
+                variant="ghost"
+                size="sm"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                title={document.type === 'url' ? t('openUrl') : t('openFile')}
+              >
+                <ExternalLink className="w-4 h-4" />
+                {document.type === 'url' ? t('openUrl') : t('openFile')}
+              </Button>
+            )}
+            {selection && (
+              <Button
+                onClick={handleSaveExcerpt}
+                variant="ghost"
+                size="sm"
+                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+                title={t('saveExcerpt')}
+              >
+                <Quote className="w-4 h-4" />
+                {t('saveExcerpt')}
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -278,6 +311,9 @@ export default function SourcePanel(): ReactElement {
   const [modalType, setModalType] = useState<AddSourceType | null>(null)
   const [hasEmbeddingModel, setHasEmbeddingModel] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<KnowledgeDocument | null>(null)
+  // The source list is a full-panel view that unmounts while a source is open.
+  // Focus returns here after “Back” so a keyboard user does not land on <body>.
+  const listRef = useRef<HTMLDivElement>(null)
 
   const {
     documents,
@@ -524,27 +560,38 @@ export default function SourcePanel(): ReactElement {
     }
   }, [])
 
-  // 处理文档点击
+  // 处理文档点击（#65）。
+  //
+  // 列表点击一律打开应用内阅读器：PDF 走 `PdfSourceReader`，其余格式走文本回退，两者
+  // 都是 #71 的同一个 reading 契约。以前只有 text/note 预览、file/url 交给操作系统，
+  // 于是「从 Library 读 PDF」和「从 citation 跳 PDF」变成了两套模型；现在两者同一个入口，
+  // 外部打开退化为阅读器标题栏里的显式动作。
   const handleSelectDocument = useCallback(
     (document: KnowledgeDocument) => {
-      // 文本和笔记类型可以预览，直接显示预览页面
-      if (document.type === 'text' || document.type === 'note') {
-        setSelectedDocument(document)
-        // 列表里的选择优先，清掉对话/URL 那边可能还挂着的请求
-        closeSourceAnchor()
-      } else {
-        // 其他类型（文件、URL）直接打开
-        handleOpenSource(document.id)
-      }
+      setSelectedDocument(document)
+      // 列表里的选择优先，清掉对话/URL 那边可能还挂着的请求
+      closeSourceAnchor()
     },
-    [handleOpenSource, closeSourceAnchor]
+    [closeSourceAnchor]
   )
 
-  // 返回列表
+  // 返回列表（#65）。焦点必须落回「打开阅读器的那里」：citation → 那张芯片，
+  // 笔记摘录 → 编辑器，Library 进来 → 来源列表。只有没有 origin 的 reader
+  // （deep link / 恢复的 session）才把焦点交给 composer。
   const handleBack = useCallback(() => {
+    const cameFromAnchor = focusedSource !== null
     setSelectedDocument(null)
     closeSourceAnchor()
-  }, [closeSourceAnchor])
+
+    if (cameFromAnchor) {
+      if (restoreSourceOriginFocus()) return
+      window.dispatchEvent(new CustomEvent(FOCUS_CHAT_EVENT))
+      return
+    }
+
+    // 列表在下一帧才重新挂载，所以越过这一帧再 focus。
+    requestAnimationFrame(() => listRef.current?.focus())
+  }, [focusedSource, closeSourceAnchor])
 
   // 处理弹窗提交
   const handleModalSubmit = useCallback(
@@ -570,15 +617,20 @@ export default function SourcePanel(): ReactElement {
           anchor={readerAnchor}
           onBack={handleBack}
           onSaveExcerpt={handleSaveExcerpt}
+          onOpenSource={handleOpenSource}
         />
       ) : (
         // 文档列表页面
-        <>
+        <div
+          ref={listRef}
+          tabIndex={-1}
+          className="flex h-full flex-col overflow-hidden outline-none"
+        >
           <PanelHeader
             draggable
             left={
               <span className="text-sm font-medium text-foreground truncate w-full select-none">
-                {t('knowledgeBase')}
+                {t('library')}
               </span>
             }
             right={
@@ -666,7 +718,7 @@ export default function SourcePanel(): ReactElement {
               />
             </ScrollArea>
           )}
-        </>
+        </div>
       )}
 
       {/* 添加来源弹窗 - 使用 key 强制在 type 变化时重新挂载组件 */}

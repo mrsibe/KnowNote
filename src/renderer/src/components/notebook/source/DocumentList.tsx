@@ -116,34 +116,38 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
   }
 
   return (
-    <div
-      onClick={() => onSelect(document)}
-      className="group grid grid-cols-[auto_1fr_auto] gap-2 items-start rounded-md px-2 py-2 transition-colors cursor-pointer select-none hover:bg-surface-hover"
-    >
-      {/* 图标列 - 固定宽度 */}
-      {getTypeIcon()}
+    <div className="group grid grid-cols-[1fr_auto] items-start gap-1 rounded-md transition-colors hover:bg-surface-hover">
+      {/* The row is a real button, not a click handler on a div: it is the primary
+          way into a source, so it must be reachable and activatable by keyboard
+          (#65). The delete control is its sibling rather than a child — a button
+          nested in a button is the same defect the tab strip already fixed. */}
+      <button
+        type="button"
+        onClick={() => onSelect(document)}
+        className="grid min-w-0 cursor-pointer grid-cols-[auto_1fr] select-none items-start gap-2 rounded-md px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        {/* 图标列 - 固定宽度 */}
+        {getTypeIcon()}
 
-      {/* 内容列 - 可被压缩 */}
-      <div className="min-w-0 flex flex-col gap-1">
-        <h3 className="text-sm font-medium truncate">{document.title}</h3>
-        <p className="text-xs text-subtle-foreground">{document.chunkCount} chunks</p>
-        {document.status === 'processing' && (
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Loader2 className="w-3 h-3 animate-spin" />
-            {t('indexing')}
-          </p>
-        )}
-      </div>
+        {/* 内容列 - 可被压缩 */}
+        <div className="min-w-0 flex flex-col gap-1">
+          <h3 className="text-sm font-medium truncate">{document.title}</h3>
+          <p className="text-xs text-subtle-foreground">{document.chunkCount} chunks</p>
+          {document.status === 'processing' && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              {t('indexing')}
+            </p>
+          )}
+        </div>
+      </button>
 
       {/* 删除按钮列 - 固定宽度 */}
       <Button
-        onClick={(e) => {
-          e.stopPropagation()
-          setIsDeleteDialogOpen(true)
-        }}
+        onClick={() => setIsDeleteDialogOpen(true)}
         variant="ghost"
         size="icon"
-        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 mt-0.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+        className="mt-2 mr-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-destructive hover:bg-destructive/10 hover:text-destructive"
         title={t('deleteDocument')}
       >
         <Trash2 className="w-4 h-4" />

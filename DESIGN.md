@@ -10,8 +10,8 @@ Tailwind class. If you are an agent adding a page or a component, follow the
 recipes in [Component recipes](#component-recipes) instead of inventing values.
 If a rule here is wrong or missing, change this file in the same PR as the code.
 
-Non-goals: this document does not define product behaviour, information
-architecture, branding (logo, hue of the primary colour) or i18n.
+Non-goals: this document does not define product behaviour, branding (logo, hue
+of the primary colour) or i18n.
 
 ## Design principles
 
@@ -30,6 +30,97 @@ architecture, branding (logo, hue of the primary colour) or i18n.
 
 Direction reference: Notion's content feel, Linear's information density,
 Raycast's desktop chrome (near-flat dark surfaces, hairlines, almost no shadow).
+
+## Information architecture
+
+Implementation: `components/notebook/NotebookLayout.tsx` and the three panels it
+composes. [Workspace shell](#workspace-shell) owns the geometry; this section is
+the layer above it — what each zone is for, how it is entered, and how the loop
+between them stays continuous.
+
+### Three zones, one loop
+
+KnowNote is not a menu of features. It is one loop:
+
+```text
+import → read → annotate / cite → ask → inspect the source → return → excerpt into a note
+```
+
+| Zone               | Surface                                 | Owns                                                                           |
+| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------ |
+| **Library**        | left panel, list state                  | what is in the notebook: sources, and the way in                               |
+| **Reading / Chat** | left panel reading state + centre panel | the working surface: the document is the anchor, the conversation is beside it |
+| **Notes**          | right panel                             | output that stays linked to its source                                         |
+
+The **citation is the connective tissue** between the three. A `[n]` in an answer
+opens the source at its page/block ([Cross-panel requests](#cross-panel-requests));
+a selection in the reader becomes an excerpt in a note that links back to the same
+anchor (`shared/utils/excerpt.ts`). No other surface needs to know how the panels
+talk to each other.
+
+Mind map, quiz and Anki are **secondary utilities**, not part of this loop. They
+stay reachable — from the Notes panel and from their own windows — but they are
+never promoted into the three zones or into the loop above. This is #65's explicit
+non-goal, recorded here so the next IA change does not relitigate it.
+
+### Library and Reading are one zone, two states
+
+Reading does **not** get its own column. The left card switches between the source
+list and the reader, and the switch is explicit in both directions:
+
+- A source row opens the reader **in-app, for every format**. PDF renders its
+  pages (`PdfSourceReader`); every other format uses the text fallback. There is
+  one entry (`handleSelectDocument`) and one reading contract, so "read from the
+  Library" and "jump from a citation" cannot drift into two navigation models.
+- "Open in system application" is an explicit action in the reader header, never
+  the meaning of a list click.
+- **Back** (Back button or `Escape`) returns to where the reader was opened from.
+  From a citation or a note excerpt, focus returns to that element; from the
+  Library list, focus returns to the list; a reader with no origin (deep link,
+  restored session) hands focus to the chat composer. Returning to the exact
+  origin is the accessible behaviour — not a hard-coded "Escape focuses the
+  composer".
+
+The source row is the primary control of this switch, so it is a real `<button>`
+with `hover` and `focus-visible`. Two of the four states are **unreachable** for
+it, and are therefore not invented: `selected` cannot be shown because the list is
+replaced by the reader, so no row is visible while its source is open; `disabled`
+can never apply because reading a source is not gated on anything. The surface
+that carries the full `hover` / `selected` / `focus-visible` / `disabled` set is
+the citation chip, not the row.
+
+### Keyboard path
+
+- **Open a citation:** `Tab` to the chip, then `Enter` / `Space`. Chips are real
+  buttons, so this is the platform behaviour, not a custom keybinding.
+- **Return:** `Escape` (or Back) returns focus to the chip that opened the reader.
+- **Move between the zones:** `Cmd/Ctrl+[` reveals Library (if collapsed) and
+  moves focus into it; `Cmd/Ctrl+]` does the same for Notes. The persisted action
+  IDs (`toggle_knowledge_base` / `toggle_creative_space`) are unchanged, but the
+  behaviour is “go to the zone”, not “show the panel” — this is the “move between
+  zones” path. Collapsing a side stays on its panel-header button. The centre
+  composer is reached through `FOCUS_CHAT_EVENT` (the reader's back fallback).
+
+The chip for the citation the reader is currently showing carries `aria-current`
+and a selected fill. That state is **derived** from `uiStore.focusedSource`
+(`sourceAnchorsEqual(citationToSourceAnchor(citation), focusedSource)`) — there is
+no second selection store to keep in sync.
+
+### States, by zone
+
+Every zone defines its four states. This table is the contract; a missing state is
+a bug (rule 5).
+
+| Zone    | empty                                                                 | loading                                                              | error                                                                                 | offline                                                                                              |
+| ------- | --------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Library | `Empty` — no documents, or no embedding model with a link to settings | spinner while the list loads; a row shows `indexing` while ingesting | a failed ingestion surfaces on its row; a source whose file is gone fails when opened | local-first: listing sources needs no network                                                        |
+| Reading | a text source with no content renders an empty reader                 | reader spinner until blocks and bytes arrive                         | `readerPdfUnavailable` when the stored file is missing                                | local-first: bytes are served over `knownote-doc://`                                                 |
+| Chat    | `Empty` — "start a new conversation"                                  | streaming cursor; the send button is disabled while a turn runs      | a retrieval `failed` line; a `none` line when nothing was used                        | the composer refuses to send with no chat model (`noProviderConfigured`); the transcript still reads |
+| Notes   | `Empty` — no items                                                    | `generating` row for an in-flight artifact; editor save state        | `failed` row for an artifact                                                          | local-first: notes live in SQLite                                                                    |
+
+Offline is a **model-connection** concern, not a zone concern: zones read local
+data and never gate on connectivity. Only a chat turn and remote embeddings need
+the network, and both already carry their own unavailable state.
 
 ## Surfaces
 
@@ -272,7 +363,7 @@ cannot pass a prop. It writes to `uiStore` and `SourcePanel` derives from it **d
 render** — never in an effect:
 
 ```tsx
-const openDocument = selectedDocument ?? focusedDocument
+const openDocument = focusedDocument ?? selectedDocument
 ```
 
 Two things this avoids, both of which were tried and rejected:

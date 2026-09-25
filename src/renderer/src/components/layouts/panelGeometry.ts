@@ -137,3 +137,40 @@ export const nextPanelWidth = (
 
   return Math.max(MIN_SIDE_WIDTH, Math.min(max, next))
 }
+
+/** The two side zones the workspace shortcuts enter (#65). */
+export type WorkspaceZone = 'library' | 'notes'
+
+export interface ZoneEntry {
+  /**
+   * Always `false`: entering a zone reveals it, it never hides one. Typed as a
+   * literal so the "enter is not toggle" rule cannot be broken by returning a
+   * computed value here.
+   */
+  collapsed: false
+  /**
+   * Width to apply while revealing, or `null` when the zone is already open - in
+   * that case entering must leave the layout alone, because entering is not
+   * resizing.
+   */
+  width: number | null
+}
+
+/**
+ * What a zone shortcut does to the layout (#65).
+ *
+ * The persisted shortcut IDs are still the panel toggles, but the behaviour is
+ * "go to the zone": pressing it twice must leave the zone open, not hide it like
+ * the panel-header toggle (which is what `toggleLeftPanel` / `toggleRightPanel`
+ * remain for). A collapsed zone comes back at the size it had before it was
+ * collapsed, falling back to the default when there is nothing remembered or the
+ * remembered size is unusable (`0` is what a collapsed panel holds).
+ */
+export const planZoneEntry = (
+  collapsed: boolean,
+  rememberedWidth: number | undefined,
+  fallbackWidth: number
+): ZoneEntry => ({
+  collapsed: false,
+  width: collapsed ? rememberedWidth || fallbackWidth : null
+})

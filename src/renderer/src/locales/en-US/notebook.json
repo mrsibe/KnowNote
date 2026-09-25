@@ -69,6 +69,5 @@
   "mindMapTitlePlaceholder": "Enter mind map title",
   "quizTitlePlaceholder": "Enter quiz title",
   "ankiTitlePlaceholder": "Enter Anki card title",
-  "confirm": "Confirm",
-  "creativeSpace": "Creative Space"
+  "confirm": "Confirm"
 }

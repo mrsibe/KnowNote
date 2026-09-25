@@ -14,7 +14,8 @@ import {
   isResizeKey,
   maxSideWidth,
   nextPanelWidth,
-  parseStoredWidths
+  parseStoredWidths,
+  planZoneEntry
 } from '../src/renderer/src/components/layouts/panelGeometry.ts'
 
 /**
@@ -155,5 +156,45 @@ test('stored widths accept zero, which is a collapsed panel rather than a corrup
 test('the documented fallbacks are usable widths', () => {
   for (const value of [DEFAULT_LEFT_WIDTH, DEFAULT_RIGHT_WIDTH, MIN_SIDE_WIDTH]) {
     assert.ok(Number.isFinite(value) && value >= MIN_SIDE_WIDTH, String(value))
+  }
+})
+
+/**
+ * #65 made the zone shortcuts "go to" a zone rather than toggle it. The persisted
+ * action IDs are still the panel toggles, which makes the two behaviours easy to
+ * conflate: entering must reveal and focus, never hide, and it must not disturb a
+ * zone that is already open.
+ */
+
+test('entering an open zone leaves its width alone', () => {
+  // Entering is not resizing: a zone that is already open must not jump back to a
+  // remembered size when the shortcut is pressed.
+  assert.deepEqual(planZoneEntry(false, 512, DEFAULT_LEFT_WIDTH), {
+    collapsed: false,
+    width: null
+  })
+})
+
+test('entering a collapsed zone restores the size it had before collapsing', () => {
+  assert.deepEqual(planZoneEntry(true, 512, DEFAULT_LEFT_WIDTH), {
+    collapsed: false,
+    width: 512
+  })
+})
+
+test('a collapsed zone with nothing remembered falls back to the default', () => {
+  // `0` is what a collapsed panel holds and `undefined` is a session that never
+  // resized one; both must yield a usable width rather than a zero-width zone.
+  assert.equal(planZoneEntry(true, 0, DEFAULT_LEFT_WIDTH).width, DEFAULT_LEFT_WIDTH)
+  assert.equal(planZoneEntry(true, undefined, DEFAULT_LEFT_WIDTH).width, DEFAULT_LEFT_WIDTH)
+  assert.equal(planZoneEntry(true, 0, DEFAULT_RIGHT_WIDTH).width, DEFAULT_RIGHT_WIDTH)
+})
+
+test('entering a zone never collapses it, so the same shortcut twice is safe', () => {
+  // The shortcut shares its action ID with a panel toggle, so the one thing that
+  // must not happen is it behaving like one: a second press would hide the zone the
+  // user just asked to enter.
+  for (const collapsed of [true, false]) {
+    assert.equal(planZoneEntry(collapsed, 400, DEFAULT_LEFT_WIDTH).collapsed, false)
   }
 })
