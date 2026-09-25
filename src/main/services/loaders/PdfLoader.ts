@@ -9,10 +9,12 @@ import { extname } from 'path'
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentProxy, PDFPageProxy, TextItem } from 'pdfjs-dist/types/src/display/api'
 import Logger from '../../../shared/utils/logger'
+import { layoutPageText, type PositionedTextItem } from './pdfTextLayout'
 import type {
   IDocumentLoader,
   DocumentLoadResult,
   LoadOptions,
+  PageBlockInfo,
   PageInfo,
   NormalizedBox
 } from './types'
@@ -86,22 +88,38 @@ export class PdfLoader implements IDocumentLoader {
         const textContent = await page.getTextContent()
         const viewport = page.getViewport({ scale: 1.0 })
 
-        // 提取页面文本
+        // 把文本项按几何位置还原成页内段落，引用才能落到"第 12 页右下角那一段"
         const textItems = textContent.items.filter((item): item is TextItem => 'str' in item)
-        const pageText = textItems.map((item) => item.str).join(' ')
+        const paragraphs = layoutPageText(
+          this.toPositionedItems(textItems, viewport),
+          viewport.width,
+          viewport.height
+        )
 
-        // 清理文本
-        const cleanedText = this.cleanPDFText(pageText)
-        const pageTextWithNewline = cleanedText + '\n\n'
+        // 页内容由段落拼出，段落偏移随后锚定到这份规范字符串上
+        const pageContent = paragraphs.map((paragraph) => paragraph.text).join('\n\n')
+        const pageBlocks: PageBlockInfo[] = []
+        let pageCursor = 0
+        for (const paragraph of paragraphs) {
+          const startOffset = currentOffset + pageCursor
+          pageBlocks.push({
+            text: paragraph.text,
+            startOffset,
+            endOffset: startOffset + paragraph.text.length,
+            bbox: paragraph.bbox
+          })
+          pageCursor += paragraph.text.length + 2 // '\n\n'
+        }
 
         // 记录页面信息
         if (opts.preserveStructure) {
           pages.push({
             pageNumber: pageNum,
-            content: cleanedText,
+            content: pageContent,
             startOffset: currentOffset,
-            endOffset: currentOffset + cleanedText.length,
-            bbox: this.computeNormalizedBBox(textItems, viewport),
+            endOffset: currentOffset + pageContent.length,
+            bbox: this.unionBBox(paragraphs.map((paragraph) => paragraph.bbox)),
+            blocks: pageBlocks,
             metadata: {
               width: viewport.width,
               height: viewport.height
@@ -109,6 +127,7 @@ export class PdfLoader implements IDocumentLoader {
           })
         }
 
+        const pageTextWithNewline = pageContent + '\n\n'
         fullText += pageTextWithNewline
         currentOffset += pageTextWithNewline.length
 
@@ -147,62 +166,41 @@ export class PdfLoader implements IDocumentLoader {
   }
 
   /**
-   * 把页面上所有文本项映射到页面空间,取并集后归一化到 0..1。
-   *
-   * 用 viewport.transform 把 PDF 用户空间（原点在左下）转成视口空间（原点在左上），
-   * 这样渲染层不需要知道缩放比例。没有任何文本项时返回 undefined。
+   * 把 pdf.js 的文本项转换到视口坐标（原点左上，y 向下）。渲染层因此不需要知道缩放。
    */
-  private computeNormalizedBBox(
+  private toPositionedItems(
     items: TextItem[],
     viewport: ReturnType<PDFPageProxy['getViewport']>
-  ): NormalizedBox | undefined {
-    let minX = Infinity
-    let minY = Infinity
-    let maxX = -Infinity
-    let maxY = -Infinity
+  ): PositionedTextItem[] {
+    const positioned: PositionedTextItem[] = []
 
     for (const item of items) {
+      if (!item.str) continue
+
       const textTransform = pdfjsLib.Util.transform(viewport.transform, item.transform)
       const fontHeight = Math.hypot(textTransform[2], textTransform[3])
-      const left = textTransform[4]
-      const right = left + Math.abs(item.width)
-      const top = textTransform[5] - fontHeight
-      const bottom = textTransform[5]
 
-      minX = Math.min(minX, left, right)
-      maxX = Math.max(maxX, left, right)
-      minY = Math.min(minY, top, bottom)
-      maxY = Math.max(maxY, top, bottom)
+      positioned.push({
+        str: item.str,
+        left: textTransform[4],
+        baseline: textTransform[5],
+        width: Math.abs(item.width),
+        height: fontHeight > 0 ? fontHeight : 1
+      })
     }
 
-    if (!Number.isFinite(minX) || !Number.isFinite(minY)) return undefined
-
-    const clamp = (value: number): number => Math.min(1, Math.max(0, value))
-    const width = viewport.width || 1
-    const height = viewport.height || 1
-
-    return {
-      x: clamp(minX / width),
-      y: clamp(minY / height),
-      w: clamp((maxX - minX) / width),
-      h: clamp((maxY - minY) / height)
-    }
+    return positioned
   }
 
-  /**
-   * 清理 PDF 提取的文本
-   */
-  private cleanPDFText(text: string): string {
-    return (
-      text
-        // 移除多余的空格
-        .replace(/[ \t]+/g, ' ')
-        // 修复断行（连续的行可能是同一段落）
-        .replace(/([^\n])\n([^\n])/g, '$1 $2')
-        // 统一多个换行为两个
-        .replace(/\n{3,}/g, '\n\n')
-        // 移除首尾空白
-        .trim()
-    )
+  /** 多个归一化包围盒的并集（页面 bbox）。没有有效盒时返回 undefined。 */
+  private unionBBox(boxes: NormalizedBox[]): NormalizedBox | undefined {
+    if (boxes.length === 0) return undefined
+
+    const left = Math.min(...boxes.map((box) => box.x))
+    const top = Math.min(...boxes.map((box) => box.y))
+    const right = Math.max(...boxes.map((box) => box.x + box.w))
+    const bottom = Math.max(...boxes.map((box) => box.y + box.h))
+
+    return { x: left, y: top, w: right - left, h: bottom - top }
   }
 }

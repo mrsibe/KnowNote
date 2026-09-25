@@ -36,12 +36,15 @@ import { EmbeddingService } from './EmbeddingService'
 import type { EmbeddingSpace } from '../../shared/types'
 import { ChunkingService, type ChunkOptions, type ChunkResult } from './ChunkingService'
 import { FileParserService } from './FileParserService'
+import type { DocumentStructure } from './loaders/types'
 import {
   buildDocumentBlocks,
   assignBlockIds,
   type IdentifiedBlockDraft
 } from './blocks/documentBlocks'
 import { resolveChunkProvenance, type ChunkProvenance } from './chunkProvenance'
+import { DenseRetriever } from './retrieval'
+import type { EvidenceLocator, Retriever } from './retrieval'
 import { WebFetchService } from './WebFetchService'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
@@ -72,6 +75,9 @@ export interface SearchOptions {
 
 /**
  * 搜索结果
+ *
+ * `locator` 是检索 → 引用的 seam：页码区间与块区间随结果一起交付，#69 直接用它
+ * 组装 citation，不必再回头查库。
  */
 export interface SearchResult {
   chunkId: string
@@ -81,6 +87,7 @@ export interface SearchResult {
   content: string
   score: number
   chunkIndex: number
+  locator: EvidenceLocator
   metadata?: Record<string, unknown>
 }
 
@@ -96,6 +103,7 @@ export type IndexProgressCallback = (stage: string, progress: number) => void
 export class KnowledgeService {
   private embeddingService: EmbeddingService
   private chunkingService: ChunkingService
+  private retriever: Retriever
   private fileParserService: FileParserService
   private webFetchService: WebFetchService
   private knowledgeFilesDir: string
@@ -103,6 +111,7 @@ export class KnowledgeService {
   constructor(embeddingService: EmbeddingService) {
     this.embeddingService = embeddingService
     this.chunkingService = new ChunkingService()
+    this.retriever = new DenseRetriever(embeddingService)
     this.fileParserService = new FileParserService()
     this.webFetchService = new WebFetchService()
     // 知识库文件存储目录
@@ -178,145 +187,41 @@ export class KnowledgeService {
     // 计算内容哈希
     const contentHash = createHash('md5').update(options.content).digest('hex')
 
-    try {
-      // 1. 创建文档记录
-      onProgress?.('creating_document', 0)
+    // 1. 创建 source 记录。Document 是 source identity：之后的每一次重新索引都复用
+    //    这一行，不会再生成新的 documentId。
+    onProgress?.('creating_document', 0)
 
-      const newDoc: NewDocument = {
-        id: documentId,
-        notebookId,
-        title: options.title,
-        type: options.type,
-        sourceUri: options.sourceUri,
-        sourceNoteId: options.sourceNoteId,
-        content: options.content,
-        contentHash,
-        mimeType: options.mimeType,
-        fileSize: options.fileSize,
-        metadata: options.metadata,
-        status: 'processing',
-        chunkCount: 0,
-        createdAt: now,
-        updatedAt: now
-      }
-
-      db.insert(documents).values(newDoc).run()
-
-      // 1b. 持久化文档块（文本/URL/笔记没有结构，按段落平铺），并把同一批块交给分块器
-      const blocks = assignBlockIds(documentId, buildDocumentBlocks({ content: options.content }))
-      this.persistDocumentBlocks(blocks)
-
-      // 2. 分块（偏移锚定 options.content，即 documents.content）
-      onProgress?.('chunking', 10)
-      const chunkResults = this.chunkingService.chunkBlocks(
-        options.content,
-        blocks,
-        options.chunkOptions
-      )
-
-      if (chunkResults.length === 0) {
-        throw new Error('No chunks generated from document')
-      }
-
-      Logger.info('KnowledgeService', `Document ${documentId}: ${chunkResults.length} chunks`)
-
-      // 3. 保存分块与 chunk↔block 映射（同一事务，不会出现没有映射的 chunk）
-      onProgress?.('saving_chunks', 20)
-      const { chunkIds, chunkContents } = this.saveChunks(documentId, notebookId, chunkResults, now)
-
-      // 4. 生成嵌入向量
-      // 不指定维度:维度由 embedding 模型决定,写死维度会让用别的模型的笔记本直接
-      // 索引失败(vec0 表的宽度在创建时固定,见 #33)。测出真实维度之后再用它建表。
-      const embeddingResults = await this.embedDocumentChunks(notebookId, chunkContents, onProgress)
-
-      if (embeddingResults.length === 0) {
-        throw new Error('Embedding 服务没有返回任何向量')
-      }
-
-      // space 由模型决定;与既有 space 不一致时重建向量表并把文档标回待索引
-      const detectedDimensions = embeddingResults[0].dimensions
-      await this.reconcileEmbeddingSpace(
-        notebookId,
-        await this.embeddingService.getSpace(),
-        detectedDimensions
-      )
-      Logger.info('KnowledgeService', `Embedding dimensions: ${detectedDimensions}`)
-
-      // 5. 保存嵌入元数据并添加到向量存储
-      onProgress?.('saving_embeddings', 85)
-      const vectorStore = await vectorStoreManager.getStore(
-        notebookId,
-        undefined,
-        detectedDimensions
-      )
-      const vectorItems: Array<{
-        id: string
-        chunkId: string
-        vector: Float32Array
-        metadata?: Record<string, unknown>
-      }> = []
-
-      for (let i = 0; i < chunkIds.length; i++) {
-        const embeddingId = `emb_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-        const embResult = embeddingResults[i]
-
-        // 保存嵌入元数据到数据库
-        const newEmbedding: NewEmbedding = {
-          id: embeddingId,
-          chunkId: chunkIds[i],
-          notebookId,
-          model: embResult.model,
-          dimensions: embResult.dimensions,
-          createdAt: now
-        }
-
-        db.insert(embeddings).values(newEmbedding).run()
-
-        // 准备向量数据
-        vectorItems.push({
-          id: embeddingId,
-          chunkId: chunkIds[i],
-          vector: embResult.embedding,
-          metadata: { model: embResult.model, documentId }
-        })
-      }
-
-      // 批量添加到向量存储
-      await vectorStore.upsert(vectorItems)
-
-      // 6. 更新文档状态
-      onProgress?.('finalizing', 95)
-      db.update(documents)
-        .set({
-          status: 'indexed',
-          chunkCount: chunkResults.length,
-          updatedAt: new Date()
-        })
-        .where(eq(documents.id, documentId))
-        .run()
-
-      executeCheckpoint('PASSIVE')
-      onProgress?.('completed', 100)
-
-      Logger.info(
-        'KnowledgeService',
-        `Document indexed: ${documentId}, ${chunkResults.length} chunks`
-      )
-      return documentId
-    } catch (error) {
-      // 更新文档状态为失败
-      db.update(documents)
-        .set({
-          status: 'failed',
-          errorMessage: (error as Error).message,
-          updatedAt: new Date()
-        })
-        .where(eq(documents.id, documentId))
-        .run()
-
-      Logger.error('KnowledgeService', 'Failed to add document:', error)
-      throw error
+    const newDoc: NewDocument = {
+      id: documentId,
+      notebookId,
+      title: options.title,
+      type: options.type,
+      sourceUri: options.sourceUri,
+      sourceNoteId: options.sourceNoteId,
+      content: options.content,
+      contentHash,
+      mimeType: options.mimeType,
+      fileSize: options.fileSize,
+      metadata: options.metadata,
+      status: 'processing',
+      chunkCount: 0,
+      createdAt: now,
+      updatedAt: now
     }
+
+    db.insert(documents).values(newDoc).run()
+
+    // 2. 建立派生索引（blocks → chunks → embeddings → 向量表）。失败时由
+    //    `indexDocument()` 把这一行标成 failed，source 行保留以便重试或重新索引。
+    await this.indexDocument(
+      documentId,
+      options.content,
+      undefined,
+      { chunkOptions: options.chunkOptions },
+      onProgress
+    )
+
+    return documentId
   }
 
   /**
@@ -330,6 +235,8 @@ export class KnowledgeService {
     const db = getDatabase()
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
     let localFilePath: string | undefined
+    let parsedContent = ''
+    let parsedStructure: DocumentStructure | undefined
 
     try {
       onProgress?.('parsing_file', 0)
@@ -338,12 +245,14 @@ export class KnowledgeService {
       localFilePath = await this.copyFileToKnowledgeDir(filePath, documentId)
 
       const parseResult = await this.fileParserService.parseFile(filePath)
+      parsedContent = parseResult.content
+      parsedStructure = parseResult.structure ?? undefined
 
       // 计算内容哈希
       const contentHash = createHash('md5').update(parseResult.content).digest('hex')
       const now = new Date()
 
-      // 1. 创建文档记录（包含 localFilePath）
+      // 1. 创建 source 记录（包含 localFilePath 与解析结构）
       onProgress?.('creating_document', 0)
 
       // 根据 MIME 类型决定文档类型
@@ -361,6 +270,8 @@ export class KnowledgeService {
         sourceUri: filePath,
         localFilePath: localFilePath,
         content: parseResult.content,
+        // 结构随 source 一起持久化，重新索引才能不加解析地重建同一批块
+        structure: parsedStructure,
         contentHash,
         mimeType: parseResult.mimeType,
         fileSize: parseResult.metadata?.fileSize as number | undefined,
@@ -372,17 +283,65 @@ export class KnowledgeService {
       }
 
       db.insert(documents).values(newDoc).run()
+    } catch (error) {
+      // 拷贝/解析/建行失败时删除已拷贝的文件，并把（可能已创建的）行标成失败
+      if (localFilePath) {
+        await this.deleteLocalFile(localFilePath)
+      }
 
-      // 1b. 持久化文档块，保留解析器给出的页/标题结构，并把同一批块交给分块器
-      const blocks = assignBlockIds(
-        documentId,
-        buildDocumentBlocks({ content: parseResult.content, structure: parseResult.structure })
-      )
+      db.update(documents)
+        .set({
+          status: 'failed',
+          errorMessage: (error as Error).message,
+          updatedAt: new Date()
+        })
+        .where(eq(documents.id, documentId))
+        .run()
+
+      Logger.error('KnowledgeService', 'Failed to add document from file:', error)
+      throw error
+    }
+
+    // 2. 建立派生索引。索引失败由 `indexDocument()` 标记；这里保留本地文件，
+    //    用户可以重新索引，而不是重新导入。
+    await this.indexDocument(documentId, parsedContent, parsedStructure, {}, onProgress)
+
+    return documentId
+  }
+
+  /**
+   * 为一份已经存在的 source（`documents` 行）建立派生索引：
+   * blocks → chunks → embeddings → 向量表。
+   *
+   * Document 是 source identity，blocks/chunks/embeddings 是派生索引。这个方法只写
+   * 派生索引，从不插入或删除 `documents` 行，所以对同一个 documentId 反复调用不会改
+   * 变来源身份（历史 citation 仍然指向同一个来源）。
+   *
+   * 调用前该文档不应带有旧的派生索引；重新索引要先 `clearDerivedIndex()`。
+   * 失败时把该行标成 `failed` 并抛出，由调用方决定是否清理 source。
+   */
+  private async indexDocument(
+    documentId: string,
+    content: string,
+    structure: DocumentStructure | undefined,
+    options: { chunkOptions?: ChunkOptions } = {},
+    onProgress?: IndexProgressCallback
+  ): Promise<number> {
+    const db = getDatabase()
+    const doc = db.select().from(documents).where(eq(documents.id, documentId)).get()
+    if (!doc) throw new Error(`Document ${documentId} not found`)
+
+    const notebookId = doc.notebookId
+    const now = new Date()
+
+    try {
+      // 1. 文档块。偏移锚定 content，即 documents.content。
+      const blocks = assignBlockIds(documentId, buildDocumentBlocks({ content, structure }))
       this.persistDocumentBlocks(blocks)
 
-      // 2. 分块（偏移锚定 parseResult.content，即 documents.content）
+      // 2. 分块（偏移同样锚定 content）
       onProgress?.('chunking', 10)
-      const chunkResults = this.chunkingService.chunkBlocks(parseResult.content, blocks)
+      const chunkResults = this.chunkingService.chunkBlocks(content, blocks, options.chunkOptions)
 
       if (chunkResults.length === 0) {
         throw new Error('No chunks generated from document')
@@ -460,6 +419,7 @@ export class KnowledgeService {
         .set({
           status: 'indexed',
           chunkCount: chunkResults.length,
+          errorMessage: null,
           updatedAt: new Date()
         })
         .where(eq(documents.id, documentId))
@@ -472,14 +432,9 @@ export class KnowledgeService {
         'KnowledgeService',
         `Document indexed: ${documentId}, ${chunkResults.length} chunks`
       )
-      return documentId
+      return chunkResults.length
     } catch (error) {
-      // 失败时删除已拷贝的文件
-      if (localFilePath) {
-        await this.deleteLocalFile(localFilePath)
-      }
-
-      // 更新文档状态为失败
+      // 派生索引可以重建，所以失败只是状态问题，不需要删掉 source 行
       db.update(documents)
         .set({
           status: 'failed',
@@ -489,9 +444,44 @@ export class KnowledgeService {
         .where(eq(documents.id, documentId))
         .run()
 
-      Logger.error('KnowledgeService', 'Failed to add document from file:', error)
+      Logger.error('KnowledgeService', 'Failed to index document:', error)
       throw error
     }
+  }
+
+  /**
+   * 删除一份文档的全部派生索引（向量、chunk↔block 映射、chunks、embeddings、
+   * document_blocks），并把它标回 `processing`。`documents` 行本身保留。
+   */
+  private async clearDerivedIndex(documentId: string): Promise<void> {
+    const db = getDatabase()
+    const doc = db.select().from(documents).where(eq(documents.id, documentId)).get()
+    if (!doc) return
+
+    const oldChunks = db
+      .select({ id: chunks.id })
+      .from(chunks)
+      .where(eq(chunks.documentId, documentId))
+      .all()
+
+    if (oldChunks.length > 0) {
+      const chunkIds = oldChunks.map((chunk) => chunk.id)
+
+      const vectorStore = await vectorStoreManager.getStore(doc.notebookId)
+      await vectorStore.deleteByChunkIds(chunkIds)
+
+      // 映射与 embeddings 不依赖外键级联（连接上 foreign_keys 默认是关的），显式删除
+      db.delete(chunkBlocks).where(inArray(chunkBlocks.chunkId, chunkIds)).run()
+      db.delete(embeddings).where(inArray(embeddings.chunkId, chunkIds)).run()
+      db.delete(chunks).where(eq(chunks.documentId, documentId)).run()
+    }
+
+    db.delete(documentBlocks).where(eq(documentBlocks.documentId, documentId)).run()
+
+    db.update(documents)
+      .set({ status: 'processing', errorMessage: null, chunkCount: 0, updatedAt: new Date() })
+      .where(eq(documents.id, documentId))
+      .run()
   }
 
   /**
@@ -751,14 +741,17 @@ export class KnowledgeService {
   }
 
   /**
-   * 语义搜索
+   * 语义搜索。
+   *
+   * 保持原有签名与返回形状，内部委托给默认的 `Retriever`（当前是 `DenseRetriever`）。
+   * embedding space 校验留在这里：它是前置条件，不是检索策略的一部分。
    */
   async search(
     notebookId: string,
     query: string,
     options: SearchOptions = {}
   ): Promise<SearchResult[]> {
-    const { topK = 5, threshold = 0.5, includeContent = true } = options
+    const { includeContent = true } = options
     const db = getDatabase()
 
     // 0. 索引身份校验：当前模型与建索引时不一致，向量不可比，明确要求重新索引
@@ -774,64 +767,31 @@ export class KnowledgeService {
       )
     }
 
-    // 1. 生成查询向量（E5 要求 query 前缀，与索引时的 document 前缀区分）
-    await this.embeddingService.ensureReady()
-    const queryEmbedding = await this.embeddingService.embed(query, 'query')
-
-    // 2. 向量检索
-    const vectorStore = await vectorStoreManager.getStore(notebookId)
-    const vectorResults = await vectorStore.query(queryEmbedding.embedding, {
-      topK,
-      threshold
+    // 1. 检索（向量 → 批量补齐来源/定位信息）
+    const evidence = await this.retriever.search(notebookId, query, {
+      topK: options.topK,
+      threshold: options.threshold
     })
 
-    if (vectorResults.length === 0) {
-      return []
-    }
-
-    // 3. 获取 chunk 详情
-    const chunkIds = vectorResults.map((r) => r.chunkId)
-
-    const chunkDetails = db.select().from(chunks).where(inArray(chunks.id, chunkIds)).all()
-
-    // 获取文档信息
-    const documentIds = [...new Set(chunkDetails.map((c) => c.documentId))]
-    const documentDetails = db
-      .select()
-      .from(documents)
-      .where(inArray(documents.id, documentIds))
-      .all()
-
-    const documentMap = new Map(documentDetails.map((d) => [d.id, d]))
-    const chunkMap = new Map(chunkDetails.map((c) => [c.id, c]))
-
-    // 4. 组装结果
-    const results: SearchResult[] = []
-
-    for (const vr of vectorResults) {
-      const chunk = chunkMap.get(vr.chunkId)
-      if (!chunk) continue
-
-      const doc = documentMap.get(chunk.documentId)
-
+    // 2. 映射回兼容的 SearchResult 形状
+    return evidence.map((item) => {
       const result: SearchResult = {
-        chunkId: vr.chunkId,
-        documentId: chunk.documentId,
-        documentTitle: doc?.title || 'Unknown',
-        documentType: doc?.type || 'unknown',
-        content: includeContent ? chunk.content : '',
-        score: vr.score,
-        chunkIndex: chunk.chunkIndex
+        chunkId: item.chunkId,
+        documentId: item.documentId,
+        documentTitle: item.source.title,
+        documentType: item.source.type,
+        content: includeContent ? item.content : '',
+        score: item.score,
+        chunkIndex: item.chunkIndex,
+        locator: item.locator
       }
 
-      if (chunk.metadata) {
-        result.metadata = chunk.metadata
+      if (item.metadata) {
+        result.metadata = item.metadata
       }
 
-      results.push(result)
-    }
-
-    return results
+      return result
+    })
   }
 
   /**
@@ -873,38 +833,14 @@ export class KnowledgeService {
     const doc = db.select().from(documents).where(eq(documents.id, documentId)).get()
     if (!doc) return
 
-    // 获取所有 chunk IDs
-    const docChunks = db
-      .select({ id: chunks.id })
-      .from(chunks)
-      .where(eq(chunks.documentId, documentId))
-      .all()
-
-    // 从向量存储删除
-    if (docChunks.length > 0) {
-      const vectorStore = await vectorStoreManager.getStore(doc.notebookId)
-      await vectorStore.deleteByChunkIds(docChunks.map((c) => c.id))
-    }
+    // 删除全部派生索引（向量、映射、chunks、embeddings、blocks）
+    await this.clearDerivedIndex(documentId)
 
     // 删除本地拷贝的文件（如果存在）
     if (doc.localFilePath) {
       await this.deleteLocalFile(doc.localFilePath)
     }
 
-    // 块与映射不依赖外键级联（连接上 foreign_keys 默认是关的），显式删除
-    if (docChunks.length > 0) {
-      db.delete(chunkBlocks)
-        .where(
-          inArray(
-            chunkBlocks.chunkId,
-            docChunks.map((c) => c.id)
-          )
-        )
-        .run()
-    }
-    db.delete(documentBlocks).where(eq(documentBlocks.documentId, documentId)).run()
-
-    // 级联删除会自动清理 chunks 和 embeddings
     db.delete(documents).where(eq(documents.id, documentId)).run()
 
     executeCheckpoint('PASSIVE')
@@ -912,7 +848,13 @@ export class KnowledgeService {
   }
 
   /**
-   * 重建文档索引
+   * 重建文档索引。
+   *
+   * 只重建派生索引：documentId、localFilePath、sourceUri、metadata 与解析结构都
+   * 保持不变。重新索引不会让历史 citation 指向另一个来源。
+   *
+   * 升级前导入的文档 `structure` 为 NULL（migration 只加列，不回填）。这时先从本地
+   * 副本恢复结构再删除旧索引：顺序很重要，否则恢复失败会把已有的 page/bbox 也删掉。
    */
   async reindexDocument(documentId: string, onProgress?: IndexProgressCallback): Promise<void> {
     const db = getDatabase()
@@ -922,57 +864,42 @@ export class KnowledgeService {
       throw new Error(`Document ${documentId} not found or has no content`)
     }
 
-    // 删除旧的 chunks 和 embeddings
-    const oldChunks = db
-      .select({ id: chunks.id })
-      .from(chunks)
-      .where(eq(chunks.documentId, documentId))
-      .all()
-
-    if (oldChunks.length > 0) {
-      const vectorStore = await vectorStoreManager.getStore(doc.notebookId)
-      await vectorStore.deleteByChunkIds(oldChunks.map((c) => c.id))
-      db.delete(chunkBlocks)
-        .where(
-          inArray(
-            chunkBlocks.chunkId,
-            oldChunks.map((c) => c.id)
-          )
-        )
-        .run()
+    let structure = doc.structure ?? undefined
+    if (!structure) {
+      structure = await this.recoverStructure(doc)
+      if (structure) {
+        db.update(documents).set({ structure }).where(eq(documents.id, documentId)).run()
+        Logger.info('KnowledgeService', `Recovered structure for legacy document ${documentId}`)
+      }
     }
 
-    db.delete(chunks).where(eq(chunks.documentId, documentId)).run()
-    db.delete(embeddings)
-      .where(
-        inArray(
-          embeddings.chunkId,
-          oldChunks.map((c) => c.id)
+    await this.clearDerivedIndex(documentId)
+    await this.indexDocument(documentId, doc.content, structure, {}, onProgress)
+  }
+
+  /**
+   * 从本地副本重新解析出结构，用于升级前没有持久化 `structure` 的文档。
+   *
+   * 只在 `localFilePath` 存在且重新解析出的内容与规范内容完全一致时采用 —— 文件被改
+   * 过的话 offsets 就指不到同一份文本，宁可退化成平铺块也不能错误对齐。
+   */
+  private async recoverStructure(doc: Document): Promise<DocumentStructure | undefined> {
+    if (!doc.localFilePath || !doc.content) return undefined
+
+    try {
+      const parsed = await this.fileParserService.parseFile(doc.localFilePath)
+      if (parsed.content !== doc.content) {
+        Logger.warn(
+          'KnowledgeService',
+          `Cannot recover structure for ${doc.id}: content changed since import`
         )
-      )
-      .run()
-
-    // 更新状态
-    db.update(documents)
-      .set({ status: 'processing', updatedAt: new Date() })
-      .where(eq(documents.id, documentId))
-      .run()
-
-    // 重新索引（复用 addDocument 逻辑的核心部分）
-    // 为简化实现，这里直接调用内部处理
-    await this.addDocument(
-      doc.notebookId,
-      {
-        title: doc.title,
-        type: doc.type as 'file' | 'note' | 'url' | 'text',
-        content: doc.content,
-        sourceUri: doc.sourceUri || undefined,
-        sourceNoteId: doc.sourceNoteId || undefined,
-        mimeType: doc.mimeType || undefined,
-        metadata: doc.metadata || undefined
-      },
-      onProgress
-    )
+        return undefined
+      }
+      return parsed.structure ?? undefined
+    } catch (error) {
+      Logger.warn('KnowledgeService', `Cannot recover structure for ${doc.id}:`, error)
+      return undefined
+    }
   }
 
   /**

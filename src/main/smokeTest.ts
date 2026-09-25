@@ -46,6 +46,9 @@ import { SQLiteVectorStore } from './vectorstore/SQLiteVectorStore'
 import { assignBlockIds, buildDocumentBlocks } from './services/blocks/documentBlocks'
 import { ChunkingService } from './services/ChunkingService'
 import { insertChunkBlocks, resolveChunkProvenance } from './services/chunkProvenance'
+import { KnowledgeService } from './services/KnowledgeService'
+import { DenseRetriever } from './services/retrieval'
+import type { EmbeddingService } from './services/EmbeddingService'
 
 export const SMOKE_TEST_FLAG = '--smoke-test'
 
@@ -93,6 +96,38 @@ function assertThrows(run: () => unknown, message: string): void {
     return
   }
   throw new Error(message)
+}
+
+/**
+ * A deterministic stand-in for `EmbeddingService` so the smoke test can drive
+ * the whole index lifecycle (blocks → chunks → embeddings → vectors) without
+ * downloading model weights. Only the methods `KnowledgeService` calls are
+ * implemented.
+ */
+function fakeEmbeddingService(dimensions = 16): EmbeddingService {
+  const result = (): { embedding: Float32Array; model: string; dimensions: number } => {
+    const embedding = new Float32Array(dimensions)
+    embedding[0] = 1
+    return { embedding, model: 'smoke-embed', dimensions }
+  }
+
+  // SAFETY: only `ensureReady`, `embedBatch` and `getSpace` are reached by the
+  // index path; the cast hides the rest of the real service's surface from the
+  // compiler on purpose, so a new call site here fails loudly at runtime.
+  return {
+    ensureReady: async () => undefined,
+    embed: async () => result(),
+    embedBatch: async (texts: string[]) => texts.map(() => result()),
+    getSpace: async () => ({
+      id: 'smoke-embed-space',
+      backend: 'local',
+      model: 'smoke-embed',
+      revision: '',
+      dimensions,
+      pooling: 'mean',
+      normalize: true
+    })
+  } as unknown as EmbeddingService
 }
 
 /**
@@ -423,6 +458,106 @@ async function runChecks(): Promise<string[]> {
   db.delete(chunks).where(eq(chunks.documentId, provenanceDocId)).run()
   db.delete(documentBlocks).where(eq(documentBlocks.documentId, provenanceDocId)).run()
   db.delete(documents).where(eq(documents.id, provenanceDocId)).run()
+
+  // --- re-index keeps the source identity -----------------------------------
+  // The bug this guards: `reindexDocument()` used to call `addDocument()`, which
+  // minted a new `documentId` and dropped `localFilePath`. A citation persisted
+  // against the old id would then point at a source that no longer exists. This
+  // drives the real service end to end with a fake embedding backend.
+  const reindexNotebook = 'smoke-notebook-reindex'
+  const reindexNow = Date.now()
+  database
+    .prepare('INSERT INTO notebooks (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)')
+    .run(reindexNotebook, 'Smoke re-index notebook', reindexNow, reindexNow)
+
+  const knowledge = new KnowledgeService(fakeEmbeddingService())
+  const reindexDocId = await knowledge.addDocumentFromFile(
+    reindexNotebook,
+    join(fixtures, 'sample.pdf')
+  )
+
+  const before = knowledge.getDocument(reindexDocId)
+  assert(before?.status === 'indexed', `imported document status was ${before?.status}`)
+  assert(Boolean(before?.localFilePath), 'imported document lost its localFilePath')
+  const blocksBefore = knowledge.getDocumentBlocks(reindexDocId)
+  assert(blocksBefore.length > 0, 'imported document produced no blocks')
+
+  await knowledge.reindexDocument(reindexDocId)
+
+  const after = knowledge.getDocument(reindexDocId)
+  assert(Boolean(after), 'the document disappeared after a re-index')
+  assert(after!.status === 'indexed', `re-index left status ${after!.status}`)
+  assert(after!.localFilePath === before!.localFilePath, 're-index did not preserve localFilePath')
+  assert(
+    !knowledge
+      .getDocuments(reindexNotebook)
+      .some((doc) => doc.id !== reindexDocId && doc.title === before!.title),
+    're-index created a second document instead of rebuilding in place'
+  )
+  assert(
+    JSON.stringify(knowledge.getDocumentBlocks(reindexDocId)) === JSON.stringify(blocksBefore),
+    're-index rebuilt a different block sequence from the persisted structure'
+  )
+  const chunksAfter = knowledge.getDocumentChunks(reindexDocId)
+  assert(
+    chunksAfter.length > 0 && after!.chunkCount === chunksAfter.length,
+    're-index left the document without chunks'
+  )
+
+  // Retrieval delivers provenance, not a bare chunk (#74). The re-index above
+  // just rebuilt chunks, embeddings, vectors and the chunk↔block mapping, so
+  // this drives the real DenseRetriever against them.
+  const evidence = await new DenseRetriever(fakeEmbeddingService()).search(
+    reindexNotebook,
+    'sample query'
+  )
+  assert(evidence.length > 0, 'DenseRetriever returned no evidence for an indexed notebook')
+  const first = evidence[0]
+  assert(first.documentId === reindexDocId, `evidence came from ${first.documentId}`)
+  assert(first.source.title.length > 0, 'evidence lost its source title')
+  assert(first.content.length > 0, 'evidence lost its content')
+  assert(first.locator.pageStart === 1, `evidence page was ${first.locator.pageStart}`)
+  assert(first.locator.blocks.length > 0, 'evidence carried no block locator')
+  assert(
+    first.locator.blocks.every((block) => block.page === 1),
+    'an evidence block lost its page'
+  )
+  assert(
+    first.locator.blocks.some((block) => block.bbox && block.bbox.w > 0 && block.bbox.h > 0),
+    'evidence lost the paragraph bbox needed to highlight it (#72)'
+  )
+  pass('DenseRetriever returns retrieved evidence with a page/block locator')
+
+  // Documents imported before `documents.structure` existed have NULL there.
+  // Re-indexing them must recover the structure from the local copy *before*
+  // clearing the old index, or one re-index would downgrade a page/paragraph
+  // citation to a flat block.
+  database.prepare('UPDATE documents SET structure = NULL WHERE id = ?').run(reindexDocId)
+  assert(
+    knowledge.getDocument(reindexDocId)?.structure == null,
+    'could not simulate a legacy document without structure'
+  )
+
+  await knowledge.reindexDocument(reindexDocId)
+
+  assert(
+    Boolean(knowledge.getDocument(reindexDocId)?.structure),
+    'legacy re-index did not backfill the structure'
+  )
+  const legacyBlocks = knowledge.getDocumentBlocks(reindexDocId)
+  assert(legacyBlocks.length > 0, 'legacy re-index produced no blocks')
+  assert(
+    legacyBlocks.every((block) => block.page === 1),
+    'legacy re-index dropped page provenance instead of recovering it'
+  )
+  pass('re-index recovers structure for documents imported before the column existed')
+
+  await knowledge.deleteDocument(reindexDocId)
+  assert(
+    knowledge.getDocument(reindexDocId) === undefined,
+    'deleting the re-indexed document did not remove it'
+  )
+  pass('re-index rebuilds the derived index in place and keeps the source identity')
 
   const { ApkgExporter } = await import('./services/exporters/ApkgExporter')
   const { buffer, summary } = await new ApkgExporter().export(

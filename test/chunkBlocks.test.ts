@@ -271,6 +271,7 @@ test('a chunk resolves to its ordered block spans', () => {
       kind: block.kind,
       level: block.level,
       page: block.page,
+      bbox: null,
       text: block.text,
       startOffset: block.startOffset,
       endOffset: block.endOffset,
