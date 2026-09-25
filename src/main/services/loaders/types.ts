@@ -4,6 +4,16 @@
  */
 
 /**
+ * 归一化矩形框（0..1，相对页面）。页面坐标系原点在左上角，便于渲染层直接使用。
+ */
+export interface NormalizedBox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
  * 页面信息（用于 PDF、PPT 等分页文档）
  */
 export interface PageInfo {
@@ -11,6 +21,7 @@ export interface PageInfo {
   content: string // 页面文本
   startOffset: number // 在完整文本中的起始位置
   endOffset: number // 在完整文本中的结束位置
+  bbox?: NormalizedBox // 页面文本的归一化包围盒（可选）
   metadata?: {
     width?: number
     height?: number

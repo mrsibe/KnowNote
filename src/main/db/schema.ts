@@ -182,6 +182,49 @@ export type Chunk = typeof chunks.$inferSelect
 export type NewChunk = typeof chunks.$inferInsert
 
 /**
+ * 文档块表
+ *
+ * 把解析出的结构持久化：块是引用的落点，`start_offset`/`end_offset` 索引的是
+ * `documents.content`（每个文档唯一的规范字符串）。`chunks.metadata` 不再是
+ * 存放来源信息的地方，块才是。
+ *
+ * `page` 从 1 开始，非分页格式为 NULL；`level` 仅标题块有值；`bbox` 是归一化
+ * 到 0..1 的页面坐标（仅分页格式）。
+ */
+export const documentBlocks = sqliteTable(
+  'document_blocks',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    kind: text('kind', {
+      enum: ['heading', 'paragraph', 'list_item', 'table', 'figure', 'caption', 'code']
+    }).notNull(),
+    order: integer('order').notNull(), // 文档内的阅读顺序
+    page: integer('page'), // 1 起始页码；非分页格式为 NULL
+    level: integer('level'), // 标题层级；非标题块为 NULL
+    text: text('text').notNull(),
+    startOffset: integer('start_offset').notNull(), // 相对 documents.content
+    endOffset: integer('end_offset').notNull(),
+    bbox: text('bbox', { mode: 'json' }).$type<{
+      x: number
+      y: number
+      w: number
+      h: number
+    }>(), // 归一化页面坐标
+    metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>()
+  },
+  (table) => ({
+    documentOrderIdx: index('idx_blocks_document_order').on(table.documentId, table.order),
+    documentPageIdx: index('idx_blocks_document_page').on(table.documentId, table.page)
+  })
+)
+
+export type DocumentBlock = typeof documentBlocks.$inferSelect
+export type NewDocumentBlock = typeof documentBlocks.$inferInsert
+
+/**
  * 向量嵌入表（元数据）
  * 存储 chunk 的向量元信息，实际向量存储在 vec0 虚拟表中
  */
