@@ -9,9 +9,16 @@ import {
   type CSSProperties,
   type ReactElement
 } from 'react'
-import * as pdfjs from 'pdfjs-dist'
+// The legacy build is required, not a size trade-off: pdfjs-dist 6.x calls
+// `Map.prototype.getOrInsertComputed` throughout the API and the worker, and that
+// proposal only shipped in Chromium 145. Electron 39 is Chromium 142, so the modern
+// build throws `getOrInsertComputed is not a function` on the first `page.render()`
+// and every page paints blank (#125). The legacy build bundles the core-js polyfills
+// for it (`Map`/`WeakMap`, `getOrInsert`/`getOrInsertComputed`), which the main-process
+// loader already relies on. Move back to `pdfjs-dist/build/*` once Chromium >= 145.
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 import { useTranslation } from 'react-i18next'
 import { Minus, Plus, Loader2 } from 'lucide-react'
 import { documentUrl } from '../../../../../../shared/utils/documentUrl'
