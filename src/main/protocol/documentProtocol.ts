@@ -4,13 +4,14 @@
  * 渲染进程不应拿到任意文件路径。它只知道 documentId，主进程按 id 查库、只服务
  * 这份来源自己的文件。路径永远来自数据库，不来自请求，因此不存在路径穿越。
  *
- * scheme 必须在 app ready 之前注册为 privileged；handler 在 ready 之后安装。
+ * scheme 必须在 app ready 之前声明为 privileged；handler 在 ready 之后安装。
  */
 
 import { net, protocol } from 'electron'
 import { pathToFileURL } from 'url'
 import { DOCUMENT_SCHEME, parseDocumentUrl } from '../../shared/utils/documentUrl'
 import Logger from '../../shared/utils/logger'
+import { declarePrivilegedScheme } from './privilegedSchemes'
 
 /**
  * Origins allowed to read a document. The renderer is `file://` in production
@@ -22,23 +23,21 @@ const ALLOWED_ORIGINS = new Set(['null', 'http://localhost:5173', 'http://127.0.
 
 export { DOCUMENT_SCHEME, documentUrl, parseDocumentUrl } from '../../shared/utils/documentUrl'
 
-/** 必须在 app ready 之前调用一次。 */
-export function registerDocumentScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: DOCUMENT_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        stream: true,
-        // The renderer fetches this scheme from a different origin (`file://` in
-        // production, the dev server in development), so it is a cross-origin
-        // request and must be CORS-enabled to succeed.
-        corsEnabled: true
-      }
+/** 声明特权。只入队，提交由 `applyPrivilegedSchemes()` 在 ready 前统一完成（#135）。 */
+export function declareDocumentScheme(): void {
+  declarePrivilegedScheme({
+    scheme: DOCUMENT_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      // The renderer fetches this scheme from a different origin (`file://` in
+      // production, the dev server in development), so it is a cross-origin
+      // request and must be CORS-enabled to succeed.
+      corsEnabled: true
     }
-  ])
+  })
 }
 
 /** 在 app ready 之后调用，安装只读的字节服务 handler。 */

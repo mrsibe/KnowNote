@@ -18,8 +18,12 @@
  * actually broke - loading every external package the main process needs, the
  * native addons, the app's own vector-store code path and the document importers
  * (PDF, DOCX, HTML) against the fixtures in test/fixtures - and then exits
- * without creating a window, so CI can gate on the exit code. It is driven by
+ * without showing a window, so CI can gate on the exit code. It is driven by
  * `scripts/smoke-packaged.mjs`, which passes `--smoke-fixtures=<dir>`.
+ *
+ * One check does create a hidden window: a custom scheme's `supportFetchAPI`
+ * privilege is only observable from a renderer, and checking it from the main
+ * process is what let #135 ship.
  */
 
 import Logger from '../shared/utils/logger'
@@ -27,7 +31,7 @@ import { readFile, readdir } from 'fs/promises'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { net } from 'electron'
+import { net, BrowserWindow } from 'electron'
 import { eq } from 'drizzle-orm'
 import {
   closeDatabase,
@@ -103,6 +107,39 @@ function assertThrows(run: () => unknown, message: string): void {
     return
   }
   throw new Error(message)
+}
+
+/**
+ * Hidden windows created for renderer-side checks. They are deliberately **not**
+ * destroyed: destroying the last window fires `window-all-closed`, and this app
+ * closes the database (and quits) on that event, which would abort every check
+ * after this one. The process exits through `app.exit()` anyway.
+ */
+const smokeWindows: BrowserWindow[] = []
+
+/**
+ * Fetch a custom-scheme URL from a real renderer.
+ *
+ * `protocol.handle` keeps working in the main process even when its scheme was
+ * never registered as privileged, so a `net.fetch` check cannot see a missing
+ * privilege. Only the renderer's `fetch` can - and that is exactly what broke
+ * when two `registerSchemesAsPrivileged()` calls replaced each other and dropped
+ * `knownote-doc`, leaving every PDF unopenable (#135).
+ */
+async function fetchFromRenderer(
+  url: string
+): Promise<{ ok: boolean; status: number; body: string }> {
+  const window = new BrowserWindow({ show: false })
+  smokeWindows.push(window)
+  await window.loadURL('data:text/html,<html><body></body></html>')
+  return (await window.webContents.executeJavaScript(`(async () => {
+    try {
+      const response = await fetch(${JSON.stringify(url)});
+      return { ok: response.ok, status: response.status, body: await response.text() };
+    } catch (error) {
+      return { ok: false, status: 0, body: String((error && error.message) || error) };
+    }
+  })()`)) as { ok: boolean; status: number; body: string }
 }
 
 /**
@@ -261,9 +298,17 @@ async function runChecks(): Promise<string[]> {
   const unknown = await net.fetch(documentUrl('smoke-missing-doc'))
   assert(unknown.status === 404, `an unknown document id returned ${unknown.status}, not 404`)
 
+  // And the same URL from a renderer: this is the check whose absence let #135 ship.
+  const rendererFetch = await fetchFromRenderer(documentUrl(protocolDocumentId))
+  assert(
+    rendererFetch.ok && rendererFetch.body === protocolPayload,
+    `the renderer could not fetch knownote-doc:// (status ${rendererFetch.status}: ${rendererFetch.body})`
+  )
+
   database.prepare('DELETE FROM documents WHERE id = ?').run(protocolDocumentId)
   rmSync(protocolDir, { recursive: true, force: true })
   pass('knownote-doc:// serves an owned document and 404s an unknown id')
+  pass('knownote-doc:// is fetchable from a renderer (scheme privileges registered)')
 
   const { version } = database.prepare('SELECT vec_version() AS version').get() as {
     version: string
