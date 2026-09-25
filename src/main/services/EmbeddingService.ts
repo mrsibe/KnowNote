@@ -16,7 +16,7 @@ import type {
   LocalEmbeddingModelInfo
 } from '../../shared/types'
 import { DEFAULT_EMBEDDING_SOURCES } from '../../shared/types'
-import { ConnectionManager } from '../models/ConnectionManager'
+import type { ConnectionManager } from '../models/ConnectionManager'
 import Logger from '../../shared/utils/logger'
 import { LocalEmbeddingBackend } from '../embedding/LocalEmbeddingBackend'
 import type { TransformersModuleLoader } from '../embedding/LocalEmbeddingBackend'
@@ -36,6 +36,7 @@ import {
  */
 export interface EmbeddingServiceConfig {
   batchSize?: number // 远程批处理大小，默认 20
+  localBatchSize?: number // 本地批处理大小，默认 16
   maxRetries?: number // 最大重试次数，默认 3
   retryDelay?: number // 重试延迟（毫秒），默认 1000
   rateLimit?: number // 请求间隔（毫秒），默认 100
@@ -78,6 +79,9 @@ export class EmbeddingService {
     this.loadTransformers = options.loadTransformers
     this.config = {
       batchSize: options.batchSize ?? 20,
+      // 本地一次推理的输入量。multilingual-e5-small 按 512 token 截断，把整本书的
+      // chunk（几百条）一次喂给 pipeline 会同时炸内存和分词耗时；16 是保守起点。
+      localBatchSize: options.localBatchSize ?? 16,
       maxRetries: options.maxRetries ?? 3,
       retryDelay: options.retryDelay ?? 1000,
       rateLimit: options.rateLimit ?? 100
@@ -153,7 +157,41 @@ export class EmbeddingService {
       return await this.embedRemoteInBatches(backend, texts, purpose, onProgress)
     }
 
-    return await this.withRetry(() => backend.embedBatch(texts, purpose, onProgress))
+    return await this.embedLocalInBatches(backend, texts, purpose, onProgress)
+  }
+
+  /**
+   * 本地推理分 batch。
+   *
+   * 不分 batch 时，整份文档的 chunk 会被一次性 tokenize 并送进一个 ONNX 前向：一本
+   * 几百 chunk 的书会长时间无响应、内存峰值失控，而且 `onProgress` 只在最后被调用一次，
+   * 界面上进度一直停在起点。分开之后峰值受控，进度按 batch 前进。
+   */
+  private async embedLocalInBatches(
+    backend: EmbeddingBackend,
+    texts: string[],
+    purpose: EmbeddingPurpose,
+    onProgress?: (completed: number, total: number) => void
+  ): Promise<BackendEmbeddingResult[]> {
+    const batches = this.chunk(texts, this.config.localBatchSize)
+    const results: BackendEmbeddingResult[] = []
+
+    Logger.info(
+      'EmbeddingService',
+      `Local embedding: ${texts.length} texts in ${batches.length} batches of up to ${this.config.localBatchSize}`
+    )
+
+    for (const batch of batches) {
+      const batchResults = await this.withRetry(() => backend.embedBatch(batch, purpose))
+      results.push(...batchResults)
+      onProgress?.(results.length, texts.length)
+
+      // 分词是同步 JS：一批的 tokenize 会把主进程事件循环按住。每个 batch 之间让出
+      // 一次，IPC（索引进度、其它窗口请求）才有机会被处理。
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
+
+    return results
   }
 
   private async embedRemoteInBatches(
