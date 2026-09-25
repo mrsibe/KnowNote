@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { ChatSession, ChatMessage } from '../shared/types/chat'
+import type { ChatSession, ChatMessage, ChatMessageMetadata } from '../shared/types/chat'
 import type {
   Notebook,
   Note,
@@ -208,6 +208,8 @@ declare global {
           content?: string
           reasoningId?: string
           metadata?: any
+          /** Persisted `chat_messages.metadata` for the finished answer. */
+          messageMetadata?: ChatMessageMetadata
         }) => void
       ) => () => void
       onMessageError: (callback: (data: { messageId: string; error: string }) => void) => () => void

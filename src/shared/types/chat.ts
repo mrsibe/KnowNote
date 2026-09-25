@@ -9,6 +9,7 @@ import type {
   ChatSession as DBChatSession,
   ChatMessage as DBChatMessage
 } from '../../main/db/schema'
+import type { Citation } from './citation'
 
 /**
  * 聊天会话接口（完整版）
@@ -63,6 +64,12 @@ export type RetrievalStatus = 'used' | 'none' | 'failed'
 export interface ChatMessageMetadata {
   sources?: AnswerSource[]
   retrieval?: RetrievalStatus
+  /**
+   * The structured provenance of this answer (#69). `sources` says *what* the
+   * answer was built from; `citations` says *where* in the source each marker
+   * points. Both are snapshots written when the answer was produced.
+   */
+  citations?: Citation[]
   [key: string]: unknown
 }
 

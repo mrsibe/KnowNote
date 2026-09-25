@@ -2,51 +2,16 @@ import { ipcMain, IpcMainInvokeEvent } from 'electron'
 import * as queries from '../db/queries'
 import { ConnectionManager } from '../models/ConnectionManager'
 import { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
-import { KnowledgeService, type SearchResult } from '../services/KnowledgeService'
+import { KnowledgeService } from '../services/KnowledgeService'
+import { buildRAGContext } from '../services/citations'
 import { validateAndCleanMessages } from '../utils/messageValidator'
 import Logger from '../../shared/utils/logger'
-import type { AnswerSource, RetrievalStatus } from '../../shared/types/chat'
+import type { AnswerSource, ChatMessageMetadata, RetrievalStatus } from '../../shared/types/chat'
+import type { Citation } from '../../shared/types/citation'
 import { ChatSchemas, validate } from './validation'
 
 // 管理活跃的流式请求
 const activeStreams = new Map<string, AbortController>()
-
-/**
- * 构建 RAG 上下文 prompt，并把「这段回答基于哪些段落」一起交出来。
- *
- * 之前这里只取 `documentTitle` / `content` / `score` 三个字段，
- * `chunkId`、`documentId`、`chunkIndex` 全部被丢掉 —— 于是回答交付之后，
- * 界面上再也没有回到原文的路。prompt 文本保持不变，这里只是不再丢弃身份。
- */
-function buildRAGContext(searchResults: SearchResult[]): {
-  context: string
-  sources: AnswerSource[]
-} {
-  if (searchResults.length === 0) return { context: '', sources: [] }
-
-  const sources: AnswerSource[] = searchResults.map((result, index) => ({
-    index: index + 1,
-    documentId: result.documentId,
-    documentTitle: result.documentTitle,
-    documentType: result.documentType,
-    chunkId: result.chunkId,
-    chunkIndex: result.chunkIndex,
-    content: result.content,
-    score: result.score
-  }))
-
-  const contextParts = sources.map(
-    (source) => `[来源 ${source.index}: ${source.documentTitle}]\n${source.content}`
-  )
-
-  const context = `以下是与用户问题相关的背景知识，请参考这些信息来回答：
-
-${contextParts.join('\n\n---\n\n')}
-
-请基于以上背景知识回答用户的问题。如果背景知识不足以回答问题，请说明并尽力提供有帮助的回答。`
-
-  return { context, sources }
-}
 
 /**
  * Register chat-related IPC Handlers
@@ -145,6 +110,7 @@ export function registerChatHandlers(
     // 于是「没有依据的回答」和「有依据的回答」在界面上完全无法区分。
     let retrieval: RetrievalStatus = 'none'
     let answerSources: AnswerSource[] = []
+    let answerCitations: Citation[] = []
     try {
       const embeddingClient = await connectionManager.getEmbeddingClient()
 
@@ -157,9 +123,10 @@ export function registerChatHandlers(
           })
 
           if (searchResults.length > 0) {
-            const { context, sources } = buildRAGContext(searchResults)
+            const { context, sources, citations } = buildRAGContext(searchResults)
             retrieval = 'used'
             answerSources = sources
+            answerCitations = citations
             Logger.debug(
               'ChatHandlers',
               `RAG: Found ${searchResults.length} relevant chunks for query`
@@ -181,11 +148,13 @@ export function registerChatHandlers(
       Logger.warn('ChatHandlers', 'RAG search failed:', error)
     }
 
-    queries.updateMessageMetadata(assistantMessage.id, {
+    const answerMetadata: ChatMessageMetadata = {
       ...(assistantMessage.metadata ?? {}),
       retrieval,
-      sources: answerSources
-    })
+      sources: answerSources,
+      citations: answerCitations
+    }
+    queries.updateMessageMetadata(assistantMessage.id, answerMetadata)
 
     // 4. 调用 Model Connection 流式生成
     const client = await connectionManager.getChatClient()
@@ -257,7 +226,11 @@ export function registerChatHandlers(
           event.sender.send('message-chunk', {
             messageId: assistantMessage.id,
             type: 'finish',
-            metadata: metadata
+            metadata: metadata,
+            // The renderer's in-memory message never sees the DB row written
+            // before streaming, so the persisted provenance rides along here or
+            // the answer loses its citations until the session is reloaded.
+            messageMetadata: answerMetadata
           })
         }
       },
