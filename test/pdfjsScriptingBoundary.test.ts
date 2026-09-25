@@ -109,6 +109,39 @@ test('`enableScripting` is never left on', () => {
   )
 })
 
+test('no source file imports the modern pdfjs build, which requires Chromium 145', () => {
+  // pdfjs-dist 6.x calls `Map.prototype.getOrInsertComputed` (and `getOrInsert`) in the
+  // main-thread API and in the worker. That proposal shipped in Chromium 145; Electron 39
+  // is Chromium 142, so the modern build dies at the first `page.render()` with
+  // `getOrInsertComputed is not a function` and every page paints blank (#125). The legacy
+  // build bundles the core-js polyfills for it, which is why every runtime import must go
+  // through `pdfjs-dist/legacy/build/*`. Lift this guard once the app runs on Chromium >= 145.
+  const offenders: string[] = []
+
+  for (const file of sourceFiles()) {
+    const source = readFileSync(file, 'utf8')
+    for (const line of source.split('\n')) {
+      // Type-only imports emit nothing, so `import type ... from 'pdfjs-dist'` is fine.
+      // It is the value import (`import * as pdfjs from 'pdfjs-dist'`) and the
+      // `pdfjs-dist/build/*` subpaths that pull the modern runtime in.
+      if (/^\s*import\s+type\b/.test(line)) continue
+      for (const specifier of importSpecifiers(line)) {
+        if (specifier === 'pdfjs-dist' || specifier.startsWith('pdfjs-dist/build/')) {
+          offenders.push(`${file} imports ${specifier}`)
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'The modern pdfjs build needs `Map.prototype.getOrInsertComputed`, which Electron 39 ' +
+      '(Chromium 142) does not implement, so it throws on the first render (#125). Use ' +
+      "'pdfjs-dist/legacy/build/*' instead; the legacy build ships the polyfill."
+  )
+})
+
 test('the guard actually scans the source tree', () => {
   // A boundary test that silently scans nothing is worse than no test: it would report the
   // invariant as enforced while checking no files at all.
@@ -130,7 +163,9 @@ test('the guard actually scans the source tree', () => {
   )
   assert.ok(reader)
   assert.ok(
-    importSpecifiers(readFileSync(reader, 'utf8')).includes('pdfjs-dist'),
+    importSpecifiers(readFileSync(reader, 'utf8')).some((specifier) =>
+      specifier.startsWith('pdfjs-dist')
+    ),
     'import extraction found no pdfjs specifier in the reader'
   )
 })
