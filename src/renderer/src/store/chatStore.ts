@@ -234,7 +234,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 export function setupChatListeners() {
   // 监听流式消息片段（AI SDK fullStream 格式）
   const cleanupChunk = window.api.onMessageChunk((data) => {
-    const { messageId, type, content } = data
+    const { messageId, type, content, messageMetadata } = data
     const store = useChatStore.getState()
 
     const cached = store.messageToNotebook[messageId]
@@ -305,6 +305,17 @@ export function setupChatListeners() {
       case 'finish': {
         // 流式传输完成
         store.setStreamingMessage(cached.notebookId, null)
+
+        // Provenance (retrieval status, sources, citations) is written to the DB
+        // before the model call, so the in-memory message never saw it. Apply it
+        // now, or the answer stays un-citable until the session is reloaded.
+        if (messageMetadata) {
+          useChatStore.setState((state) => ({
+            messages: state.messages.map((msg) =>
+              msg.id === messageId ? { ...msg, metadata: messageMetadata } : msg
+            )
+          }))
+        }
 
         // 清理缓存
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
