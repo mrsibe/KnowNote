@@ -19,7 +19,8 @@ import {
   embeddings,
   notes,
   notebookEmbeddingSpaces,
-  documentBlocks
+  documentBlocks,
+  chunkBlocks
 } from '../db/schema'
 import type {
   Document,
@@ -33,13 +34,14 @@ import type {
 import { eq, desc, inArray, sql } from 'drizzle-orm'
 import { EmbeddingService } from './EmbeddingService'
 import type { EmbeddingSpace } from '../../shared/types'
-import { ChunkingService, type ChunkOptions } from './ChunkingService'
+import { ChunkingService, type ChunkOptions, type ChunkResult } from './ChunkingService'
 import { FileParserService } from './FileParserService'
 import {
   buildDocumentBlocks,
   assignBlockIds,
   type IdentifiedBlockDraft
 } from './blocks/documentBlocks'
+import { resolveChunkProvenance, type ChunkProvenance } from './chunkProvenance'
 import { WebFetchService } from './WebFetchService'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
@@ -218,30 +220,9 @@ export class KnowledgeService {
 
       Logger.info('KnowledgeService', `Document ${documentId}: ${chunkResults.length} chunks`)
 
-      // 3. 保存分块
+      // 3. 保存分块与 chunk↔block 映射（同一事务，不会出现没有映射的 chunk）
       onProgress?.('saving_chunks', 20)
-      const chunkIds: string[] = []
-      const chunkContents: string[] = []
-
-      for (const chunk of chunkResults) {
-        const chunkId = `chunk_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-        chunkIds.push(chunkId)
-        chunkContents.push(chunk.content)
-
-        const newChunk: NewChunk = {
-          id: chunkId,
-          documentId,
-          notebookId,
-          content: chunk.content,
-          chunkIndex: chunk.index,
-          startOffset: chunk.startOffset,
-          endOffset: chunk.endOffset,
-          tokenCount: chunk.tokenCount,
-          createdAt: now
-        }
-
-        db.insert(chunks).values(newChunk).run()
-      }
+      const { chunkIds, chunkContents } = this.saveChunks(documentId, notebookId, chunkResults, now)
 
       // 4. 生成嵌入向量
       // 不指定维度:维度由 embedding 模型决定,写死维度会让用别的模型的笔记本直接
@@ -409,30 +390,9 @@ export class KnowledgeService {
 
       Logger.info('KnowledgeService', `Document ${documentId}: ${chunkResults.length} chunks`)
 
-      // 3. 保存分块
+      // 3. 保存分块与 chunk↔block 映射（同一事务，不会出现没有映射的 chunk）
       onProgress?.('saving_chunks', 20)
-      const chunkIds: string[] = []
-      const chunkContents: string[] = []
-
-      for (const chunk of chunkResults) {
-        const chunkId = `chunk_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-        chunkIds.push(chunkId)
-        chunkContents.push(chunk.content)
-
-        const newChunk: NewChunk = {
-          id: chunkId,
-          documentId,
-          notebookId,
-          content: chunk.content,
-          chunkIndex: chunk.index,
-          startOffset: chunk.startOffset,
-          endOffset: chunk.endOffset,
-          tokenCount: chunk.tokenCount,
-          createdAt: now
-        }
-
-        db.insert(chunks).values(newChunk).run()
-      }
+      const { chunkIds, chunkContents } = this.saveChunks(documentId, notebookId, chunkResults, now)
 
       // 4. 生成嵌入向量
       // 不指定维度:维度由 embedding 模型决定,写死维度会让用别的模型的笔记本直接
@@ -559,6 +519,58 @@ export class KnowledgeService {
   }
 
   /**
+   * 写入分块与 chunk↔block 映射。两者放在同一个事务里，所以不会出现没有映射的
+   * chunk；`page_start/page_end` 直接取分块器算好的覆盖块页码区间。
+   */
+  private saveChunks(
+    documentId: string,
+    notebookId: string,
+    chunkResults: ChunkResult[],
+    now: Date
+  ): { chunkIds: string[]; chunkContents: string[] } {
+    const db = getDatabase()
+    const chunkIds: string[] = []
+    const chunkContents: string[] = []
+
+    db.transaction((tx) => {
+      for (const chunk of chunkResults) {
+        const chunkId = `chunk_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+        chunkIds.push(chunkId)
+        chunkContents.push(chunk.content)
+
+        const newChunk: NewChunk = {
+          id: chunkId,
+          documentId,
+          notebookId,
+          content: chunk.content,
+          chunkIndex: chunk.index,
+          startOffset: chunk.startOffset,
+          endOffset: chunk.endOffset,
+          pageStart: chunk.pageStart,
+          pageEnd: chunk.pageEnd,
+          tokenCount: chunk.tokenCount,
+          createdAt: now
+        }
+
+        tx.insert(chunks).values(newChunk).run()
+
+        for (const span of chunk.blockSpans) {
+          tx.insert(chunkBlocks)
+            .values({
+              chunkId,
+              blockId: span.blockId,
+              startInBlock: span.startInBlock,
+              endInBlock: span.endInBlock
+            })
+            .run()
+        }
+      }
+    })
+
+    return { chunkIds, chunkContents }
+  }
+
+  /**
    * 获取文档的所有块，按阅读顺序返回。
    */
   getDocumentBlocks(documentId: string): DocumentBlock[] {
@@ -568,6 +580,13 @@ export class KnowledgeService {
       .where(eq(documentBlocks.documentId, documentId))
       .orderBy(documentBlocks.order)
       .all()
+  }
+
+  /**
+   * 解析一个 chunk 的来源：文档 id、页码区间，以及按文档顺序排列的块区间。
+   */
+  getChunkProvenance(chunkId: string): ChunkProvenance | undefined {
+    return resolveChunkProvenance(getDatabase(), chunkId)
   }
 
   /**
@@ -872,7 +891,17 @@ export class KnowledgeService {
       await this.deleteLocalFile(doc.localFilePath)
     }
 
-    // 块没有依赖向量表，显式删除而不依赖外键级联（连接上 foreign_keys 默认是关的）
+    // 块与映射不依赖外键级联（连接上 foreign_keys 默认是关的），显式删除
+    if (docChunks.length > 0) {
+      db.delete(chunkBlocks)
+        .where(
+          inArray(
+            chunkBlocks.chunkId,
+            docChunks.map((c) => c.id)
+          )
+        )
+        .run()
+    }
     db.delete(documentBlocks).where(eq(documentBlocks.documentId, documentId)).run()
 
     // 级联删除会自动清理 chunks 和 embeddings
@@ -903,6 +932,14 @@ export class KnowledgeService {
     if (oldChunks.length > 0) {
       const vectorStore = await vectorStoreManager.getStore(doc.notebookId)
       await vectorStore.deleteByChunkIds(oldChunks.map((c) => c.id))
+      db.delete(chunkBlocks)
+        .where(
+          inArray(
+            chunkBlocks.chunkId,
+            oldChunks.map((c) => c.id)
+          )
+        )
+        .run()
     }
 
     db.delete(chunks).where(eq(chunks.documentId, documentId)).run()
