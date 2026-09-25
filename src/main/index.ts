@@ -77,7 +77,13 @@ app.whenReady().then(async () => {
   initDatabase()
   runMigrations()
   initVectorStore()
-  registerDocumentProtocolHandler()
+  // The resolver is lazy on purpose: `knowledgeService` is constructed further down, and
+  // the protocol only ever answers requests from a renderer that loads after startup.
+  // Reading it per request keeps the dependency direction protocol → Document layer →
+  // database without reordering startup (#60).
+  registerDocumentProtocolHandler(
+    (documentId) => knowledgeService?.getDocumentLocalFilePath(documentId) ?? null
+  )
   Logger.info('Main', 'Database initialized')
 
   // Initialize electron-store

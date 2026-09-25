@@ -9,9 +9,6 @@
 
 import { net, protocol } from 'electron'
 import { pathToFileURL } from 'url'
-import { eq } from 'drizzle-orm'
-import { getDatabase } from '../db'
-import { documents } from '../db/schema'
 import { DOCUMENT_SCHEME, parseDocumentUrl } from '../../shared/utils/documentUrl'
 import Logger from '../../shared/utils/logger'
 
@@ -45,23 +42,22 @@ export function registerDocumentScheme(): void {
 }
 
 /** 在 app ready 之后调用，安装只读的字节服务 handler。 */
-export function registerDocumentProtocolHandler(): void {
+export function registerDocumentProtocolHandler(
+  resolveLocalFilePath: (documentId: string) => string | null
+): void {
   protocol.handle(DOCUMENT_SCHEME, async (request) => {
     const documentId = parseDocumentUrl(request.url)
     if (!documentId) return new Response('Not found', { status: 404 })
 
-    const document = getDatabase()
-      .select({ localFilePath: documents.localFilePath })
-      .from(documents)
-      .where(eq(documents.id, documentId))
-      .get()
-
-    if (!document?.localFilePath) return new Response('Not found', { status: 404 })
+    // 路径来自 Document 层，不来自这里，也不来自请求。handler 自己不碰数据库：
+    // 它只需要一个「可读文件」的答案，依赖方向保持 protocol → Document 层 → database（#60）。
+    const localFilePath = resolveLocalFilePath(documentId)
+    if (!localFilePath) return new Response('Not found', { status: 404 })
 
     try {
       // net.fetch handles file:// in the main process and streams the response, so
       // a large PDF is not read into memory to be served.
-      const response = await net.fetch(pathToFileURL(document.localFilePath).toString())
+      const response = await net.fetch(pathToFileURL(localFilePath).toString())
       const headers = new Headers(response.headers)
       const origin = request.headers.get('Origin') ?? 'null'
       if (ALLOWED_ORIGINS.has(origin)) headers.set('Access-Control-Allow-Origin', origin)
