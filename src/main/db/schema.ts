@@ -1,5 +1,6 @@
 import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core'
 import type { QuizQuestion } from '../../shared/types/quiz'
+import type { DocumentStructure } from '../services/loaders/types'
 
 /**
  * 笔记本表
@@ -129,6 +130,10 @@ export const documents = sqliteTable(
     localFilePath: text('local_file_path'), // 本地拷贝文件路径
     sourceNoteId: text('source_note_id').references(() => notes.id, { onDelete: 'set null' }),
     content: text('content'), // 原始内容（可选存储）
+    // 解析器给出的结构（页/章节）。这是 source record 的一部分,不是派生索引:
+    // 重新索引必须能重建出与首次导入一致的 document_blocks,所以不能靠重新解析
+    // 文件来恢复（文件可能已变化,内容又是规范文本）。
+    structure: text('structure', { mode: 'json' }).$type<DocumentStructure>(),
     contentHash: text('content_hash'), // 内容哈希，用于检测变更
     mimeType: text('mime_type'), // 文件类型
     fileSize: integer('file_size'), // 文件大小（字节）
