@@ -10,7 +10,7 @@ import {
   type ReactElement
 } from 'react'
 import * as pdfjs from 'pdfjs-dist'
-import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
+import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { useTranslation } from 'react-i18next'
 import { Minus, Plus, Loader2 } from 'lucide-react'
@@ -202,18 +202,29 @@ const PdfSourceReader = forwardRef<ReaderHandle, PdfSourceReaderProps>(function 
 
   useEffect(() => {
     let cancelled = false
-    let loaded: PDFDocumentProxy | null = null
+    // pdfjs-dist 6.x moved `destroy()` off `PDFDocumentProxy` and onto the loading task,
+    // so the task is what has to be held on to for teardown (the document keeps only
+    // `cleanup()`).
+    let loaded: PDFDocumentLoadingTask | null = null
 
     const load = async (): Promise<void> => {
       const response = await fetch(documentUrl(documentId))
       if (!response.ok) throw new Error(`Document request failed: ${response.status}`)
       const data = new Uint8Array(await response.arrayBuffer())
-      const doc = await pdfjs.getDocument({ data }).promise
+      // 这个 reader 只做 `page.render()`（canvas）和 `TextLayer`，刻意不构造 AnnotationLayer、
+      // 也不导入 `pdfjs-dist/web/*` —— 而 `enableScripting` 只存在于 AnnotationLayer / viewer
+      // 上，不在 `getDocument` 参数里，所以这里没有可以传的开关（#121 /
+      // GHSA-hq66-cqwq-w95j）。也就是说**在当前检查过的调用点下漏洞路径不可达**，
+      // 前提由 `test/pdfjsScriptingBoundary.test.ts` 守住。
+      const task = pdfjs.getDocument({ data })
+      loaded = task
+      const doc = await task.promise
       if (cancelled) {
-        await doc.destroy()
+        // 置空再销毁，让卸载路径不再重复销毁同一个 task。
+        loaded = null
+        await task.destroy()
         return
       }
-      loaded = doc
       setPdf(doc)
       setNumPages(doc.numPages)
       setStatus('ready')
