@@ -528,6 +528,30 @@ async function runChecks(): Promise<string[]> {
   )
   pass('DenseRetriever returns retrieved evidence with a page/block locator')
 
+  // Documents imported before `documents.structure` existed have NULL there.
+  // Re-indexing them must recover the structure from the local copy *before*
+  // clearing the old index, or one re-index would downgrade a page/paragraph
+  // citation to a flat block.
+  database.prepare('UPDATE documents SET structure = NULL WHERE id = ?').run(reindexDocId)
+  assert(
+    knowledge.getDocument(reindexDocId)?.structure == null,
+    'could not simulate a legacy document without structure'
+  )
+
+  await knowledge.reindexDocument(reindexDocId)
+
+  assert(
+    Boolean(knowledge.getDocument(reindexDocId)?.structure),
+    'legacy re-index did not backfill the structure'
+  )
+  const legacyBlocks = knowledge.getDocumentBlocks(reindexDocId)
+  assert(legacyBlocks.length > 0, 'legacy re-index produced no blocks')
+  assert(
+    legacyBlocks.every((block) => block.page === 1),
+    'legacy re-index dropped page provenance instead of recovering it'
+  )
+  pass('re-index recovers structure for documents imported before the column existed')
+
   await knowledge.deleteDocument(reindexDocId)
   assert(
     knowledge.getDocument(reindexDocId) === undefined,

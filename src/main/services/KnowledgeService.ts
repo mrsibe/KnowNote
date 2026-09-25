@@ -852,6 +852,9 @@ export class KnowledgeService {
    *
    * 只重建派生索引：documentId、localFilePath、sourceUri、metadata 与解析结构都
    * 保持不变。重新索引不会让历史 citation 指向另一个来源。
+   *
+   * 升级前导入的文档 `structure` 为 NULL（migration 只加列，不回填）。这时先从本地
+   * 副本恢复结构再删除旧索引：顺序很重要，否则恢复失败会把已有的 page/bbox 也删掉。
    */
   async reindexDocument(documentId: string, onProgress?: IndexProgressCallback): Promise<void> {
     const db = getDatabase()
@@ -861,8 +864,42 @@ export class KnowledgeService {
       throw new Error(`Document ${documentId} not found or has no content`)
     }
 
+    let structure = doc.structure ?? undefined
+    if (!structure) {
+      structure = await this.recoverStructure(doc)
+      if (structure) {
+        db.update(documents).set({ structure }).where(eq(documents.id, documentId)).run()
+        Logger.info('KnowledgeService', `Recovered structure for legacy document ${documentId}`)
+      }
+    }
+
     await this.clearDerivedIndex(documentId)
-    await this.indexDocument(documentId, doc.content, doc.structure ?? undefined, {}, onProgress)
+    await this.indexDocument(documentId, doc.content, structure, {}, onProgress)
+  }
+
+  /**
+   * 从本地副本重新解析出结构，用于升级前没有持久化 `structure` 的文档。
+   *
+   * 只在 `localFilePath` 存在且重新解析出的内容与规范内容完全一致时采用 —— 文件被改
+   * 过的话 offsets 就指不到同一份文本，宁可退化成平铺块也不能错误对齐。
+   */
+  private async recoverStructure(doc: Document): Promise<DocumentStructure | undefined> {
+    if (!doc.localFilePath || !doc.content) return undefined
+
+    try {
+      const parsed = await this.fileParserService.parseFile(doc.localFilePath)
+      if (parsed.content !== doc.content) {
+        Logger.warn(
+          'KnowledgeService',
+          `Cannot recover structure for ${doc.id}: content changed since import`
+        )
+        return undefined
+      }
+      return parsed.structure ?? undefined
+    } catch (error) {
+      Logger.warn('KnowledgeService', `Cannot recover structure for ${doc.id}:`, error)
+      return undefined
+    }
   }
 
   /**
