@@ -13,6 +13,10 @@ import {
   type ChunkBlock,
   type ChunkResult
 } from '../src/main/services/ChunkingService.ts'
+import {
+  projectChunkProvenance,
+  type ChunkProvenanceRow
+} from '../src/main/services/chunkProvenance.ts'
 
 /**
  * The chunker is the safety net for the whole provenance epic: if
@@ -247,6 +251,69 @@ test('the char-window fallback also produces canonical offsets and overlap', () 
     assert.equal(
       current.content.slice(next.startOffset - current.startOffset),
       next.content.slice(0, current.endOffset - next.startOffset)
+    )
+  }
+})
+
+test('a chunk resolves to its ordered block spans', () => {
+  const { content, blocks } = synthetic()
+  const chunks = new ChunkingService().chunkBlocks(content, blocks)
+  const chunk = chunks[0]
+
+  assert.equal(chunk.blockSpans.length, blocks.length, 'the whole synthetic document is one chunk')
+
+  // Build the rows in reverse to prove the projection sorts by document order.
+  const rows: ChunkProvenanceRow[] = [...chunk.blockSpans].reverse().map((span) => {
+    const order = blocks.findIndex((block) => block.id === span.blockId)
+    const block = blocks[order]
+    return {
+      blockId: block.id,
+      kind: block.kind,
+      level: block.level,
+      page: block.page,
+      text: block.text,
+      startOffset: block.startOffset,
+      endOffset: block.endOffset,
+      order,
+      startInBlock: span.startInBlock,
+      endInBlock: span.endInBlock
+    }
+  })
+
+  const resolved = projectChunkProvenance(
+    'chunk_1',
+    'doc_synthetic',
+    chunk.pageStart,
+    chunk.pageEnd,
+    rows
+  )
+
+  assert.equal(resolved.chunkId, 'chunk_1')
+  assert.equal(resolved.documentId, 'doc_synthetic')
+  assert.deepEqual(
+    resolved.blocks.map((block) => block.blockId),
+    blocks.map((block) => block.id)
+  )
+  assert.equal(resolved.blocks[0].text, blocks[0].text)
+})
+
+test('page_start/page_end equal the min/max page of the mapped blocks', async () => {
+  const result = await new PdfLoader().loadFromPath(fixture('multipage.pdf'))
+  const blocks = assignBlockIds(
+    'doc_pdf',
+    buildDocumentBlocks({ content: result.content, structure: result.structure })
+  )
+  const chunks = new ChunkingService().chunkBlocks(result.content, blocks)
+
+  for (const chunk of chunks) {
+    const pages = chunk.blockSpans
+      .map((span) => blocks.find((block) => block.id === span.blockId)!.page)
+      .filter((page): page is number => page !== null)
+
+    assert.deepEqual(
+      [chunk.pageStart, chunk.pageEnd],
+      [Math.min(...pages), Math.max(...pages)],
+      `chunk ${chunk.index} page range does not match its blocks`
     )
   }
 })

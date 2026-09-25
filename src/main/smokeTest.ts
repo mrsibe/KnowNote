@@ -25,10 +25,12 @@
 import Logger from '../shared/utils/logger'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
+import { eq } from 'drizzle-orm'
 import {
   closeDatabase,
   createNotebookVectorTable,
   dropNotebookVectorTable,
+  getDatabase,
   getNotebookVectorTable,
   getSqlite,
   initDatabase,
@@ -36,10 +38,14 @@ import {
   rebuildNotebookVectorTable,
   runMigrations
 } from './db'
+import { documents, documentBlocks, chunks, chunkBlocks } from './db/schema'
 import type Database from 'better-sqlite3'
 import { FileParserService } from './services/FileParserService'
 import { WebLoader } from './services/loaders/WebLoader'
 import { SQLiteVectorStore } from './vectorstore/SQLiteVectorStore'
+import { assignBlockIds, buildDocumentBlocks } from './services/blocks/documentBlocks'
+import { ChunkingService } from './services/ChunkingService'
+import { insertChunkBlocks, resolveChunkProvenance } from './services/chunkProvenance'
 
 export const SMOKE_TEST_FLAG = '--smoke-test'
 
@@ -330,6 +336,93 @@ async function runChecks(): Promise<string[]> {
     `HTML import lost the fixture text (got "${excerpt(html.content)}")`
   )
   pass('HTML import extracts body text (jsdom + Readability)')
+
+  // --- provenance: blocks -> chunk -> chunk_blocks -> resolved page range ----
+  // test/blocks.test.ts and test/chunkBlocks.test.ts cover the pure builder and
+  // chunker, but only the packaged app has a working better-sqlite3, so the
+  // database round trip is asserted here: insert a document, its blocks, a chunk
+  // and the mapping, then resolve the chunk back through the real join.
+  const provenanceDocId = 'smoke-provenance-doc'
+  const provenanceChunkId = 'smoke-provenance-chunk'
+  const provenanceBlocks = assignBlockIds(
+    provenanceDocId,
+    buildDocumentBlocks({ content: pdf.content, structure: pdf.structure })
+  )
+  const provenanceChunks = new ChunkingService().chunkBlocks(pdf.content, provenanceBlocks)
+  assert(provenanceChunks.length > 0, 'chunking the PDF fixture produced no chunks')
+
+  const db = getDatabase()
+  const provenanceNow = new Date()
+  db.insert(documents)
+    .values({
+      id: provenanceDocId,
+      notebookId: LEGACY_NOTEBOOK,
+      title: 'Smoke provenance document',
+      type: 'file',
+      content: pdf.content,
+      status: 'indexed',
+      chunkCount: provenanceChunks.length,
+      createdAt: provenanceNow,
+      updatedAt: provenanceNow
+    })
+    .run()
+  db.insert(documentBlocks)
+    .values(
+      provenanceBlocks.map((block) => ({
+        id: block.id,
+        documentId: block.documentId,
+        kind: block.kind,
+        order: block.order,
+        page: block.page,
+        level: block.level,
+        text: block.text,
+        startOffset: block.startOffset,
+        endOffset: block.endOffset,
+        bbox: block.bbox,
+        metadata: block.metadata
+      }))
+    )
+    .run()
+
+  const provenanceChunk = provenanceChunks[0]
+  db.insert(chunks)
+    .values({
+      id: provenanceChunkId,
+      documentId: provenanceDocId,
+      notebookId: LEGACY_NOTEBOOK,
+      content: provenanceChunk.content,
+      chunkIndex: provenanceChunk.index,
+      startOffset: provenanceChunk.startOffset,
+      endOffset: provenanceChunk.endOffset,
+      pageStart: provenanceChunk.pageStart,
+      pageEnd: provenanceChunk.pageEnd,
+      tokenCount: provenanceChunk.tokenCount,
+      createdAt: provenanceNow
+    })
+    .run()
+  insertChunkBlocks(db, provenanceChunkId, provenanceChunk.blockSpans)
+
+  const resolved = resolveChunkProvenance(db, provenanceChunkId)
+  assert(resolved, 'a chunk with a mapping did not resolve')
+  assert(resolved.documentId === provenanceDocId, `resolved document was ${resolved.documentId}`)
+  assert(
+    resolved.blocks.length === provenanceChunk.blockSpans.length,
+    `resolved ${resolved.blocks.length} blocks, expected ${provenanceChunk.blockSpans.length}`
+  )
+  assert(
+    resolved.pageStart === 1 && resolved.pageEnd === 1,
+    `resolved page range was ${resolved.pageStart}-${resolved.pageEnd}`
+  )
+  assert(
+    resolved.blocks.every((block) => block.page === 1),
+    'a resolved block lost its page'
+  )
+  pass('document blocks, chunk mapping and page range round trip through the database')
+
+  db.delete(chunkBlocks).where(eq(chunkBlocks.chunkId, provenanceChunkId)).run()
+  db.delete(chunks).where(eq(chunks.documentId, provenanceDocId)).run()
+  db.delete(documentBlocks).where(eq(documentBlocks.documentId, provenanceDocId)).run()
+  db.delete(documents).where(eq(documents.id, provenanceDocId)).run()
 
   const { ApkgExporter } = await import('./services/exporters/ApkgExporter')
   const { buffer, summary } = await new ApkgExporter().export(
