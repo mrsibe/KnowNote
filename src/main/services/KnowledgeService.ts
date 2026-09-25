@@ -741,6 +741,16 @@ export class KnowledgeService {
   }
 
   /**
+   * RAG 是否能跑：远程 embedding connection 已配置，或内置本地模型已安装。
+   *
+   * 不能用 `ConnectionManager.getEmbeddingClient()` 判断 —— 那个只看远程 connection，
+   * 本地模型时为 null，会把整条 RAG 路径关掉（本地是默认配置）。
+   */
+  async isEmbeddingAvailable(): Promise<boolean> {
+    return await this.embeddingService.isAvailable()
+  }
+
+  /**
    * 语义搜索。
    *
    * 保持原有签名与返回形状，内部委托给默认的 `Retriever`（当前是 `DenseRetriever`）。

@@ -106,7 +106,9 @@ export function registerChatHandlers(
     }
 
     // 3.2 RAG 增强：检索相关知识并注入上下文
-    // 只有在配置了 embedding connection 时才启用 RAG。
+    // 只要 embedding 后端可用就启用 RAG（远程 connection 或内置本地模型）。
+    // 以前这里用 `getEmbeddingClient()` 判断，它只认远程 connection，本地模型
+    // 直接返回 null —— 于是默认配置下 RAG 被静默关闭，回答无依据也无引用。
     // 检索结果同时记录到消息上：以前检索失败只留一行日志，
     // 于是「没有依据的回答」和「有依据的回答」在界面上完全无法区分。
     let retrieval: RetrievalStatus = 'none'
@@ -114,9 +116,7 @@ export function registerChatHandlers(
     let answerCitations: Citation[] = []
     let citationContexts: CitationContext[] = []
     try {
-      const embeddingClient = await connectionManager.getEmbeddingClient()
-
-      if (embeddingClient) {
+      if (await knowledgeService.isEmbeddingAvailable()) {
         const session = queries.getSessionById(sessionId)
         if (session?.notebookId) {
           const searchResults = await knowledgeService.search(session.notebookId, content, {
@@ -148,7 +148,7 @@ export function registerChatHandlers(
           }
         }
       } else {
-        Logger.debug('ChatHandlers', 'RAG disabled: No embedding model configured')
+        Logger.debug('ChatHandlers', 'RAG disabled: no embedding backend available')
       }
     } catch (error) {
       // RAG 失败不应该阻止对话

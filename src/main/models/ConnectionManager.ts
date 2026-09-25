@@ -77,7 +77,13 @@ export class ConnectionManager {
   async getEmbeddingClient(): Promise<ModelClient | null> {
     const connection = await connectionConfigManager.getConnection('embedding')
     if (!connection) {
-      Logger.warn('ConnectionManager', 'No embedding model configured')
+      // 这不是错误。`EmbeddingService.resolveBackend()` 在拿不到远程 connection 时
+      // 会 fallback 到内置本地模型，也就是默认路径。用 debug，否则每个本地用户每次
+      // 索引/检索都会看到一条看起来像故障的 warning。
+      Logger.debug(
+        'ConnectionManager',
+        'No remote embedding connection configured; EmbeddingService will use the built-in local model'
+      )
       return null
     }
     if (!protocolSupportsEmbedding(connection.protocol)) {
