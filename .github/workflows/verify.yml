@@ -78,3 +78,24 @@ jobs:
       - name: Smoke test the packaged app (macOS / Windows)
         if: runner.os != 'Linux'
         run: npm run smoke:packaged
+
+      # The eval baseline (#75) is the reference point every v1.5 experiment is
+      # measured against, so CI proves the committed numbers still reproduce. The
+      # model cache is keyed on the pinned model file, so the 134 MB download
+      # happens once per pin, not once per run. A hit is required for the run to
+      # be offline: `eval:prepare` only downloads when the cache is cold.
+      - name: Cache eval embedding model
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.config/knownote/models
+          key: knownote-eval-model-${{ hashFiles('src/main/embedding/localModel.ts') }}
+
+      - name: Eval harness is deterministic
+        if: runner.os == 'Linux'
+        run: |
+          xvfb-run -a npm run eval:prepare
+          xvfb-run -a node scripts/eval.mjs
+          cp docs/eval/baseline-v1.4.json /tmp/eval-a.json
+          xvfb-run -a node scripts/eval.mjs
+          diff /tmp/eval-a.json docs/eval/baseline-v1.4.json

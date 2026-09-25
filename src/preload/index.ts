@@ -179,6 +179,8 @@ const api = {
       ipcRenderer.invoke('knowledge:get-document', { documentId }),
     getDocumentChunks: (documentId: string) =>
       ipcRenderer.invoke('knowledge:get-document-chunks', { documentId }),
+    getDocumentBlocks: (documentId: string) =>
+      ipcRenderer.invoke('knowledge:get-document-blocks', { documentId }),
     deleteDocument: (documentId: string) =>
       ipcRenderer.invoke('knowledge:delete-document', { documentId }),
     reindexDocument: (documentId: string) =>

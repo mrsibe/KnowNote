@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Card } from '../ui/card'
 import { PanelHeader } from '../ui/panel-header'
 import DocumentList from './source/DocumentList'
+import SourceReader from './source/reader/SourceReader'
 import type { KnowledgeDocument } from '../../../../shared/types/knowledge'
 
 // 添加来源类型
@@ -168,27 +169,6 @@ interface DocumentViewerPanelProps {
 
 function DocumentViewerPanel({ document, onBack }: DocumentViewerPanelProps) {
   const { t } = useTranslation('ui')
-  const [content, setContent] = useState<string>('')
-  const [isLoading, setIsLoading] = useState(false)
-
-  // 加载文档内容
-  useEffect(() => {
-    const loadContent = async () => {
-      setIsLoading(true)
-      try {
-        const chunks = await window.api.knowledge.getDocumentChunks(document.id)
-        // 合并所有 chunk 的内容
-        const fullContent = chunks.map((chunk) => chunk.content).join('\n\n')
-        setContent(fullContent)
-      } catch (error) {
-        console.error('Error loading document content:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadContent()
-  }, [document.id])
 
   return (
     <>
@@ -209,20 +189,10 @@ function DocumentViewerPanel({ document, onBack }: DocumentViewerPanelProps) {
         center={<span className="text-sm font-medium truncate">{document.title}</span>}
       />
 
-      {/* 文档内容 */}
-      <ScrollArea className="flex-1">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="p-6">
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{content}</pre>
-            </div>
-          </div>
-        )}
-      </ScrollArea>
+      {/* 来源阅读器（#71）：PDF 渲染原页，其余格式走文本回退，两者同一契约。 */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <SourceReader document={document} />
+      </div>
     </>
   )
 }

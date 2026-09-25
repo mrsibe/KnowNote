@@ -24,6 +24,33 @@ export interface ChunkOptions {
 }
 
 /**
+ * 默认分块参数。导出的原因只有一个：eval baseline 报告必须引用真实值，而不是
+ * 把它手抄一遍。改了默认值而没有重新跑 baseline，差异会从报告里直接暴露出来。
+ */
+export const DEFAULT_CHUNK_OPTIONS: Required<ChunkOptions> = {
+  chunkSize: 500,
+  chunkOverlap: 50,
+  minChunkSize: 100,
+  allowSpanPages: false,
+  separators: [
+    '\n\n\n', // 多个空行（章节分隔）
+    '\n\n', // 段落分隔
+    '\n', // 行分隔
+    '。', // 中文句号
+    '.', // 英文句号
+    '！',
+    '!',
+    '？',
+    '?',
+    '；',
+    ';',
+    '，',
+    ',',
+    ' ' // 空格（最后手段）
+  ]
+}
+
+/**
  * 分块器接受的块。字段是 `document_blocks` 的子集。
  */
 export interface ChunkBlock {
@@ -74,28 +101,7 @@ interface Range {
  * 支持块感知分块（保留来源结构），以及无块时的字符窗口回退。
  */
 export class ChunkingService {
-  private defaultOptions: Required<ChunkOptions> = {
-    chunkSize: 500,
-    chunkOverlap: 50,
-    minChunkSize: 100,
-    allowSpanPages: false,
-    separators: [
-      '\n\n\n', // 多个空行（章节分隔）
-      '\n\n', // 段落分隔
-      '\n', // 行分隔
-      '。', // 中文句号
-      '.', // 英文句号
-      '！',
-      '!',
-      '？',
-      '?',
-      '；',
-      ';',
-      '，',
-      ',',
-      ' ' // 空格（最后手段）
-    ]
-  }
+  private defaultOptions: Required<ChunkOptions> = DEFAULT_CHUNK_OPTIONS
 
   /**
    * 块感知分块。偏移与内容都锚定在 `content` 这份规范字符串上。

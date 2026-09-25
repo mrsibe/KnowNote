@@ -198,6 +198,21 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     })
   )
 
+  // 获取文档的结构块（#71）。Reader 需要页码与 bbox 才能把引用落点高亮。
+  ipcMain.handle(
+    'knowledge:get-document-blocks',
+    validate(KnowledgeSchemas.getDocumentBlocks, async (params) => {
+      Logger.debug('KnowledgeHandlers', 'get-document-blocks:', params.documentId)
+
+      try {
+        return knowledgeService.getDocumentBlocks(params.documentId)
+      } catch (error) {
+        Logger.error('KnowledgeHandlers', 'Error getting document blocks:', error)
+        return []
+      }
+    })
+  )
+
   // 删除文档
   ipcMain.handle(
     'knowledge:delete-document',

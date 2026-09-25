@@ -10,7 +10,8 @@ import type {
   ModelConnection,
   LocalEmbeddingModelInfo,
   EmbeddingDownloadProgress,
-  EmbeddingSourceInfo
+  EmbeddingSourceInfo,
+  SourceBlock
 } from '../shared/types'
 import type {
   KnowledgeDocument,
@@ -284,6 +285,7 @@ declare global {
         getDocuments: (notebookId: string) => Promise<KnowledgeDocument[]>
         getDocument: (documentId: string) => Promise<KnowledgeDocument | null>
         getDocumentChunks: (documentId: string) => Promise<KnowledgeChunk[]>
+        getDocumentBlocks: (documentId: string) => Promise<SourceBlock[]>
         deleteDocument: (documentId: string) => Promise<{ success: boolean; error?: string }>
         reindexDocument: (documentId: string) => Promise<{ success: boolean; error?: string }>
 

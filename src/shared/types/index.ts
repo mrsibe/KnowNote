@@ -12,6 +12,9 @@ export * from './chat'
 // 导出引用类型
 export * from './citation'
 
+// 导出来源阅读器契约类型
+export * from './source'
+
 // 导出 Result 错误处理类型
 export * from './result'
 
