@@ -5,7 +5,7 @@
  * `resources/pdfjs/{cmaps,standard_fonts,wasm}` 下的文件。路径来自这里的
  * `pdfjsAssetRoot()`，不来自请求。
  *
- * 和 `documentProtocol` 一样，scheme 必须在 app ready 之前注册为 privileged；
+ * 和 `documentProtocol` 一样，scheme 必须在 app ready 之前声明为 privileged；
  * handler 在 ready 之后安装。
  */
 
@@ -15,6 +15,7 @@ import { pathToFileURL } from 'url'
 import { PDFJS_ASSET_SCHEME, parsePdfjsAssetUrl } from '../../shared/utils/pdfjsAssets'
 import { pdfjsAssetRoot } from '../pdfjsAssetPaths'
 import Logger from '../../shared/utils/logger'
+import { declarePrivilegedScheme } from './privilegedSchemes'
 
 /**
  * Origins allowed to read an asset. Same set as `documentProtocol`: the renderer
@@ -23,23 +24,21 @@ import Logger from '../../shared/utils/logger'
  */
 const ALLOWED_ORIGINS = new Set(['null', 'http://localhost:5173', 'http://127.0.0.1:5173'])
 
-/** 必须在 app ready 之前调用一次。 */
-export function registerPdfjsAssetScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: PDFJS_ASSET_SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        stream: true,
-        // The renderer fetches this scheme from a different origin (`file://` in
-        // production, the dev server in development), so it is a cross-origin
-        // request and must be CORS-enabled to succeed.
-        corsEnabled: true
-      }
+/** 声明特权。只入队，提交由 `applyPrivilegedSchemes()` 在 ready 前统一完成（#135）。 */
+export function declarePdfjsAssetScheme(): void {
+  declarePrivilegedScheme({
+    scheme: PDFJS_ASSET_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      // The renderer fetches this scheme from a different origin (`file://` in
+      // production, the dev server in development), so it is a cross-origin
+      // request and must be CORS-enabled to succeed.
+      corsEnabled: true
     }
-  ])
+  })
 }
 
 /** 在 app ready 之后调用，安装只读的资源 handler。 */

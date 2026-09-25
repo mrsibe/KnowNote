@@ -21,20 +21,23 @@ import { getStore } from './config/store'
 import { migrateProvidersToConnections } from './config/connectionMigration'
 import { isSmokeTestRequested, runSmokeTest } from './smokeTest'
 import { isEvalRequested, runEvalCli } from './eval/run'
+import { declareDocumentScheme, registerDocumentProtocolHandler } from './protocol/documentProtocol'
 import {
-  registerDocumentProtocolHandler,
-  registerDocumentScheme
-} from './protocol/documentProtocol'
-import {
-  registerPdfjsAssetProtocolHandler,
-  registerPdfjsAssetScheme
+  declarePdfjsAssetScheme,
+  registerPdfjsAssetProtocolHandler
 } from './protocol/pdfjsAssetProtocol'
+import { applyPrivilegedSchemes } from './protocol/privilegedSchemes'
 import Logger from '../shared/utils/logger'
 
-// Scheme privileges must be registered before the app is ready, so this is a
-// module-scope call rather than part of the whenReady sequence.
-registerDocumentScheme()
-registerPdfjsAssetScheme()
+// Scheme privileges must be declared before the app is ready, so this is a
+// module-scope sequence rather than part of the whenReady flow. They are
+// submitted in one call on purpose: Electron *replaces* the privilege table
+// instead of appending to it, so a second `registerSchemesAsPrivileged()` drops
+// every scheme registered by the first - which is how `knownote-asset` silently
+// broke `knownote-doc` and the PDF reader (#135).
+declareDocumentScheme()
+declarePdfjsAssetScheme()
+applyPrivilegedSchemes()
 
 let connectionManager: ConnectionManager | null = null
 let embeddingService: EmbeddingService | null = null
