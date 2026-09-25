@@ -1,5 +1,5 @@
 import type { Citation } from '../types/citation'
-import type { ReaderAnchor, SourceAnchor } from '../types/source'
+import type { ReaderAnchor, ReaderSelection, SourceAnchor } from '../types/source'
 
 /**
  * `SourceAnchor` 的构造与序列化（#72）。
@@ -36,6 +36,33 @@ export function citationToSourceAnchor(citation: Citation): SourceAnchor {
   }
 
   return { documentId: citation.documentId, location }
+}
+
+/**
+ * 阅读器选区 → 定位（#73）。
+ *
+ * 与 `citationToSourceAnchor` 是同一个构造点的两个入口：citation 来自答案，selection
+ * 来自阅读器。两者都只搬运已经记录下来的字段，不补、不猜。
+ *
+ * 这里也是外层 `documentId` 与 `location.documentId` 唯一被同时写入的地方。`ReaderSelection`
+ * 继承 `ReaderAnchor`，因此它自己的 `documentId` 就定义了两个字段必须取同一个值，而不是
+ * 由调用方各自拼装出一份可能互相矛盾的对象。
+ */
+export function selectionToSourceAnchor(selection: ReaderSelection): SourceAnchor {
+  const location: ReaderAnchor = { documentId: selection.documentId }
+
+  if (typeof selection.page === 'number' && Number.isFinite(selection.page)) {
+    location.page = selection.page
+  }
+  if (selection.blockId) location.blockId = selection.blockId
+  if (typeof selection.startOffset === 'number' && Number.isFinite(selection.startOffset)) {
+    location.startOffset = selection.startOffset
+  }
+  if (typeof selection.endOffset === 'number' && Number.isFinite(selection.endOffset)) {
+    location.endOffset = selection.endOffset
+  }
+
+  return { documentId: selection.documentId, location }
 }
 
 /** 只写入确实存在的字段：缺失的位置不应该以空串或 `"null"` 的形式出现在 URL 里。 */

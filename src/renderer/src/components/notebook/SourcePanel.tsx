@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, ReactElement } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, FileText, Globe, FileUp, Loader2, StickyNote, ArrowLeft } from 'lucide-react'
+import { Plus, FileText, Globe, FileUp, Loader2, StickyNote, ArrowLeft, Quote } from 'lucide-react'
+import { toast } from 'sonner'
 import { useKnowledgeStore, setupKnowledgeListeners } from '../../store/knowledgeStore'
 import { useItemStore } from '../../store/itemStore'
 import { useUIStore } from '../../store/uiStore'
@@ -16,12 +17,15 @@ import { PanelHeader } from '../ui/panel-header'
 import DocumentList from './source/DocumentList'
 import SourceReader from './source/reader/SourceReader'
 import type { KnowledgeDocument } from '../../../../shared/types/knowledge'
-import type { ReaderAnchor } from '../../../../shared/types/source'
+import type { ReaderAnchor, ReaderSelection } from '../../../../shared/types/source'
 import {
+  selectionToSourceAnchor,
   sourceAnchorFromSearchParams,
   sourceAnchorsEqual
 } from '../../../../shared/utils/sourceAnchor'
+import { buildExcerptMarkdown } from '../../../../shared/utils/excerpt'
 import { useSourceAnchorNavigation } from '../../hooks/useSourceAnchorNavigation'
+import { requestAppendExcerpt } from './note/appendExcerptCommand'
 
 // 添加来源类型
 type AddSourceType = 'file' | 'url' | 'text' | 'note'
@@ -172,10 +176,41 @@ interface DocumentViewerPanelProps {
   document: KnowledgeDocument
   anchor?: ReaderAnchor | null
   onBack: () => void
+  onSaveExcerpt: (excerptMarkdown: string, sourceTitle: string) => void
 }
 
-function DocumentViewerPanel({ document, anchor, onBack }: DocumentViewerPanelProps) {
+function DocumentViewerPanel({
+  document,
+  anchor,
+  onBack,
+  onSaveExcerpt
+}: DocumentViewerPanelProps) {
   const { t } = useTranslation('ui')
+
+  // 阅读器里当前选中的那段文字。它与用来跳转的 `anchor` 无关，所以单独一份 state。
+  // 面板按 document.id 重挂载，切来源时选区自动清空。
+  const [selection, setSelection] = useState<ReaderSelection | null>(null)
+
+  const handleSelectionChange = useCallback((next: ReaderSelection | null): void => {
+    setSelection(next)
+  }, [])
+
+  const handleSaveExcerpt = useCallback((): void => {
+    if (!selection) return
+
+    const markdown = buildExcerptMarkdown({
+      text: selection.text,
+      anchor: selectionToSourceAnchor(selection),
+      label:
+        typeof selection.page === 'number'
+          ? t('excerptSourceLabel', { title: document.title, page: selection.page })
+          : document.title
+    })
+    if (!markdown) return
+
+    onSaveExcerpt(markdown, document.title)
+    setSelection(null)
+  }, [selection, document.title, onSaveExcerpt, t])
 
   // Esc 是返回按钮的键盘等价物。它不是「关闭笔记本」快捷键（那个已经刻意不再绑到裸
   // Escape），并且会先把 Escape 让给已经打开的对话框。
@@ -206,12 +241,31 @@ function DocumentViewerPanel({ document, anchor, onBack }: DocumentViewerPanelPr
           </Button>
         }
         center={<span className="text-sm font-medium truncate">{document.title}</span>}
+        right={
+          selection && (
+            <Button
+              onClick={handleSaveExcerpt}
+              variant="ghost"
+              size="sm"
+              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+              title={t('saveExcerpt')}
+            >
+              <Quote className="w-4 h-4" />
+              {t('saveExcerpt')}
+            </Button>
+          )
+        }
       />
 
       {/* 来源阅读器（#71）：PDF 渲染原页，其余格式走文本回退，两者同一契约。
-          `anchor`（#72）把引用定位传进来，reader 自己决定页/块/偏移的优先级。 */}
+          `anchor`（#72）把引用定位传进来，reader 自己决定页/块/偏移的优先级。
+          `onSelectionChange`（#73）把「选中的一段文字」交上来，用于摘录到笔记。 */}
       <div className="flex min-h-0 flex-1 flex-col">
-        <SourceReader document={document} anchor={anchor} />
+        <SourceReader
+          document={document}
+          anchor={anchor}
+          onSelectionChange={handleSelectionChange}
+        />
       </div>
     </>
   )
@@ -240,7 +294,7 @@ export default function SourcePanel(): ReactElement {
     selectFiles
   } = useKnowledgeStore()
 
-  const { notes, loadNotes } = useItemStore()
+  const { notes, loadNotes, currentNote, createNote } = useItemStore()
 
   const { openSettings } = useUIStore()
 
@@ -331,6 +385,35 @@ export default function SourcePanel(): ReactElement {
     focusedSource && openDocument && focusedSource.documentId === openDocument.id
       ? focusedSource.location
       : null
+
+  /**
+   * 「保存摘录」（#73）。
+   *
+   * 当前有打开的笔记就追加进去，没有才新建一条，并把新笔记打开（`createNote` 会把它设为
+   * 当前笔记并进入编辑态）。摘录是往正在工作的笔记里沉淀，不是每次产出一张独立卡片。
+   *
+   * 追加走命令而不是 `updateNote`：正文的写入者是笔记编辑器，外面直接改库会被编辑器下一次
+   * `onUpdate` 用旧正文覆盖（见 `appendExcerptCommand`）。
+   */
+  const handleSaveExcerpt = useCallback(
+    async (excerptMarkdown: string, sourceTitle: string): Promise<void> => {
+      if (!notebookId) return
+
+      if (currentNote) {
+        requestAppendExcerpt(currentNote.id, excerptMarkdown)
+        toast.success(t('excerptAppended', { title: currentNote.title }))
+        return
+      }
+
+      try {
+        await createNote(notebookId, excerptMarkdown, t('excerptNoteTitle', { title: sourceTitle }))
+      } catch (error) {
+        console.error('[SourcePanel] Failed to save the excerpt as a note:', error)
+        toast.error(t('excerptSaveFailed'))
+      }
+    },
+    [notebookId, currentNote, createNote, t]
+  )
 
   // 处理文件上传
   const handleFileUpload = useCallback(async () => {
@@ -486,6 +569,7 @@ export default function SourcePanel(): ReactElement {
           document={openDocument}
           anchor={readerAnchor}
           onBack={handleBack}
+          onSaveExcerpt={handleSaveExcerpt}
         />
       ) : (
         // 文档列表页面

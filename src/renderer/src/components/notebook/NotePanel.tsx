@@ -132,7 +132,7 @@ function NoteEditorPanel({
 
       {/* 编辑器内容 */}
       <div className="flex-1 overflow-hidden">
-        <NoteEditor content={editContent} onChange={setEditContent} />
+        <NoteEditor noteId={note.id} content={editContent} onChange={setEditContent} />
       </div>
     </div>
   )

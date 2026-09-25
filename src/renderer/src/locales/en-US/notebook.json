@@ -18,6 +18,7 @@
   "backToList": "Back to List",
   "save": "Save",
   "noteSaved": "Saved",
+  "excerptSourceMissing": "This excerpt's source is no longer available.",
   "noNotesYet": "No notes yet",
   "noNotesYetDesc": "Click the \"+\" button in the top right to create a note",
   "unsavedChangesWarning": "You have unsaved changes. Are you sure you want to leave?",

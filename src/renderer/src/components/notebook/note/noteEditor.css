@@ -110,6 +110,19 @@
   opacity: 0.8;
 }
 
+/* 摘录锚点（#73）：正文里指回原文的一条来源引用。
+   来源被删除后它不再可跳转，于是按禁用态呈现 —— 但引文和这条引用本身都留在正文里，
+   因为「笔记当初来自这里」和「现在拿不到这份证据」是两件事。 */
+.ProseMirror a[data-source-missing] {
+  color: var(--muted-foreground);
+  text-decoration-line: line-through;
+  cursor: default;
+}
+
+.ProseMirror a[data-source-missing]:hover {
+  opacity: 1;
+}
+
 .ProseMirror blockquote {
   border-left: 2px solid var(--border);
   padding-left: 1rem;
