@@ -6,8 +6,9 @@ import { KnowledgeService } from '../services/KnowledgeService'
 import { buildRAGContext } from '../services/citations'
 import { validateAndCleanMessages } from '../utils/messageValidator'
 import Logger from '../../shared/utils/logger'
+import { resolveCitations } from '../../shared/utils/citationResolution'
 import type { AnswerSource, ChatMessageMetadata, RetrievalStatus } from '../../shared/types/chat'
-import type { Citation } from '../../shared/types/citation'
+import type { Citation, CitationContext } from '../../shared/types/citation'
 import { ChatSchemas, validate } from './validation'
 
 // 管理活跃的流式请求
@@ -111,6 +112,7 @@ export function registerChatHandlers(
     let retrieval: RetrievalStatus = 'none'
     let answerSources: AnswerSource[] = []
     let answerCitations: Citation[] = []
+    let citationContexts: CitationContext[] = []
     try {
       const embeddingClient = await connectionManager.getEmbeddingClient()
 
@@ -127,6 +129,12 @@ export function registerChatHandlers(
             retrieval = 'used'
             answerSources = sources
             answerCitations = citations
+            // The span a quote is checked against lives only in the locator, so
+            // carry it alongside the citation for validation (#70).
+            citationContexts = citations.map((citation, index) => ({
+              citation,
+              spanText: searchResults[index].locator.blocks.map((block) => block.text).join('\n')
+            }))
             Logger.debug(
               'ChatHandlers',
               `RAG: Found ${searchResults.length} relevant chunks for query`
@@ -155,6 +163,9 @@ export function registerChatHandlers(
       citations: answerCitations
     }
     queries.updateMessageMetadata(assistantMessage.id, answerMetadata)
+    // Rewritten at the end of the stream, once the answer text exists and its
+    // `[n]` markers can be resolved against the evidence.
+    let resolvedMetadata = answerMetadata
 
     // 4. 调用 Model Connection 流式生成
     const client = await connectionManager.getChatClient()
@@ -222,6 +233,19 @@ export function registerChatHandlers(
             usageMetadata = metadata
           }
 
+          // An answer that marked sources gets only the grounded ones: a
+          // fabricated `[9]` or a quote that is not in its span must not survive
+          // as a clickable source (#70). With no markers at all, keep the full
+          // evidence set — the model simply did not use the marker convention.
+          const resolution = resolveCitations(fullTextContent, citationContexts)
+          if (resolution.matches.length > 0) {
+            const grounded: Citation[] = []
+            for (const match of resolution.resolved) {
+              if (match.citation) grounded.push(match.citation)
+            }
+            resolvedMetadata = { ...answerMetadata, citations: grounded }
+          }
+
           // 发送完成事件
           event.sender.send('message-chunk', {
             messageId: assistantMessage.id,
@@ -230,7 +254,7 @@ export function registerChatHandlers(
             // The renderer's in-memory message never sees the DB row written
             // before streaming, so the persisted provenance rides along here or
             // the answer loses its citations until the session is reloaded.
-            messageMetadata: answerMetadata
+            messageMetadata: resolvedMetadata
           })
         }
       },
@@ -248,6 +272,9 @@ export function registerChatHandlers(
         try {
           // 更新数据库中的完整内容（包含推理内容）
           queries.updateMessageContent(assistantMessage.id, fullTextContent, fullReasoningContent)
+
+          // Persist the marker-filtered citations now that the answer text is final.
+          queries.updateMessageMetadata(assistantMessage.id, resolvedMetadata)
 
           // 计算 token 使用量
           let tokensUsed = 0

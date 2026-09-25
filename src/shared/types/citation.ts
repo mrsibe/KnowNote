@@ -29,3 +29,38 @@ export interface Citation {
   quote: string
   score: number
 }
+
+/**
+ * 一条 citation 连同它所覆盖的原文。
+ *
+ * 校验「引文确实落在引用区间内」需要区间文本，而文本只在检索侧（`locator`）
+ * 存在，因此由调用方补齐。`spanText` 缺失时无法证伪引文 —— 解析结果保持为
+ * resolved，而不是把一个证据不足的怀疑渲染成错误。
+ */
+export interface CitationContext {
+  citation: Citation
+  spanText?: string
+}
+
+/** 回答里一个 `[n]` 标记的归宿。 */
+export type CitationMatchStatus = 'resolved' | 'unresolved' | 'misattributed'
+
+export interface CitationMatch {
+  /** 回答里的 `[n]` 编号。 */
+  marker: number
+  status: CitationMatchStatus
+  /** 标记在回答文本里的字符位置。 */
+  position: number
+  /** 仅在 `resolved` / `misattributed` 时存在。 */
+  citation?: Citation
+}
+
+/** `resolveCitations` 的结果。三组是互斥且穷尽的，因此可从中直接算出 precision。 */
+export interface CitationResolution {
+  matches: CitationMatch[]
+  resolved: CitationMatch[]
+  unresolved: CitationMatch[]
+  misattributed: CitationMatch[]
+  /** `resolved / total`；回答里没有任何标记时为 0。 */
+  precision: number
+}
