@@ -1,4 +1,8 @@
-import type { ReaderSelection, SourceBlock } from '../../../../../../shared/types/source'
+import type {
+  ReaderAnchor,
+  ReaderSelection,
+  SourceBlock
+} from '../../../../../../shared/types/source'
 
 /**
  * Reader 定位的纯计算（#71）
@@ -55,6 +59,38 @@ export function blockById(
 ): SourceBlock | null {
   if (!blockId) return null
   return blocks.find((block) => block.id === blockId) ?? null
+}
+
+/**
+ * 把一个 `ReaderAnchor` 解析成「翻到哪一页、高亮哪个块」。
+ *
+ * 定位优先级（#72）：
+ *
+ *   blockId            —— 命中最方便，但它是派生索引，reindex 后可能失效；
+ *   startOffset/endOffset —— canonical offset，稳定，用来找回重建后的块；
+ *   page               —— 只翻页，不高亮；
+ *   都没有             —— 打开文档顶部。
+ *
+ * 命中的块给出的页优先于 `anchor.page`：`page` 只是 citation 写下位置时的提示，块才是
+ * 真正要落的地方。反过来（页覆盖块）会产生「高亮在第 4 页、却滚到第 5 页」这种最坏的
+ * 错位。只有当块本身不携带页码（非分页来源）时才用 `anchor.page` 兜底。
+ *
+ * 返回 null 的块表示「没有可高亮的块」，调用方据此清掉上一次的高亮，而不是把旧高亮
+ * 留在屏幕上冒充这一次的落点。
+ */
+export function resolveAnchor(
+  blocks: readonly SourceBlock[],
+  anchor: ReaderAnchor
+): { page: number | null; block: SourceBlock | null } {
+  const byId = blockById(blocks, anchor.blockId)
+  if (byId) return { page: byId.page ?? anchor.page ?? null, block: byId }
+
+  if (typeof anchor.startOffset === 'number') {
+    const byOffset = blockContainingOffset(blocks, anchor.startOffset)
+    if (byOffset) return { page: byOffset.page ?? anchor.page ?? null, block: byOffset }
+  }
+
+  return { page: anchor.page ?? null, block: null }
 }
 
 /**

@@ -33,6 +33,21 @@ export interface ReaderAnchor {
   endOffset?: number | null
 }
 
+/**
+ * 「打开哪个来源，并去哪」(#72)。
+ *
+ * `ReaderAnchor` 回答的是「在已经打开的 Reader 里去哪」；`SourceAnchor` 把来源身份和
+ * 位置绑在一起，因此它是「打开某个来源并定位」这一动作的完整参数，也是 #72（引用跳转）
+ * 与 #73（摘录到笔记）共享的定位单位。
+ *
+ * `location` 直接复用 `ReaderAnchor`，这样它可以原样交给 `ReaderHandle.openAt`；其中的
+ * `documentId` 与外层字段是同一条来源身份。
+ */
+export interface SourceAnchor {
+  documentId: string
+  location: ReaderAnchor
+}
+
 /** 用户在阅读器里选中的一段文字。用于 #73 的摘录。 */
 export interface ReaderSelection extends ReaderAnchor {
   text: string

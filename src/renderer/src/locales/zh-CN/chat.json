@@ -10,6 +10,10 @@
   "sourcesUsed": "基于 {{count}} 段来源原文",
   "hideSources": "隐藏来源",
   "showDocument": "在知识库中查看",
+  "citationPage": "第 {{page}} 页",
+  "citationOpen": "打开 {{title}}",
+  "citationOpenAtPage": "打开 {{title}} 第 {{page}} 页",
+  "citationUnavailable": "来源已删除",
   "answerNotGrounded": "这条回答没有使用你来源中的任何段落。",
   "answerRetrievalFailed": "检索来源失败，这条回答没有依据你的来源。"
 }

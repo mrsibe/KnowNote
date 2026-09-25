@@ -22,7 +22,13 @@ import type {
   SourceBlock
 } from '../../../../../../shared/types/source'
 import { Button } from '../../../ui/button'
-import { blockById, blockRect, resolveSelection, type NormalizedPoint } from './anchor'
+import {
+  blockById,
+  blockRect,
+  resolveAnchor,
+  resolveSelection,
+  type NormalizedPoint
+} from './anchor'
 import './reader.css'
 
 // The worker is emitted as its own asset by Vite; pointing pdfjs at it keeps the
@@ -177,14 +183,19 @@ const PdfSourceReader = forwardRef<ReaderHandle, PdfSourceReaderProps>(function 
 
   const applyAnchor = useCallback(
     (target: ReaderAnchor): void => {
-      const block = blockById(blocks, target.blockId)
-      const page = target.page ?? block?.page ?? null
+      const { page, block } = resolveAnchor(blocks, target)
+
+      // 每次都重设高亮：新的 anchor 没有块时清掉上一次的，避免旧高亮冒充这次的落点。
+      setHighlightBlockId(block?.id ?? null)
 
       if (page !== null) {
         setCurrentPage(page)
         pageElements.current.get(page)?.scrollIntoView({ block: 'start', behavior: 'auto' })
+        return
       }
-      if (target.blockId) setHighlightBlockId(target.blockId)
+
+      // 页码和块都定位不到（例如只有 documentId 的链接）：回到文档顶部。
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'auto' })
     },
     [blocks]
   )

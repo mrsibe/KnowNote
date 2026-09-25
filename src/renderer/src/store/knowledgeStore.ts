@@ -23,6 +23,11 @@ interface KnowledgeStore {
   isIndexing: boolean
   indexProgress: IndexProgress | null
   error: string | null
+  /**
+   * 文档列表是否已经成功读过一次。用来区分「列表为空」和「还没加载」：
+   * #72 的失效引用判定只能在加载完成后做，否则冷启动的 deep-link 会在列表回来之前被误清。
+   */
+  documentsLoaded: boolean
 
   // Actions
   setDocuments: (docs: KnowledgeDocument[]) => void
@@ -72,6 +77,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
   isIndexing: false,
   indexProgress: null,
   error: null,
+  documentsLoaded: false,
 
   // Setters
   setDocuments: (documents) => set({ documents }),
@@ -86,12 +92,12 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
 
   // 加载文档列表
   loadDocuments: async (notebookId) => {
-    set({ isLoading: true, error: null })
+    set({ isLoading: true, error: null, documentsLoaded: false })
     try {
       const docs = await window.api.knowledge.getDocuments(notebookId)
-      set({ documents: docs, isLoading: false })
+      set({ documents: docs, isLoading: false, documentsLoaded: true })
     } catch (error) {
-      set({ error: (error as Error).message, isLoading: false })
+      set({ error: (error as Error).message, isLoading: false, documentsLoaded: false })
     }
   },
 

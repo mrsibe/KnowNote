@@ -10,6 +10,10 @@
   "sourcesUsed": "Based on {{count}} source passages",
   "hideSources": "Hide sources",
   "showDocument": "Show in library",
+  "citationPage": "p.{{page}}",
+  "citationOpen": "Open {{title}}",
+  "citationOpenAtPage": "Open {{title}} at page {{page}}",
+  "citationUnavailable": "Source no longer available",
   "answerNotGrounded": "No passages from your sources were used in this answer.",
   "answerRetrievalFailed": "Searching your sources failed, so this answer is not based on them."
 }
