@@ -24,7 +24,10 @@
 
 import Logger from '../shared/utils/logger'
 import { readFile } from 'fs/promises'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
 import { join } from 'path'
+import { net } from 'electron'
 import { eq } from 'drizzle-orm'
 import {
   closeDatabase,
@@ -48,6 +51,8 @@ import { ChunkingService } from './services/ChunkingService'
 import { insertChunkBlocks, resolveChunkProvenance } from './services/chunkProvenance'
 import { KnowledgeService } from './services/KnowledgeService'
 import { DenseRetriever } from './services/retrieval'
+import { documentUrl } from '../shared/utils/documentUrl'
+import { registerDocumentProtocolHandler } from './protocol/documentProtocol'
 import type { EmbeddingService } from './services/EmbeddingService'
 
 export const SMOKE_TEST_FLAG = '--smoke-test'
@@ -214,6 +219,44 @@ async function runChecks(): Promise<string[]> {
     `the migrated vector is not searchable (got ${JSON.stringify(migratedHits)})`
   )
   pass('legacy global vec_embeddings migrates into a searchable per-notebook table')
+
+  // --- document protocol (#71): bytes by id, never by path -------------------
+  // The renderer asks for `knownote-doc://docs/<id>`; only a document that the
+  // database actually owns is served. This runs in the real packaged main
+  // process, which is the only place `protocol.handle` exists.
+  const protocolDir = mkdtempSync(join(tmpdir(), 'knownote-smoke-doc-'))
+  const protocolFilePath = join(protocolDir, 'payload.pdf')
+  const protocolPayload = 'knownote-protocol-payload'
+  const protocolDocumentId = 'smoke-protocol-doc'
+  writeFileSync(protocolFilePath, protocolPayload)
+
+  database
+    .prepare(
+      'INSERT INTO documents (id, notebook_id, title, type, content, local_file_path, status, chunk_count, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )
+    .run(
+      protocolDocumentId,
+      LEGACY_NOTEBOOK,
+      'Protocol smoke document',
+      'file',
+      protocolPayload,
+      protocolFilePath,
+      'indexed',
+      0,
+      Date.now(),
+      Date.now()
+    )
+
+  registerDocumentProtocolHandler()
+  const served = await net.fetch(documentUrl(protocolDocumentId))
+  assert(served.ok, `an owned document did not serve (status ${served.status})`)
+  assert((await served.text()) === protocolPayload, 'the document protocol served the wrong bytes')
+  const unknown = await net.fetch(documentUrl('smoke-missing-doc'))
+  assert(unknown.status === 404, `an unknown document id returned ${unknown.status}, not 404`)
+
+  database.prepare('DELETE FROM documents WHERE id = ?').run(protocolDocumentId)
+  rmSync(protocolDir, { recursive: true, force: true })
+  pass('knownote-doc:// serves an owned document and 404s an unknown id')
 
   const { version } = database.prepare('SELECT vec_version() AS version').get() as {
     version: string

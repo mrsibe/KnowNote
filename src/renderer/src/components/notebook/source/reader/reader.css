@@ -1,0 +1,88 @@
+/* Source reader surface (#71). The `.textLayer` rules mirror pdfjs-dist's viewer
+   stylesheet (web/pdf_viewer.css) for the subset the reader uses; the page wrapper
+   sets `--total-scale-factor`, which is what pdfjs sizes text runs against. */
+
+.kn-reader {
+  position: relative;
+  height: 100%;
+  overflow: auto;
+  background: var(--muted);
+}
+
+.kn-reader__pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 8px 32px;
+  gap: 16px;
+}
+
+.kn-reader__page {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  flex: none;
+}
+
+.dark .kn-reader__page {
+  background: #fff;
+}
+
+.kn-reader__canvas {
+  display: block;
+}
+
+.kn-reader .textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 2;
+}
+
+.kn-reader .textLayer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+.kn-reader .textLayer ::selection {
+  background: rgb(0 0 255 / 0.25);
+}
+
+.kn-reader__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.kn-reader__highlight {
+  position: absolute;
+  background: rgb(250 204 21 / 0.3);
+  outline: 1px solid rgb(202 138 4 / 0.7);
+  border-radius: 0.375rem;
+}
+
+.kn-reader__text {
+  padding: 24px 28px;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.7;
+  user-select: text;
+}
+
+.kn-reader__fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+}
