@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core'
 import type { QuizQuestion } from '../../shared/types/quiz'
 
 /**
@@ -166,8 +166,10 @@ export const chunks = sqliteTable(
       .references(() => notebooks.id, { onDelete: 'cascade' }),
     content: text('content').notNull(),
     chunkIndex: integer('chunk_index').notNull(), // 在文档中的顺序
-    startOffset: integer('start_offset'), // 原文起始位置
-    endOffset: integer('end_offset'), // 原文结束位置
+    startOffset: integer('start_offset'), // 原文起始位置（相对 documents.content）
+    endOffset: integer('end_offset'), // 原文结束位置（相对 documents.content）
+    pageStart: integer('page_start'), // 覆盖块的最小页码；非分页文档为 NULL
+    pageEnd: integer('page_end'), // 覆盖块的最大页码；非分页文档为 NULL
     metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
     tokenCount: integer('token_count'), // token 估算值
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
@@ -223,6 +225,34 @@ export const documentBlocks = sqliteTable(
 
 export type DocumentBlock = typeof documentBlocks.$inferSelect
 export type NewDocumentBlock = typeof documentBlocks.$inferInsert
+
+/**
+ * chunk ↔ block 映射表
+ *
+ * 检索结果只有 chunk id，必须能一路回到块、页码和字符区间。`start_in_block` /
+ * `end_in_block` 是块内的字符区间（相对 `document_blocks.text`），所以一个 chunk
+ * 可以只覆盖某块的一部分。
+ */
+export const chunkBlocks = sqliteTable(
+  'chunk_blocks',
+  {
+    chunkId: text('chunk_id')
+      .notNull()
+      .references(() => chunks.id, { onDelete: 'cascade' }),
+    blockId: text('block_id')
+      .notNull()
+      .references(() => documentBlocks.id, { onDelete: 'cascade' }),
+    startInBlock: integer('start_in_block').notNull(),
+    endInBlock: integer('end_in_block').notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.chunkId, table.blockId] }),
+    blockIdx: index('idx_chunk_blocks_block').on(table.blockId)
+  })
+)
+
+export type ChunkBlock = typeof chunkBlocks.$inferSelect
+export type NewChunkBlock = typeof chunkBlocks.$inferInsert
 
 /**
  * 向量嵌入表（元数据）
