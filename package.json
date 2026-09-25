@@ -21,7 +21,7 @@
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck:test": "tsc -p tsconfig.test.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run typecheck:test",
-    "test": "node --import ./test/ts-resolve.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/**/*.test.ts\"",
+    "test": "node --experimental-transform-types --disable-warning=ExperimentalWarning --import ./test/ts-resolve.mjs --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"test/**/*.test.ts\"",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
@@ -36,6 +36,13 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },
+  "//test": [
+    "`node --test` strips TypeScript types rather than compiling them, and strip-only",
+    "mode rejects the enums the production sources use (src/shared/utils/logger.ts is",
+    "on every loader's import path). `--experimental-transform-types` lets those",
+    "modules load unmodified, so parser tests can import the real loaders instead of",
+    "a test-only copy."
+  ],
   "//dependencies": [
     "ONLY packages that cannot be bundled belong here.",
     "electron-vite defaults build.externalizeDeps to true, so every `dependencies`",
