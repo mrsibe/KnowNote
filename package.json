@@ -28,6 +28,8 @@
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "smoke:packaged": "node scripts/smoke-packaged.mjs",
+    "eval:prepare": "npm run build && node scripts/eval.mjs --prepare",
+    "eval": "npm run build && node scripts/eval.mjs",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",

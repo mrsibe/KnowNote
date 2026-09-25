@@ -78,3 +78,28 @@ Rules:
 compatibility and delegates to the default retriever. `SearchResult` gained a
 `locator` field, which is populated from `RetrievedEvidence`; ranking, scores and
 the existing fields are unchanged.
+
+## Retrieval measurement
+
+Retrieval quality is a number before it is an opinion. `eval/` holds a committed
+corpus and a ground-truth dataset; `src/main/eval/` runs them through the normal
+ingestion path and the real `Retriever`, and writes
+`docs/eval/baseline-<version>.json` (deterministic) plus a markdown summary.
+
+Rules:
+
+- **Ground truth is corpus identity, not database identity.** A relevant location
+  is `{ document: <corpus-relative path>, page, block: <ordinal>, quote? }`. Runtime
+  `documentId`s are random and `blockId`s embed them, so a dataset keyed on them
+  would break — instead of measuring — a chunking or parser change.
+- **The baseline is frozen and the delta is explicit.** v1.5 experiments (#77,
+  #78) are reported as a delta against the committed baseline, with an
+  adopted-change threshold. A change that is not measured against it is not
+  adopted.
+- **`npm run eval` is offline.** Only `npm run eval:prepare` may download the
+  pinned model. The pinned revision is part of the embedding space identity, so a
+  model change is a baseline change.
+
+The harness is a main-process entry (`--eval-harness`), like the packaged smoke
+test, because the DB layer, vector store and loaders do not exist outside
+Electron. See `eval/README.md` for the dataset format and commands.
