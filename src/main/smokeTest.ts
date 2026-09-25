@@ -23,7 +23,7 @@
  */
 
 import Logger from '../shared/utils/logger'
-import { readFile } from 'fs/promises'
+import { readFile, readdir } from 'fs/promises'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -52,7 +52,9 @@ import { insertChunkBlocks, resolveChunkProvenance } from './services/chunkProve
 import { KnowledgeService } from './services/KnowledgeService'
 import { DenseRetriever } from './services/retrieval'
 import { documentUrl } from '../shared/utils/documentUrl'
+import { PDFJS_ASSET_DIRS } from '../shared/utils/pdfjsAssets'
 import { registerDocumentProtocolHandler } from './protocol/documentProtocol'
+import { pdfjsAssetRoot } from './pdfjsAssetPaths'
 import type { EmbeddingService } from './services/EmbeddingService'
 
 export const SMOKE_TEST_FLAG = '--smoke-test'
@@ -439,6 +441,22 @@ async function runChecks(): Promise<string[]> {
     `PDF import lost the fixture text (got "${excerpt(pdf.content)}")`
   )
   pass('PDF import extracts text (pdfjs-dist)')
+
+  // PDF.js fetches CMaps, standard fonts and wasm decoders by filename, and the
+  // packaged app serves them from `resources/pdfjs/` (electron-builder
+  // `extraResources`). Getting that wrong does not fail `npm run build`; it
+  // makes every CJK document die at runtime with "Ensure that the `cMapUrl` API
+  // parameter is provided." - the failure #125 found. Assert the files actually
+  // shipped, in the real packaged layout.
+  const assetRoot = pdfjsAssetRoot()
+  for (const dir of PDFJS_ASSET_DIRS) {
+    const entries = await readdir(join(assetRoot, dir)).catch(() => [])
+    assert(
+      entries.length > 0,
+      `PDF.js assets missing or empty in the packaged app: ${join(assetRoot, dir)}`
+    )
+  }
+  pass('PDF.js CMap / standard font / wasm assets are packaged')
 
   const docx = await parser.parseFile(join(fixtures, 'sample.docx'))
   assert(
