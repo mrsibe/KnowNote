@@ -816,6 +816,26 @@ export class KnowledgeService {
   }
 
   /**
+   * 只取一份来源的可读文件路径（#60）。
+   *
+   * 刻意做成一个窄查询，而不是让 `knownote-doc://` 的协议 handler 调 `getDocument()`：
+   * 那个 handler 是 Electron plumbing，它只需要「按 id 找一个能读的文件」，把整行
+   * `Document` 交给它会把依赖面撑得比实际需要宽。
+   *
+   * 存在的意义是固定依赖方向：protocol → Document 层 → database，而不是 protocol 自己
+   * 去 `getDatabase()`。不用为它另建 SourceStore 之类的 repository —— 一个方法就够。
+   */
+  getDocumentLocalFilePath(documentId: string): string | null {
+    const db = getDatabase()
+    const row = db
+      .select({ localFilePath: documents.localFilePath })
+      .from(documents)
+      .where(eq(documents.id, documentId))
+      .get()
+    return row?.localFilePath ?? null
+  }
+
+  /**
    * 获取文档的所有 chunks
    */
   getDocumentChunks(documentId: string): Chunk[] {

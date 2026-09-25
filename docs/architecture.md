@@ -4,6 +4,79 @@ Long-lived decisions that outlive a single feature. Feature-specific design live
 in the issue tracker and in `PRODUCT.md` / `DESIGN.md`; this file records the
 seams that other work is allowed to depend on.
 
+## Module seams
+
+Three seams carry the v1.4 features. These are the names that **actually exist in the
+code** — #60 guessed `DocumentParser` / `SourceStore` / `CitationService`, and none of
+the three was needed. See [considered and rejected](#seams-considered-and-rejected)
+for why, so the next reader does not re-litigate it.
+
+### Document
+
+| Role                          | What it is                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| Parsing contract              | `IDocumentLoader` — `src/main/services/loaders/types.ts`                       |
+| Format dispatch               | `FileParserService` — picks a loader by extension / MIME                       |
+| Implementations               | `PdfLoader`, `DocxLoader`, `MarkdownLoader`, `PptLoader`, `WebLoader`          |
+| Persistence and orchestration | `KnowledgeService` — `documents`, `document_blocks`, chunks, vectors, re-index |
+| Derived structure             | `services/blocks/documentBlocks.ts`, `ChunkingService`, `chunkProvenance.ts`   |
+
+Data invariants for this seam are in [Source provenance](#source-provenance).
+
+### Retrieval
+
+`Retriever` (interface) and `RetrievedEvidence` (result) in
+`src/main/services/retrieval/`; `DenseRetriever` is the only implementation today.
+Rules are in [Retrieval seam](#retrieval-seam).
+
+### Application
+
+**This seam is an architectural boundary, not a class.** There is deliberately no
+`ApplicationService` and no `CitationService`:
+
+- **IPC handlers** (`src/main/ipc/`) translate a request into a service call and
+  translate the answer back. No handler calls `getDatabase()` itself.
+- **Application services** — `ItemService`, `AnkiCardService`, `MindMapService`,
+  `QuizService` — own their tables and may call `getDatabase()`.
+- **Shared pure functions** — `src/shared/utils/`: `citations.ts`,
+  `citationResolution.ts`, `answerSources.ts`, `sourceAnchor.ts`, `excerpt.ts` — hold
+  citation parsing/resolution and source-anchor mapping, because the main _and_ the
+  renderer process both need them and they carry no state.
+
+**Known legacy exception, not addressed here.** `noteHandlers.ts`,
+`notebookHandlers.ts` and part of `chatHandlers.ts` call `db/queries` directly instead
+of a service. That predates v1.4 and #60 deliberately leaves it alone: its non-goals
+forbid removing a legacy path before a real feature exercises the replacement.
+
+### Call paths
+
+Concrete, checkable against the code:
+
+```text
+src/main/ipc/itemHandlers.ts
+  → ItemService                     (Application)
+    → getDatabase()
+      → Drizzle / SQLite
+
+src/main/ipc/knowledgeHandlers.ts
+  → KnowledgeService                (Document)
+    → getDatabase()
+      → Drizzle / SQLite
+
+knownote-doc://<documentId>
+src/main/protocol/documentProtocol.ts
+  → KnowledgeService.getDocumentLocalFilePath(id)   (Document, narrow query)
+    → getDatabase()
+      → documents.localFilePath
+```
+
+The protocol path is the one #60 changed. It used to run its own
+`select().from(documents)` (introduced by #116), which made an Electron plumbing module
+depend on the database from outside the Document/Application layers. It now receives
+the narrow query as a parameter, and `test/architectureBoundary.test.ts` fails if
+database access reappears under `src/main/protocol/`. The narrower query is deliberate:
+the handler needs “a readable file for this id”, not a whole `Document` row.
+
 ## Source provenance
 
 A document is an identity. Everything derived from it can be rebuilt:
@@ -133,3 +206,24 @@ Rules:
 - **The text layer is real text.** pdfjs's `TextLayer` is rendered over the canvas
   so `getSelection()` can map a DOM selection back to a source location; selecting
   the canvas would give nothing.
+
+## Seams considered and rejected
+
+Recorded so they are not proposed again without a new reason. Each was considered
+while building v1.4 and deliberately not introduced.
+
+- **`DocumentParser` — rejected.** `IDocumentLoader` plus `FileParserService` already
+  form the parsing seam, and all five format loaders implement it. A second interface
+  over the same boundary would be duplicate abstraction with no new consumer.
+- **`SourceStore` — currently rejected.** There is no storage consumer independent
+  enough to justify a repository layer: the provenance helpers
+  (`chunkProvenance.ts`) take the database handle as an explicit parameter, and
+  `KnowledgeService` still owns Document persistence orchestration. Revisit only if a
+  second, genuinely independent storage consumer appears.
+- **`CitationService` — rejected.** Citation parsing, resolution and source-anchor
+  mapping are stateless and shared between the main and renderer processes. Pure
+  functions in `src/shared/utils/` are the right shape; a service would add a
+  process-boundary round trip and a lifecycle for something that has no state.
+- **A Model seam — not part of this work.** #44 already established it
+  (`ModelClient` + `protocols/*`, driven by `ConnectionManager`); it is not rebuilt or
+  re-documented here.

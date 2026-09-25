@@ -247,7 +247,12 @@ async function runChecks(): Promise<string[]> {
       Date.now()
     )
 
-  registerDocumentProtocolHandler()
+  // Hoisted from the re-index section below so the protocol handler is wired to the
+  // real Document-layer query rather than a stand-in: this check is what proves
+  // `knownote-doc://` serves bytes *through* that path, and that it 404s when the query
+  // answers null (#60).
+  const knowledge = new KnowledgeService(fakeEmbeddingService())
+  registerDocumentProtocolHandler((documentId) => knowledge.getDocumentLocalFilePath(documentId))
   const served = await net.fetch(documentUrl(protocolDocumentId))
   assert(served.ok, `an owned document did not serve (status ${served.status})`)
   assert((await served.text()) === protocolPayload, 'the document protocol served the wrong bytes')
@@ -551,7 +556,6 @@ async function runChecks(): Promise<string[]> {
     .prepare('INSERT INTO notebooks (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)')
     .run(reindexNotebook, 'Smoke re-index notebook', reindexNow, reindexNow)
 
-  const knowledge = new KnowledgeService(fakeEmbeddingService())
   const reindexDocId = await knowledge.addDocumentFromFile(
     reindexNotebook,
     join(fixtures, 'sample.pdf')
