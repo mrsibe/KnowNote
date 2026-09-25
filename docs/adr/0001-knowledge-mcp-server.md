@@ -39,7 +39,7 @@ already changed underneath the prior art.
 
 ## Decision
 
-### 1. Target protocol revision: `2026-07-28`
+### 1. Target the `2026-07-28` protocol model, and serve both eras
 
 **Verified against the live specification on 2026-09-25**, not a summary:
 
@@ -68,24 +68,83 @@ The specification names the two eras explicitly:
 | **Legacy**   | `2025-11-25` and earlier — a session is established with an `initialize` handshake         |
 | **Dual-era** | supports both                                                                              |
 
-**Decision: implement modern (`2026-07-28`) only.** There is no session to establish, so a server that
-follows old tutorials or the #38 fork would implement a handshake the protocol no longer has. The
-spec also requires a discovery RPC, which is what makes a modern-only server discoverable rather than
-just incompatible:
+**Decision: target the 2026-07-28 protocol model, and let the official SDK serve both eras over stdio.**
 
-> Add `server/discover`: servers **MUST** implement this RPC to advertise their supported protocol
-> versions, capabilities, and identity. Clients **MAY** call it before any other request for up-front
-> version selection, or use it as a backward-compatibility probe on STDIO.
+There is no session to establish, so a server that hand-writes an `initialize` handshake from an old
+tutorial — or copies #38's fork — implements the previous era by hand. That much stands.
 
-**Revisit trigger:** if a client the user actually wants to use cannot speak `2026-07-28`, add the
-legacy handshake as a dual-era shim. Not before — dual-era support is real complexity, and
-`server/discover` is the designed answer to "what do you speak?".
+What does **not** stand is the conclusion I first drew from it, which was that serving 2025-era
+clients would mean maintaining two server implementations. With the official TypeScript SDK v2 it is
+the opposite: the SDK's stdio entry point **is** the compatibility boundary, and dual-era is its
+default.
+
+From the SDK source (`packages/server/src/server/serveStdio.ts`):
+
+> `serveStdio` — the stdio entry point for serving the 2026-07-28 protocol revision on a long-lived
+> connection, **with 2025-era serving as the default** for clients that open with the `initialize`
+> handshake.
+>
+> The entry owns the stdio transport and **the era decision** for the connection… constructs **ONE**
+> server instance from the consumer's factory for the era the client opened with, pins that instance
+> for the lifetime of the connection, and passes every later message straight through to it.
+
+The same file documents the option and the trap:
+
+- `legacy?: 'reject' | 'serve'` — `'serve'` is **the default**; `'reject'` answers an `initialize`
+  with the unsupported-protocol-version error naming the supported modern revisions.
+- A `server/discover` probe is answered by an optimistically built modern instance but **does not pin
+  the connection** — the spec's stdio backward-compatibility flow, where a client may probe first and
+  then either continue modern or fall back to `initialize`.
+- "Hand-constructed servers connected directly to a `StdioServerTransport` are unaffected by this
+  entry: **they keep serving the 2025-era protocol they were written for.**" So
+  `Server.connect(new StdioServerTransport())` — the obvious first thing to write — is exactly the
+  modern-communication gap this ADR exists to avoid.
+
+And from the SDK's dual-era example, which the SDK documents as the recommended first read for this
+migration:
+
+> One server factory, both protocol eras (2025 `initialize` and 2026-07-28 per-request envelope), both
+> transports… the entry (`serveStdio` / `createMcpHandler`) owns the era decision, **the factory is
+> era-agnostic**.
+
+So the decision is:
+
+|                           |                                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| Architectural target      | the `2026-07-28` model (per-request envelope, `server/discover`, no session)                  |
+| Compatibility boundary    | the SDK's `serveStdio(factory)` — dual-era, `legacy: 'serve'` (its default)                   |
+| Server code               | **one** factory, one set of tool handlers, one `Retriever`, one provenance model              |
+| Hand-written legacy stack | **none.** We serve the 2025 era by _delegating_ to the SDK, never by implementing a handshake |
+| Network transport         | none (see §2)                                                                                 |
+
+This is not a compromise against the product goal; it is what makes the product goal reachable. This
+ADR names Codex as a target client, and Codex today is **legacy-by-default for local stdio**:
+
+> Add an opt-in `mcp_2026_07_28` protocol mode **while preserving the legacy lifecycle by default**…
+> **Require stdio servers to opt in with `CODEX_MCP_PROTOCOL_VERSION=2026-07-28`**
+> — openai/codex#35724, _Add MCP 2026-07-28 discovery support_
+
+A modern-only server would therefore fail to connect to one of the clients this ADR was written for,
+until every user sets an environment variable. Dual-era costs one function choice and removes that
+entire class of "it does not work on my client" report.
+
+**Revisit trigger:** when the clients we care about all speak `2026-07-28` comfortably, dropping the
+legacy era is a **one-line change** (`legacy: 'reject'`) and should be its own small ADR with the
+support matrix recorded. Until then, dual-era is the default and the burden is on dropping it, not on
+keeping it.
+
+One implementation note this pins on #80: the factory **may be called twice** for one connection
+(optimistic modern probe instance, then a legacy instance when the probe falls back), so it must be
+cheap and side-effect-free to construct. The SDK says so explicitly, and a factory that opens the
+database or starts an index on construction would break under that flow.
 
 Concrete requirements this pins on #80, all from the same revision:
 
-- `server/discover` **MUST** be implemented; it is not optional.
-- Every result carries a required `resultType` (`"complete"`, or `"input_required"` for multi
-  round-trip); clients must treat a missing field from older servers as `"complete"`.
+- `server/discover` **MUST** be implemented. It is a protocol RPC, not a tool — see §3.
+- Every result carries a required `resultType`. The base protocol types it as a `string`
+  discriminator: _"The `result` **MUST** include a `resultType` field to indicate the type of the
+  result."_ For the surface defined here, results are `"complete"`; MRTR-capable operations may return
+  `"input_required"`; the Tasks extension is **out of scope** for v1 and would use its own form.
 - `tools/list` results carry `ttlMs` and `cacheScope` (the `CacheableResult` interface).
 - `tools/list` **SHOULD** be returned in a deterministic order — which also helps prompt caching.
 - Version mismatch returns `UnsupportedProtocolVersionError` (error code `-32022`).
@@ -98,21 +157,36 @@ Concrete requirements this pins on #80, all from the same revision:
 
 `stdio`: newline-delimited JSON-RPC over the standard streams of a **client-launched subprocess**.
 
-No network listener. No remote bind. No HTTP transport in v1. The protocol semantics are identical on
-every binding, so choosing stdio costs no capability an agent needs, and it means the server is not
-reachable by anything that did not start it. Cancellation arrives as `notifications/cancelled` on this
-binding.
+No network listener. No remote bind. No HTTP transport in v1. Protocol semantics are the same on
+every binding, but _transport_ mechanics are not — HTTP cancellation closes the request's response
+stream while stdio uses `notifications/cancelled` — so the justification is not "bindings are
+interchangeable" but the narrower and checkable claim: **the tool surface defined in §3 requires no
+HTTP-only capability.** It is request/response reads, so stdio carries all of it, and the server is
+not reachable by anything that did not start it.
 
-### 3. Tool surface: small, read-only
+### 3. Tool surface: one required protocol RPC, then read-only application tools
+
+`server/discover` is a **protocol RPC**, not a tool. The specification requires it of the server ("servers
+**MUST** implement this RPC to advertise their supported protocol versions, capabilities, and
+identity") and it is what a modern client calls first. It must **not** appear in `tools/list`, and #80
+must not register it as a tool named `server/discover`.
+
+**Protocol-required RPC — the SDK entry owns this:** `server/discover`. The spec's stdio
+backward-compatibility flow (probe, then continue modern or fall back to `initialize`) is implemented
+by `serveStdio`; our factory supplies a server instance and does not answer discovery itself.
+
+**KnowNote application tools:**
 
 | Tool              | Arguments                                               | Returns                                                                      |
 | ----------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `server/discover` | —                                                       | supported revisions, capabilities, identity (**required by the spec**)       |
 | `list_notebooks`  | —                                                       | notebook id + title (+ source/note counts)                                   |
 | `search_notebook` | `notebook_id`, `query`, `top_k` (default 5, **max 50**) | evidence **with provenance**, not bare text                                  |
 | `get_source`      | `document_id`                                           | source metadata + structure outline (pages / blocks)                         |
 | `read_document`   | `document_id`, `page?`                                  | canonical text, page-scoped when `page` is given, otherwise a bounded window |
 | `search_notes`    | `notebook_id`, `query`                                  | notes                                                                        |
+
+These are the tools the factory registers, and they are the same for both eras — the SDK owns the era
+decision, so there is no modern list and legacy list to keep in step.
 
 Deliberately absent in v1: **every write path**, every tool that spends money or calls a model, and
 anything that reports a filesystem path. Read-only is what makes an MCP surface safe to grant to an
@@ -181,12 +255,18 @@ onto it. The issue itself stays closed; this ADR is what it becomes.
 
 ## Consequences
 
-- #80 is a thin adapter: protocol plumbing plus a mapping from `RetrievedEvidence` to tool output. If
-  it starts to look like a second retrieval stack, the decision above has been violated.
+- #80 is a thin adapter: **one era-agnostic factory**, protocol plumbing supplied by `serveStdio`,
+  and a mapping from `RetrievedEvidence` to tool output. If it starts to look like a second retrieval
+  stack — or like two sets of handlers, one per era — the decision above has been violated.
 - The server is **coupled to the protocol revision**, so an implementation note must record the
   revision it was built against (as this ADR does) — the next revision will move things again.
-- Modern-only means an old client cannot talk to it. That is deliberate and reversible via the
-  dual-era trigger above.
+- Serving both eras is the **default** because dropping legacy is the change that needs justifying,
+  not the other way round. When the support matrix allows it, that is `legacy: 'reject'` and a small
+  follow-up ADR.
+- The SDK's entry point may construct the factory's server **twice** for one connection (an
+  optimistic modern probe instance, then a legacy instance when the probe falls back), so the factory
+  must be cheap and side-effect-free. #80 must not open the database, start an index, or attach
+  process-level state in the factory body.
 - Being stdio-only means no remote/multi-device access. If that is ever wanted it is a **new ADR**,
   not a flag on this one: a network listener changes the security model completely.
 
@@ -198,8 +278,14 @@ onto it. The issue itself stays closed; this ADR is what it becomes.
   it a remote attack surface, for a capability no requested client needs.
 - **Merge or port #38's implementation** — rejected above; its protocol era is obsolete and it forked
   the query path.
-- **Implement `2025-11-25` (legacy handshake) first** — rejected: it is the previous revision, and
-  building the deprecated shape first means rewriting the transport immediately after.
+- **Hand-implement the legacy `initialize`/session path** — rejected: `serveStdio` already serves
+  2025-era clients from the same era-agnostic factory, so writing that layer by hand would duplicate
+  the protocol for no capability. Delegating to the SDK is the whole point of the decision above.
+- **Modern-only, `legacy: 'reject'`** — rejected for v1, and this was the first draft of this ADR. It
+  looks like the smaller surface, but it trades one function argument for real client breakage: Codex
+  keeps the legacy lifecycle for local stdio by default and needs
+  `CODEX_MCP_PROTOCOL_VERSION=2026-07-28` to speak 2026-07-28 (openai/codex#35724). A modern-only
+  server would fail to connect to a client this ADR names, and dual-era costs less than that.
 - **A writable v1 (create notes / add sources from an agent)** — deferred, not rejected on principle.
   It needs its own consent and confirmation design, and it belongs in a follow-up once the read path
   is proven.
