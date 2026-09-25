@@ -29,6 +29,27 @@ export interface DocumentBlockDraft {
   metadata: Record<string, unknown> | null
 }
 
+/** 已分配 id 的块；持久化与分块共用同一批对象，id 只生成一次。 */
+export interface IdentifiedBlockDraft extends DocumentBlockDraft {
+  id: string
+  documentId: string
+}
+
+/**
+ * 给块分配 id。id 由 documentId 与顺序确定，天然唯一且可读；重新索引会换新
+ * documentId，不会与旧块冲突。
+ */
+export function assignBlockIds(
+  documentId: string,
+  drafts: DocumentBlockDraft[]
+): IdentifiedBlockDraft[] {
+  return drafts.map((draft) => ({
+    ...draft,
+    id: `blk_${documentId}_${draft.order}`,
+    documentId
+  }))
+}
+
 export interface BlockSource {
   content: string
   structure?: DocumentStructure
