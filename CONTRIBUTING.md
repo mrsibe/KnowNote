@@ -49,6 +49,8 @@ npm run dev
 | `npm run build`          | Typecheck, then bundle with electron-vite.                    |
 | `npm run build:unpack`   | `build`, then produce an unpacked app in `dist/`.             |
 | `npm run smoke:packaged` | Launch the packaged app's `--smoke-test` and check it starts. |
+| `npm run eval:prepare`   | One-time, networked: download the pinned eval embedding model. |
+| `npm run eval`           | Run the RAG eval harness offline; rewrites `docs/eval/`.       |
 | `npm run db:generate`    | Generate a Drizzle migration from `src/main/db/schema.ts`.    |
 | `npm run db:studio`      | Inspect the development database.                             |
 

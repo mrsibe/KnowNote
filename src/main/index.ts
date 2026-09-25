@@ -20,6 +20,7 @@ import { broadcastProgress as broadcastEmbeddingProgress } from './ipc/embedding
 import { getStore } from './config/store'
 import { migrateProvidersToConnections } from './config/connectionMigration'
 import { isSmokeTestRequested, runSmokeTest } from './smokeTest'
+import { isEvalRequested, runEvalCli } from './eval/run'
 import Logger from '../shared/utils/logger'
 
 let connectionManager: ConnectionManager | null = null
@@ -39,6 +40,15 @@ app.whenReady().then(async () => {
   if (isSmokeTestRequested()) {
     const code = await runSmokeTest()
     // app.exit() does not wait for stdout to drain, and CI reads this output.
+    await new Promise<void>((resolve) => process.stdout.write('', () => resolve()))
+    app.exit(code)
+    return
+  }
+
+  // RAG eval harness (#75). Like the smoke test it runs before any window is
+  // created and exits with the result.
+  if (isEvalRequested()) {
+    const code = await runEvalCli()
     await new Promise<void>((resolve) => process.stdout.write('', () => resolve()))
     app.exit(code)
     return

@@ -1,0 +1,303 @@
+{
+  "baseline": "v1.4",
+  "generatedBy": "npm run eval",
+  "config": {
+    "embedding": "Xenova/multilingual-e5-small@761b726dd34fb83930e26aab4e9ac3899aa1fa78 q8 (384d, local)",
+    "chunking": {
+      "chunkSize": 500,
+      "chunkOverlap": 50,
+      "minChunkSize": 100,
+      "allowSpanPages": false
+    },
+    "retrieval": "dense",
+    "topK": 10,
+    "threshold": 0,
+    "citationK": 5,
+    "corpus": "eval/corpus",
+    "documents": 6,
+    "questions": 13
+  },
+  "metrics": {
+    "recallAt1": 0.923077,
+    "recallAt5": 1,
+    "recallAt10": 1,
+    "mrr": 0.948718,
+    "ndcgAt10": 0.961538,
+    "citationRecall": 0.2
+  },
+  "perQuestion": [
+    {
+      "id": "q001",
+      "question": "Why is bedload harder to measure than suspended sediment?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q002",
+      "question": "How many replicate samples are collected at each river station?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q003",
+      "question": "What is the central trade-off in lithium-ion cell design?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q004",
+      "question": "Why do nickel-rich battery packs need more aggressive thermal management?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q005",
+      "question": "What happens once the separator in a battery cell melts?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q006",
+      "question": "At what temperature do honeybees begin to forage?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q007",
+      "question": "What does a late frost damage during full bloom?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q008",
+      "question": "Why is a continuous tree canopy more effective at cooling than isolated trees?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q009",
+      "question": "Why are trees with aggressive surface roots unsuitable for narrow verges?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q010",
+      "question": "At what temperature is lactic acid fermentation fastest?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q011",
+      "question": "Is the salt percentage in fermentation based on vegetable weight or water weight?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q012",
+      "question": "Why must tidal turbines be sited in places with very fast currents?",
+      "firstRelevantRank": 1,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    {
+      "id": "q013",
+      "question": "What is the main environmental concern for tidal energy installations?",
+      "firstRelevantRank": 3,
+      "relevantCount": 1,
+      "retrievedCount": 10,
+      "matchesByRank": [
+        [],
+        [],
+        [
+          0
+        ],
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    }
+  ]
+}
