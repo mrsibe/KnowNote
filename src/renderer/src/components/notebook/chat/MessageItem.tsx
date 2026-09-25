@@ -16,7 +16,7 @@ import { useKnowledgeStore } from '../../../store/knowledgeStore'
 import { useNotebookStore } from '../../../store/notebookStore'
 import { useSourceAnchorNavigation } from '../../../hooks/useSourceAnchorNavigation'
 import { parseRetrievalStatus, sourcesForDisplay } from '../../../../../shared/utils/answerSources'
-import { parseCitations, citationDocumentExists } from '../../../../../shared/utils/citations'
+import { parseCitations, sourceDocumentExists } from '../../../../../shared/utils/citations'
 import { citationToSourceAnchor } from '../../../../../shared/utils/sourceAnchor'
 import { Button } from '../../ui/button'
 import { ScrollArea, ScrollBar } from '../../ui/scroll-area'
@@ -55,7 +55,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   // provably absent. Before that (or after a failed load) the list is "unknown",
   // not "deleted", so the chip stays clickable and the reader falls back.
   const documentExists = (documentId: string): boolean =>
-    citationDocumentExists(documents, documentsLoaded, documentId)
+    sourceDocumentExists(documents, documentsLoaded, documentId)
 
   const handleOpenCitation = (citation: (typeof citations)[number]): void => {
     openSourceAnchor(citationToSourceAnchor(citation))

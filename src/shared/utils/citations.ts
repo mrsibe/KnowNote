@@ -73,15 +73,20 @@ export const parseCitations = (metadata: unknown): Citation[] => {
 }
 
 /**
- * 一条 citation 的来源现在还能不能打开（#72）。
+ * 一条来源引用现在还能不能打开。
+ *
+ * 「来源」包括答案里的 citation（#72）和笔记里的摘录锚点（#73）—— 两者都只是把
+ * `documentId` 记在别处，都需要回答同一个问题，所以共用这一条规则。
  *
  * `documentsLoaded` 是让空的列表变得无歧义的那个字段：
  *
  * - 还没读过列表 —— 空数组只意味着「不知道」，保持可点击，由阅读器侧优雅回退；
- * - 成功读过列表 —— 空数组是真实答案（最后一个来源也被删了），chip 应禁用；
+ * - 成功读过列表 —— 空数组是真实答案（最后一个来源也被删了），引用应禁用；
  * - 读取失败 —— 同样视为「不知道」，不能把失败当成「来源已删除」的证据。
+ *
+ * 禁用不等于删除：引用本身留在原地。源不在和「当初来自这里」是两件事。
  */
-export function citationDocumentExists(
+export function sourceDocumentExists(
   documents: readonly { id: string }[],
   documentsLoaded: boolean,
   documentId: string

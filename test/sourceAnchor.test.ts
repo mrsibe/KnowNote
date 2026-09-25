@@ -2,13 +2,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   citationToSourceAnchor,
+  selectionToSourceAnchor,
   sourceAnchorFromSearchParams,
   sourceAnchorToSearchParams,
   sourceAnchorsEqual,
   withSourceAnchor
 } from '../src/shared/utils/sourceAnchor.ts'
 import type { Citation } from '../src/shared/types/citation.ts'
-import type { SourceAnchor } from '../src/shared/types/source.ts'
+import type { ReaderSelection, SourceAnchor } from '../src/shared/types/source.ts'
 
 /**
  * #72 的引用跳转完全建立在 `SourceAnchor` 上：它既由 citation 快照构造，也由 URL
@@ -141,4 +142,55 @@ test('sourceAnchorsEqual compares the whole location, not just the document', ()
   assert.equal(sourceAnchorsEqual(base, anchor({ documentId: 'doc_2', page: 5 })), false)
   assert.equal(sourceAnchorsEqual(base, null), false)
   assert.equal(sourceAnchorsEqual(null, null), true)
+})
+
+/**
+ * #73：阅读器的选区也是 `SourceAnchor` 的一个入口，和 citation 并列。两件容易写错的事
+ * 在这里钉住 —— 非分页来源的 `page: null` 不能被写成 `page: null` 出现在 URL 里，以及
+ * 外层与 `location` 的 `documentId` 必须来自同一个来源身份，而不是各自拼装。
+ */
+
+const selection = (over: Partial<ReaderSelection> = {}): ReaderSelection => ({
+  documentId: 'doc_1',
+  page: 5,
+  blockId: 'block_7',
+  startOffset: 1832,
+  endOffset: 1947,
+  text: 'the selected passage',
+  ...over
+})
+
+test('selectionToSourceAnchor carries every location field the reader recorded', () => {
+  assert.deepEqual(selectionToSourceAnchor(selection()), {
+    documentId: 'doc_1',
+    location: {
+      documentId: 'doc_1',
+      page: 5,
+      blockId: 'block_7',
+      startOffset: 1832,
+      endOffset: 1947
+    }
+  })
+})
+
+test('selectionToSourceAnchor omits an unrecorded position instead of persisting a null', () => {
+  const mapped = selectionToSourceAnchor(
+    selection({ page: null, blockId: null, startOffset: null, endOffset: null })
+  )
+
+  assert.deepEqual(mapped.location, { documentId: 'doc_1' })
+  assert.equal('page' in mapped.location, false)
+  assert.equal('blockId' in mapped.location, false)
+})
+
+test('selectionToSourceAnchor keeps the outer and inner document id the same', () => {
+  const mapped = selectionToSourceAnchor(selection({ documentId: 'doc_9' }))
+
+  assert.equal(mapped.documentId, mapped.location.documentId)
+})
+
+test('a selection-derived anchor round-trips through the URL like any other', () => {
+  const original = selectionToSourceAnchor(selection({ page: null }))
+
+  assert.deepEqual(sourceAnchorFromSearchParams(sourceAnchorToSearchParams(original)), original)
 })
