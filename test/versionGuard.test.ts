@@ -1,7 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { compareVersions, newestVersionTag, parseVersion } from '../scripts/check-version.mjs'
 
 /**
@@ -141,11 +143,44 @@ test('the repository itself passes the guard', () => {
   assert.match(result.output, /check:version/)
 })
 
-test('the guard is exercised the way CI runs it', () => {
-  // `npm run check:version` is the wired-up entry point; running it through npm
-  // proves the script is reachable under that name and not only via a direct path.
-  const result = spawnSync('npm', ['run', 'check:version'], { encoding: 'utf8' })
+test('the documented entry point is wired to this script', () => {
+  // Asserted by reading package.json rather than by running `npm run check:version`:
+  // on Windows `npm` is an `npm.cmd` shim, and spawnSync cannot execute a .cmd
+  // without `shell: true`, so the subprocess returns `status: null` and the test
+  // fails on Windows only. CI runs the real `npm run check:version` step anyway,
+  // which is the stronger check.
+  const scripts = JSON.parse(readFileSync('package.json', 'utf8')).scripts
 
-  assert.equal(result.status, 0, result.stderr)
-  assert.match(result.stdout, /check:version/)
+  assert.equal(scripts['check:version'], 'node scripts/check-version.mjs')
+})
+
+/**
+ * The failure this guard is most likely to have is not a wrong answer but a silent
+ * one: a checkout that cannot see any tags compares nothing and then reports
+ * success. That already happened once - `fetch-tags: true` turned out to fetch no
+ * tags for a pull request - and the step went green while checking nothing.
+ *
+ * Reproduced in a throwaway directory that is not a git repository at all, which is
+ * the same shape as a checkout that fetched no tags.
+ */
+test('in CI, having no tags to compare against fails instead of passing', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'knownote-version-guard-'))
+  try {
+    copyFileSync('scripts/check-version.mjs', join(dir, 'check-version.mjs'))
+    copyFileSync('package.json', join(dir, 'package.json'))
+
+    const local = spawnSync('node', ['check-version.mjs'], { cwd: dir, encoding: 'utf8' })
+    assert.equal(local.status, 0, 'outside CI a missing tag list is tolerated')
+
+    const ci = spawnSync('node', ['check-version.mjs'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, GITHUB_ACTIONS: 'true' }
+    })
+
+    assert.notEqual(ci.status, 0, 'in CI it must not report success without comparing')
+    assert.match(`${ci.stdout}${ci.stderr}`, /fetch-depth: 0/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })

@@ -199,6 +199,22 @@ const checkCompareMode = (version, tags) => {
   const latest = tags === null ? null : newestVersionTag(tags)
 
   if (latest === null) {
+    // In CI this must not happen, and it is the failure this guard is most likely
+    // to have: a checkout that cannot see the tags compares nothing and then
+    // reports success, so the step looks green and checks absolutely nothing.
+    // That already happened once here - `fetch-tags: true` turned out to fetch no
+    // tags for a pull request, because it only adds the checked-out ref's own tag.
+    // Failing loudly is the same call as allowMissingDependencies: false in
+    // electron-builder.yml: a check that cannot run must not look like one that ran.
+    if (inActions) {
+      return fail(
+        `no version tag is reachable, so this check has nothing to compare against.\n` +
+          `  In CI that means the checkout did not fetch tags. verify.yml must use\n` +
+          `  \`fetch-depth: 0\`: actions/checkout only fetches every tag when it fetches\n` +
+          `  all history (\`fetch-tags\` adds just the checked-out ref's own tag).`
+      )
+    }
+
     return report(
       `check:version — package.json ${version}; no version tag reachable, nothing to compare ` +
         `(not a git clone, or a shallow checkout without tags)`,

@@ -40,10 +40,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # check:version compares package.json against the newest release tag, and
-          # the default depth-1 checkout fetches no tags at all. fetch-tags brings
-          # the tag names without pulling the whole history in behind them.
-          fetch-tags: true
+          # check:version compares package.json against the newest release tag, so the
+          # tags have to be here. `fetch-tags: true` does NOT do it: in the shallow
+          # path actions/checkout only adds the checked-out ref's own tag to the
+          # refspec, and a pull request ref (`refs/pull/N/merge`) has no tag. All tags
+          # come with all history, and this repository is small enough that the full
+          # fetch is not worth optimising.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
