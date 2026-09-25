@@ -35,7 +35,11 @@ import { EmbeddingService } from './EmbeddingService'
 import type { EmbeddingSpace } from '../../shared/types'
 import { ChunkingService, type ChunkOptions } from './ChunkingService'
 import { FileParserService } from './FileParserService'
-import { buildDocumentBlocks, type DocumentBlockDraft } from './blocks/documentBlocks'
+import {
+  buildDocumentBlocks,
+  assignBlockIds,
+  type IdentifiedBlockDraft
+} from './blocks/documentBlocks'
 import { WebFetchService } from './WebFetchService'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
@@ -196,12 +200,17 @@ export class KnowledgeService {
 
       db.insert(documents).values(newDoc).run()
 
-      // 1b. 持久化文档块（文本/URL/笔记没有结构，按段落平铺）
-      this.persistDocumentBlocks(documentId, buildDocumentBlocks({ content: options.content }))
+      // 1b. 持久化文档块（文本/URL/笔记没有结构，按段落平铺），并把同一批块交给分块器
+      const blocks = assignBlockIds(documentId, buildDocumentBlocks({ content: options.content }))
+      this.persistDocumentBlocks(blocks)
 
-      // 2. 分块
+      // 2. 分块（偏移锚定 options.content，即 documents.content）
       onProgress?.('chunking', 10)
-      const chunkResults = this.chunkingService.chunk(options.content, options.chunkOptions)
+      const chunkResults = this.chunkingService.chunkBlocks(
+        options.content,
+        blocks,
+        options.chunkOptions
+      )
 
       if (chunkResults.length === 0) {
         throw new Error('No chunks generated from document')
@@ -383,15 +392,16 @@ export class KnowledgeService {
 
       db.insert(documents).values(newDoc).run()
 
-      // 1b. 持久化文档块，保留解析器给出的页/标题结构
-      this.persistDocumentBlocks(
+      // 1b. 持久化文档块，保留解析器给出的页/标题结构，并把同一批块交给分块器
+      const blocks = assignBlockIds(
         documentId,
         buildDocumentBlocks({ content: parseResult.content, structure: parseResult.structure })
       )
+      this.persistDocumentBlocks(blocks)
 
-      // 2. 分块
+      // 2. 分块（偏移锚定 parseResult.content，即 documents.content）
       onProgress?.('chunking', 10)
-      const chunkResults = this.chunkingService.chunk(parseResult.content)
+      const chunkResults = this.chunkingService.chunkBlocks(parseResult.content, blocks)
 
       if (chunkResults.length === 0) {
         throw new Error('No chunks generated from document')
@@ -525,28 +535,27 @@ export class KnowledgeService {
   }
 
   /**
-   * 持久化文档块。块 id 由 documentId 与顺序确定，天然唯一且可读；
-   * 重新索引会换新 documentId，不会与旧块冲突。
+   * 持久化文档块。id 已由 `assignBlockIds()` 生成，与分块器看到的是同一批块。
    */
-  private persistDocumentBlocks(documentId: string, drafts: DocumentBlockDraft[]): void {
-    if (drafts.length === 0) return
+  private persistDocumentBlocks(blocks: IdentifiedBlockDraft[]): void {
+    if (blocks.length === 0) return
 
-    const rows: NewDocumentBlock[] = drafts.map((draft) => ({
-      id: `blk_${documentId}_${draft.order}`,
-      documentId,
-      kind: draft.kind,
-      order: draft.order,
-      page: draft.page,
-      level: draft.level,
-      text: draft.text,
-      startOffset: draft.startOffset,
-      endOffset: draft.endOffset,
-      bbox: draft.bbox,
-      metadata: draft.metadata
+    const rows: NewDocumentBlock[] = blocks.map((block) => ({
+      id: block.id,
+      documentId: block.documentId,
+      kind: block.kind,
+      order: block.order,
+      page: block.page,
+      level: block.level,
+      text: block.text,
+      startOffset: block.startOffset,
+      endOffset: block.endOffset,
+      bbox: block.bbox,
+      metadata: block.metadata
     }))
 
     getDatabase().insert(documentBlocks).values(rows).run()
-    Logger.debug('KnowledgeService', `Document ${documentId}: ${rows.length} blocks`)
+    Logger.debug('KnowledgeService', `Document ${blocks[0].documentId}: ${rows.length} blocks`)
   }
 
   /**

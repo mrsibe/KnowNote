@@ -1,9 +1,16 @@
 /**
  * ChunkingService
- * 智能文档分块服务，保持语义完整性
+ * 分块服务：按块序列切分，保留规范文本偏移。
+ *
+ * 关键约束：chunk 的 `content` 一律是 `content.slice(startOffset, endOffset)`。
+ * 分块器不再预处理文本、不再改写空白，所以 `documents.content`（每个文档唯一的
+ * 规范字符串）与 `chunks.start_offset/end_offset` 永远指向同一份字节。旧的
+ * `preprocessText()` 会把偏移算到清洗后的字符串上，这正是"能看到来源标题却无法
+ * 高亮来源"的根因。
  */
 
 import Logger from '../../shared/utils/logger'
+import type { BlockKind } from './blocks/documentBlocks'
 
 /**
  * 分块选项
@@ -11,30 +18,67 @@ import Logger from '../../shared/utils/logger'
 export interface ChunkOptions {
   chunkSize?: number // 每块的目标字符数，默认 500
   chunkOverlap?: number // 块之间的重叠字符数，默认 50
-  separators?: string[] // 分隔符优先级列表
-  minChunkSize?: number // 最小块大小，默认 100
+  separators?: string[] // 回退窗口在何处断开的优先级列表
+  minChunkSize?: number // 整篇文本不超过它时直接作为一块
+  allowSpanPages?: boolean // 允许一个 chunk 跨页，默认 false（分页文档在页边界断开）
+}
+
+/**
+ * 分块器接受的块。字段是 `document_blocks` 的子集。
+ */
+export interface ChunkBlock {
+  id: string
+  kind: BlockKind
+  page: number | null
+  level: number | null
+  text: string
+  startOffset: number
+  endOffset: number
+}
+
+/** 一个 chunk 覆盖的某个块内的字符区间。 */
+export interface ChunkBlockSpan {
+  blockId: string
+  startInBlock: number
+  endInBlock: number
 }
 
 /**
  * 分块结果
  */
 export interface ChunkResult {
-  content: string // 块内容
+  content: string // 块内容（规范文本的精确切片）
   index: number // 块索引
-  startOffset: number // 原文起始位置
-  endOffset: number // 原文结束位置
+  startOffset: number // 规范文本起始位置
+  endOffset: number // 规范文本结束位置
   tokenCount: number // 估算 token 数
+  blockSpans: ChunkBlockSpan[] // 覆盖的块及其区间（按文档顺序）
+  pageStart: number | null // 覆盖块的最小页码；无分页块时为 null
+  pageEnd: number | null // 覆盖块的最大页码；无分页块时为 null
+}
+
+interface Unit {
+  blockIndex: number
+  start: number // 规范文本偏移
+  end: number
+  page: number | null
+}
+
+interface Range {
+  start: number
+  end: number
 }
 
 /**
  * 文档分块服务
- * 支持智能分块，保持语义完整性
+ * 支持块感知分块（保留来源结构），以及无块时的字符窗口回退。
  */
 export class ChunkingService {
   private defaultOptions: Required<ChunkOptions> = {
     chunkSize: 500,
     chunkOverlap: 50,
     minChunkSize: 100,
+    allowSpanPages: false,
     separators: [
       '\n\n\n', // 多个空行（章节分隔）
       '\n\n', // 段落分隔
@@ -54,81 +98,80 @@ export class ChunkingService {
   }
 
   /**
-   * 对文本进行分块
+   * 块感知分块。偏移与内容都锚定在 `content` 这份规范字符串上。
+   *
+   * 分块边界只落在语义单元之间（标题 → 段落 → 行 → 句子 → 空白），标题块是原子
+   * 单元，永远不会被切开；分页文档默认不跨页。`blockSpans` 记录每个 chunk 覆盖
+   * 的块及其区间，供调用方持久化。
+   */
+  chunkBlocks(content: string, blocks: ChunkBlock[], options?: ChunkOptions): ChunkResult[] {
+    const opts = { ...this.defaultOptions, ...options }
+    const ordered = [...blocks]
+      .filter((block) => block.endOffset > block.startOffset)
+      .sort((a, b) => a.startOffset - b.startOffset)
+
+    if (ordered.length === 0) {
+      return this.chunk(content, options)
+    }
+
+    const units = this.buildUnits(ordered, opts.chunkSize)
+    const packed = this.packUnits(content, ordered, units, opts)
+
+    const chunks = packed.map((chunk, index) => ({
+      ...chunk,
+      index,
+      tokenCount: this.estimateTokens(chunk.content)
+    }))
+
+    Logger.debug('ChunkingService', `Split ${ordered.length} blocks into ${chunks.length} chunks`)
+    return chunks
+  }
+
+  /**
+   * 无块回退：按字符窗口切分规范文本。不预处理、不改写长度，偏移可精确切回。
    */
   chunk(text: string, options?: ChunkOptions): ChunkResult[] {
     const opts = { ...this.defaultOptions, ...options }
     const { chunkSize, chunkOverlap, separators, minChunkSize } = opts
 
-    // 预处理：移除多余空白
-    const cleanedText = this.preprocessText(text)
-
-    if (!cleanedText || cleanedText.length === 0) {
-      return []
-    }
-
-    // 如果文本小于最小块大小，直接返回整个文本
-    if (cleanedText.length <= minChunkSize) {
-      return [
-        {
-          content: cleanedText,
-          index: 0,
-          startOffset: 0,
-          endOffset: cleanedText.length,
-          tokenCount: this.estimateTokens(cleanedText)
-        }
-      ]
-    }
+    if (!text || text.trim().length === 0) return []
 
     const chunks: ChunkResult[] = []
-    let currentStart = 0
+    const push = (start: number, end: number): void => {
+      while (start < end && isWhitespace(text[start])) start++
+      while (end > start && isWhitespace(text[end - 1])) end--
+      if (end <= start) return
 
-    while (currentStart < cleanedText.length) {
-      let currentEnd = Math.min(currentStart + chunkSize, cleanedText.length)
+      const content = text.slice(start, end)
+      chunks.push({
+        content,
+        index: chunks.length,
+        startOffset: start,
+        endOffset: end,
+        tokenCount: this.estimateTokens(content),
+        blockSpans: [],
+        pageStart: null,
+        pageEnd: null
+      })
+    }
 
-      // 如果不是文本末尾，尝试在分隔符处断开
-      if (currentEnd < cleanedText.length) {
-        const searchEnd = currentEnd
-        const searchStart = Math.max(currentStart + Math.floor(chunkSize * 0.5), currentStart)
+    if (text.length <= minChunkSize) {
+      push(0, text.length)
+      return chunks
+    }
 
-        let bestSplitPos = -1
-        let bestSeparatorPriority = separators.length
-
-        // 在范围内查找最佳分割点
-        for (let i = searchEnd; i >= searchStart; i--) {
-          for (let j = 0; j < separators.length; j++) {
-            const sep = separators[j]
-            if (cleanedText.slice(i, i + sep.length) === sep) {
-              if (j < bestSeparatorPriority) {
-                bestSplitPos = i + sep.length
-                bestSeparatorPriority = j
-              }
-              break
-            }
-          }
-          // 找到高优先级分隔符就停止
-          if (bestSeparatorPriority <= 2) break
-        }
-
-        if (bestSplitPos > currentStart) {
-          currentEnd = bestSplitPos
-        }
+    let start = 0
+    while (start < text.length) {
+      let end = Math.min(start + chunkSize, text.length)
+      if (end < text.length) {
+        const split = this.findSeparatorSplit(text, start, end, separators)
+        if (split > start) end = split
       }
 
-      const content = cleanedText.slice(currentStart, currentEnd).trim()
+      push(start, end)
+      if (end >= text.length) break
 
-      if (content.length >= minChunkSize) {
-        chunks.push({
-          content,
-          index: chunks.length,
-          startOffset: currentStart,
-          endOffset: currentEnd,
-          tokenCount: this.estimateTokens(content)
-        })
-      }
-
-      // 计算下一块的起始位置（考虑重叠）
-      currentStart = Math.max(currentEnd - chunkOverlap, currentStart + 1)
+      start = Math.max(end - chunkOverlap, start + 1)
     }
 
     Logger.debug('ChunkingService', `Split text into ${chunks.length} chunks`)
@@ -136,90 +179,183 @@ export class ChunkingService {
   }
 
   /**
-   * 按句子分块（更保守的分块策略）
+   * 把块序列拆成语义单元。标题块整体作为一个原子单元；段落按行、句子、空白逐步
+   * 细分，但绝不跨越块边界（块边界本身就是段落级语义边界）。
    */
-  chunkBySentence(text: string, options?: ChunkOptions): ChunkResult[] {
-    const opts = { ...this.defaultOptions, ...options }
+  private buildUnits(blocks: ChunkBlock[], chunkSize: number): Unit[] {
+    const units: Unit[] = []
 
-    // 分句
-    const sentences = this.splitIntoSentences(text)
-    const chunks: ChunkResult[] = []
-    let currentChunk: string[] = []
-    let currentLength = 0
-    let currentStartOffset = 0
-
-    for (const sentence of sentences) {
-      const sentenceLength = sentence.length
-
-      if (currentLength + sentenceLength > opts.chunkSize && currentChunk.length > 0) {
-        // 保存当前块
-        const content = currentChunk.join('')
-        chunks.push({
-          content,
-          index: chunks.length,
-          startOffset: currentStartOffset,
-          endOffset: currentStartOffset + content.length,
-          tokenCount: this.estimateTokens(content)
-        })
-
-        // 开始新块（可以考虑重叠）
-        currentStartOffset += content.length
-        currentChunk = []
-        currentLength = 0
+    blocks.forEach((block, blockIndex) => {
+      const page = block.page
+      const push = (start: number, end: number, trim: boolean): void => {
+        if (trim) {
+          while (start < end && isWhitespace(block.text[start])) start++
+          while (end > start && isWhitespace(block.text[end - 1])) end--
+        }
+        if (end > start) {
+          units.push({
+            blockIndex,
+            start: block.startOffset + start,
+            end: block.startOffset + end,
+            page
+          })
+        }
       }
 
-      currentChunk.push(sentence)
-      currentLength += sentenceLength
+      if (block.kind === 'heading') {
+        push(0, block.text.length, true)
+        return
+      }
+
+      // 代码/表格保留行首缩进；其余块的行首行尾空白不属于内容
+      const preserveWhitespace = block.kind === 'code' || block.kind === 'table'
+
+      for (const line of lineRanges(block.text)) {
+        if (line.end - line.start <= chunkSize) {
+          push(line.start, line.end, !preserveWhitespace)
+          continue
+        }
+
+        for (const sentence of sentenceRanges(block.text, line.start, line.end)) {
+          if (sentence.end - sentence.start <= chunkSize) {
+            push(sentence.start, sentence.end, !preserveWhitespace)
+            continue
+          }
+          for (const piece of hardSplit(block.text, sentence.start, sentence.end, chunkSize)) {
+            push(piece.start, piece.end, !preserveWhitespace)
+          }
+        }
+      }
+    })
+
+    return units
+  }
+
+  /**
+   * 贪心装箱：装满 chunkSize 前尽量合并单元；页边界处默认断开；重叠按规范偏移对齐
+   * 到单元起点，所以重叠区域两块的字节完全一致。
+   */
+  private packUnits(
+    content: string,
+    blocks: ChunkBlock[],
+    units: Unit[],
+    opts: Required<ChunkOptions>
+  ): Array<Omit<ChunkResult, 'index' | 'tokenCount'>> {
+    const chunks: Array<Omit<ChunkResult, 'index' | 'tokenCount'>> = []
+    let current: Unit[] = []
+
+    const flush = (): void => {
+      if (current.length === 0) return
+      chunks.push(this.materialize(content, blocks, current))
+      current = []
     }
 
-    // 处理最后一个块
-    if (currentChunk.length > 0) {
-      const content = currentChunk.join('')
-      chunks.push({
-        content,
-        index: chunks.length,
-        startOffset: currentStartOffset,
-        endOffset: currentStartOffset + content.length,
-        tokenCount: this.estimateTokens(content)
-      })
+    for (const unit of units) {
+      if (current.length === 0) {
+        current.push(unit)
+        continue
+      }
+
+      const pageBreak =
+        !opts.allowSpanPages &&
+        unit.page !== null &&
+        current[current.length - 1].page !== null &&
+        unit.page !== current[current.length - 1].page
+      const wouldOverflow = unit.end - current[0].start > opts.chunkSize
+
+      if (pageBreak || wouldOverflow) {
+        const overlap = pageBreak ? [] : this.overlapUnits(current, opts.chunkOverlap)
+        flush()
+        current = overlap
+      }
+
+      current.push(unit)
     }
 
+    flush()
     return chunks
   }
 
-  /**
-   * 预处理文本
-   */
-  private preprocessText(text: string): string {
-    return (
-      text
-        // 统一换行符
-        .replace(/\r\n/g, '\n')
-        .replace(/\r/g, '\n')
-        // 移除连续的多余空白行（保留最多两个换行）
-        .replace(/\n{4,}/g, '\n\n\n')
-        // 移除行首行尾空白
-        .trim()
-    )
+  /** 从已满 chunk 的尾部取不超过 chunkOverlap 的单元作为下一块的开头。 */
+  private overlapUnits(current: Unit[], chunkOverlap: number): Unit[] {
+    if (chunkOverlap <= 0) return []
+
+    const end = current[current.length - 1].end
+    const picked: Unit[] = []
+    for (let i = current.length - 1; i >= 0; i--) {
+      if (end - current[i].start > chunkOverlap) break
+      picked.unshift(current[i])
+    }
+
+    // 不要把整个上一块当作重叠，否则新块只会不停变长
+    if (picked.length === current.length && picked.length > 1) picked.shift()
+    return picked
   }
 
-  /**
-   * 分句
-   */
-  private splitIntoSentences(text: string): string[] {
-    // 使用正则匹配句子结束符
-    const sentenceEndings = /([。！？.!?]+)/g
-    const parts = text.split(sentenceEndings)
-    const sentences: string[] = []
+  /** 依据单元范围切出 chunk 内容与块区间。内容永远是规范文本的精确切片。 */
+  private materialize(
+    content: string,
+    blocks: ChunkBlock[],
+    units: Unit[]
+  ): Omit<ChunkResult, 'index' | 'tokenCount'> {
+    const startOffset = units[0].start
+    const endOffset = units[units.length - 1].end
+    const pieces = content.slice(startOffset, endOffset)
 
-    for (let i = 0; i < parts.length; i += 2) {
-      const sentence = parts[i] + (parts[i + 1] || '')
-      if (sentence.trim()) {
-        sentences.push(sentence)
+    const blockSpans: ChunkBlockSpan[] = []
+    const pages: number[] = []
+
+    for (const unit of units) {
+      const block = blocks[unit.blockIndex]
+      if (block.page !== null) pages.push(block.page)
+
+      const startInBlock = unit.start - block.startOffset
+      const endInBlock = unit.end - block.startOffset
+      const last = blockSpans[blockSpans.length - 1]
+
+      if (last && last.blockId === block.id) {
+        last.startInBlock = Math.min(last.startInBlock, startInBlock)
+        last.endInBlock = Math.max(last.endInBlock, endInBlock)
+      } else {
+        blockSpans.push({ blockId: block.id, startInBlock, endInBlock })
       }
     }
 
-    return sentences
+    return {
+      content: pieces,
+      startOffset,
+      endOffset,
+      blockSpans,
+      pageStart: pages.length > 0 ? Math.min(...pages) : null,
+      pageEnd: pages.length > 0 ? Math.max(...pages) : null
+    }
+  }
+
+  /** 在 [start, end) 内从右向左找优先级最高的分隔符，返回断开位置。 */
+  private findSeparatorSplit(
+    text: string,
+    start: number,
+    end: number,
+    separators: string[]
+  ): number {
+    const searchStart = Math.max(start + Math.floor((end - start) / 2), start)
+    let bestPos = -1
+    let bestPriority = separators.length
+
+    for (let i = end; i >= searchStart; i--) {
+      for (let j = 0; j < separators.length; j++) {
+        if (text.startsWith(separators[j], i)) {
+          if (j < bestPriority) {
+            bestPos = i + separators[j].length
+            bestPriority = j
+          }
+          break
+        }
+      }
+      if (bestPriority <= 2) break
+    }
+
+    return bestPos > start ? bestPos : end
   }
 
   /**
@@ -259,4 +395,74 @@ export class ChunkingService {
   setDefaultOptions(options: Partial<ChunkOptions>): void {
     this.defaultOptions = { ...this.defaultOptions, ...options }
   }
+}
+
+/** 文本的每一行（不含换行符）的相对区间。 */
+function lineRanges(text: string): Range[] {
+  const ranges: Range[] = []
+  let start = 0
+
+  for (let i = 0; i <= text.length; i++) {
+    if (i === text.length || text[i] === '\n') {
+      ranges.push({ start, end: i })
+      start = i + 1
+    }
+  }
+
+  return ranges
+}
+
+/** 在 [from, to) 内按句末标点切分。 */
+function sentenceRanges(text: string, from: number, to: number): Range[] {
+  const ranges: Range[] = []
+  let start = from
+
+  for (let i = from; i < to; i++) {
+    if (!isSentenceEnd(text[i])) continue
+
+    let end = i + 1
+    while (end < to && isSentenceEnd(text[end])) end++
+    ranges.push({ start, end })
+    start = end
+    i = end - 1
+  }
+
+  if (start < to) ranges.push({ start, end: to })
+  return ranges
+}
+
+/** 超长片段的最后手段：按空白装箱，单词本身仍超长时硬切。 */
+function hardSplit(text: string, from: number, to: number, maxLength: number): Range[] {
+  const ranges: Range[] = []
+  let start = from
+  let i = from
+  let lastWhitespace = -1
+
+  while (i < to) {
+    if (i - start >= maxLength) {
+      const cut = lastWhitespace > start ? lastWhitespace : i
+      ranges.push({ start, end: cut })
+      start = cut
+      while (start < to && isWhitespace(text[start])) start++
+      i = start
+      lastWhitespace = -1
+      continue
+    }
+
+    if (isWhitespace(text[i])) lastWhitespace = i
+    i++
+  }
+
+  if (start < to) ranges.push({ start, end: to })
+  return ranges
+}
+
+function isSentenceEnd(char: string): boolean {
+  return (
+    char === '。' || char === '！' || char === '？' || char === '.' || char === '!' || char === '?'
+  )
+}
+
+function isWhitespace(char: string): boolean {
+  return char === ' ' || char === '\t' || char === '\n' || char === '\r'
 }
