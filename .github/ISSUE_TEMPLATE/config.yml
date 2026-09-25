@@ -1,4 +1,15 @@
-# Blank issues stay enabled while the project is small: plenty of feedback does
-# not fit cleanly into "bug" or "feature". Revisit once issue volume is high
-# enough that unfilled reports start costing triage time.
+# Blank issues stay enabled. Bug reports and feature requests have templates, and
+# ideas and workflow pain points now have a home in Discussions, but a blank issue
+# is still the right shape for the things that fit neither — a wrong claim in the
+# README, a packaging surprise, a question about the architecture. Revisit once
+# issue volume is high enough that unfilled reports start costing triage time.
 blank_issues_enabled: true
+
+contact_links:
+  # Ideas and workflow pain points are collected as discussions, so that an early
+  # idea does not have to arrive fully specified. Once something is approved as
+  # work it moves into its own issue, with an owner, acceptance criteria and a
+  # milestone.
+  - name: Feature requests & workflow pain points
+    url: https://github.com/mrsibe/KnowNote/discussions/categories/ideas
+    about: Suggest an idea, or describe a workflow that is harder than it should be. Approved work moves into its own issue.
