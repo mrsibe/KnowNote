@@ -10,6 +10,28 @@ permissions:
   contents: write
 
 jobs:
+  # The tag names the release and package.json is what electron-builder stamps
+  # into every artifact name and into the updater feed, so a mismatch publishes a
+  # build that disagrees with its own tag. Gating here means a bad tag fails
+  # before `create-draft` runs, so it leaves no orphan draft behind either.
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # GITHUB_REF/GITHUB_REF_NAME identify the pushed tag, so this needs no tag
+      # lookup and no full history; it reads package.json and nothing else.
+      - name: Tag matches package.json
+        run: npm run check:version
+
   # Creates the release as a draft BEFORE the platform builds, so both matrix
   # jobs upload into the same release. Without this, macos and windows run
   # concurrently, each finds no release for the tag and each creates its own
@@ -23,6 +45,7 @@ jobs:
   # its stale assets into a fresh run is worse than rebuilding the release
   # empty. Re-running a failed release run therefore starts from a clean slate.
   create-draft:
+    needs: guard
     runs-on: ubuntu-latest
     timeout-minutes: 5
 

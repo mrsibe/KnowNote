@@ -39,12 +39,26 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # check:version compares package.json against the newest release tag, so the
+          # tags have to be here. `fetch-tags: true` does NOT do it: in the shallow
+          # path actions/checkout only adds the checked-out ref's own tag to the
+          # refspec, and a pull request ref (`refs/pull/N/merge`) has no tag. All tags
+          # come with all history, and this repository is small enough that the full
+          # fetch is not worth optimising.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
+
+      # Deliberately before `npm ci`: it reads only package.json and the git tags,
+      # so a version that has fallen behind the newest release fails in seconds
+      # instead of after a full install.
+      - name: Version consistency
+        run: npm run check:version
 
       - name: Install dependencies
         run: npm ci

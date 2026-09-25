@@ -39,20 +39,21 @@ npm run dev
 
 ## Commands
 
-| Command                  | What it does                                                   |
-| ------------------------ | -------------------------------------------------------------- |
-| `npm run dev`            | Start the app in development with HMR.                         |
-| `npm run typecheck`      | Typecheck the main/preload, renderer and test projects.        |
-| `npm test`               | Run the Node test suite (`test/**/*.test.ts`).                 |
-| `npm run lint`           | ESLint (see the note on the current baseline below).           |
-| `npm run format`         | Prettier over the whole repository.                            |
-| `npm run build`          | Typecheck, then bundle with electron-vite.                     |
-| `npm run build:unpack`   | `build`, then produce an unpacked app in `dist/`.              |
-| `npm run smoke:packaged` | Launch the packaged app's `--smoke-test` and check it starts.  |
-| `npm run eval:prepare`   | One-time, networked: download the pinned eval embedding model. |
-| `npm run eval`           | Run the RAG eval harness offline; rewrites `docs/eval/`.       |
-| `npm run db:generate`    | Generate a Drizzle migration from `src/main/db/schema.ts`.     |
-| `npm run db:studio`      | Inspect the development database.                              |
+| Command                  | What it does                                                    |
+| ------------------------ | --------------------------------------------------------------- |
+| `npm run dev`            | Start the app in development with HMR.                          |
+| `npm run typecheck`      | Typecheck the main/preload, renderer and test projects.         |
+| `npm test`               | Run the Node test suite (`test/**/*.test.ts`).                  |
+| `npm run lint`           | ESLint (see the note on the current baseline below).            |
+| `npm run check:version`  | Fail when `package.json` disagrees with the newest release tag. |
+| `npm run format`         | Prettier over the whole repository.                             |
+| `npm run build`          | Typecheck, then bundle with electron-vite.                      |
+| `npm run build:unpack`   | `build`, then produce an unpacked app in `dist/`.               |
+| `npm run smoke:packaged` | Launch the packaged app's `--smoke-test` and check it starts.   |
+| `npm run eval:prepare`   | One-time, networked: download the pinned eval embedding model.  |
+| `npm run eval`           | Run the RAG eval harness offline; rewrites `docs/eval/`.        |
+| `npm run db:generate`    | Generate a Drizzle migration from `src/main/db/schema.ts`.      |
+| `npm run db:studio`      | Inspect the development database.                               |
 
 ## Before you open a pull request
 
@@ -128,6 +129,38 @@ when it does, and `breaking` when it breaks compatibility.
 
 **Version bumps and releases are done by the maintainer** — don't change
 `version` in `package.json` or add a tag in a PR.
+
+`package.json`'s `version` is the single source of truth. electron-builder takes
+the app version and every artifact name (`knownote-${version}-setup.exe`, the
+`.dmg`, `latest.yml`) from it, the updater compares versions against it, and the
+About panel reads it back out of the packaged app via `app.getVersion()`. The
+git tag has to agree with it, and it has to be `v`-prefixed, because
+`release.yml` triggers on `tags: v*.*.*` — a tag named `1.3.0` would push nothing
+and publish no artifacts.
+
+The recommended procedure, which cannot drift because one command does both
+halves at once:
+
+1. On a clean `main`, run `npm version <patch|minor|major>`. It bumps
+   `package.json` and `package-lock.json`, commits, and creates the `v<version>`
+   tag.
+2. `git push --follow-tags`. Pushing the tag is what starts `release.yml`.
+
+Bumping `package.json` by hand and tagging the same commit separately also
+works, and is how earlier releases here were cut. The mechanism matters less than
+the invariant: whatever bumps the version must land on `main` before the tag is
+pushed, and the tag must be `v<version>`.
+
+`scripts/check-version.mjs` (`npm run check:version`) enforces that invariant, and
+both workflows run it:
+
+- **tag build** (`release.yml`) — the tag must equal `package.json` **exactly**.
+  This is the release blocker: nothing is built or published on a mismatch, and
+  it runs before the draft release is created, so a bad tag leaves nothing behind.
+- **pull request** (`verify.yml`) — `package.json` must not be **behind** the
+  newest tag. Equality is deliberately not required here: `npm version` is merged
+  before the tag is pushed, and during that window `main` is legitimately ahead
+  of the newest tag.
 
 ## Where things live
 
