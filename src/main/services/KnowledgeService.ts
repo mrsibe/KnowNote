@@ -43,6 +43,8 @@ import {
   type IdentifiedBlockDraft
 } from './blocks/documentBlocks'
 import { resolveChunkProvenance, type ChunkProvenance } from './chunkProvenance'
+import { DenseRetriever } from './retrieval'
+import type { EvidenceLocator, Retriever } from './retrieval'
 import { WebFetchService } from './WebFetchService'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
@@ -73,6 +75,9 @@ export interface SearchOptions {
 
 /**
  * 搜索结果
+ *
+ * `locator` 是检索 → 引用的 seam：页码区间与块区间随结果一起交付，#69 直接用它
+ * 组装 citation，不必再回头查库。
  */
 export interface SearchResult {
   chunkId: string
@@ -82,6 +87,7 @@ export interface SearchResult {
   content: string
   score: number
   chunkIndex: number
+  locator: EvidenceLocator
   metadata?: Record<string, unknown>
 }
 
@@ -97,6 +103,7 @@ export type IndexProgressCallback = (stage: string, progress: number) => void
 export class KnowledgeService {
   private embeddingService: EmbeddingService
   private chunkingService: ChunkingService
+  private retriever: Retriever
   private fileParserService: FileParserService
   private webFetchService: WebFetchService
   private knowledgeFilesDir: string
@@ -104,6 +111,7 @@ export class KnowledgeService {
   constructor(embeddingService: EmbeddingService) {
     this.embeddingService = embeddingService
     this.chunkingService = new ChunkingService()
+    this.retriever = new DenseRetriever(embeddingService)
     this.fileParserService = new FileParserService()
     this.webFetchService = new WebFetchService()
     // 知识库文件存储目录
@@ -733,14 +741,17 @@ export class KnowledgeService {
   }
 
   /**
-   * 语义搜索
+   * 语义搜索。
+   *
+   * 保持原有签名与返回形状，内部委托给默认的 `Retriever`（当前是 `DenseRetriever`）。
+   * embedding space 校验留在这里：它是前置条件，不是检索策略的一部分。
    */
   async search(
     notebookId: string,
     query: string,
     options: SearchOptions = {}
   ): Promise<SearchResult[]> {
-    const { topK = 5, threshold = 0.5, includeContent = true } = options
+    const { includeContent = true } = options
     const db = getDatabase()
 
     // 0. 索引身份校验：当前模型与建索引时不一致，向量不可比，明确要求重新索引
@@ -756,64 +767,28 @@ export class KnowledgeService {
       )
     }
 
-    // 1. 生成查询向量（E5 要求 query 前缀，与索引时的 document 前缀区分）
-    await this.embeddingService.ensureReady()
-    const queryEmbedding = await this.embeddingService.embed(query, 'query')
+    // 1. 检索（向量 → 批量补齐来源/定位信息）
+    const evidence = await this.retriever.search(notebookId, query, options)
 
-    // 2. 向量检索
-    const vectorStore = await vectorStoreManager.getStore(notebookId)
-    const vectorResults = await vectorStore.query(queryEmbedding.embedding, {
-      topK,
-      threshold
-    })
-
-    if (vectorResults.length === 0) {
-      return []
-    }
-
-    // 3. 获取 chunk 详情
-    const chunkIds = vectorResults.map((r) => r.chunkId)
-
-    const chunkDetails = db.select().from(chunks).where(inArray(chunks.id, chunkIds)).all()
-
-    // 获取文档信息
-    const documentIds = [...new Set(chunkDetails.map((c) => c.documentId))]
-    const documentDetails = db
-      .select()
-      .from(documents)
-      .where(inArray(documents.id, documentIds))
-      .all()
-
-    const documentMap = new Map(documentDetails.map((d) => [d.id, d]))
-    const chunkMap = new Map(chunkDetails.map((c) => [c.id, c]))
-
-    // 4. 组装结果
-    const results: SearchResult[] = []
-
-    for (const vr of vectorResults) {
-      const chunk = chunkMap.get(vr.chunkId)
-      if (!chunk) continue
-
-      const doc = documentMap.get(chunk.documentId)
-
+    // 2. 映射回兼容的 SearchResult 形状
+    return evidence.map((item) => {
       const result: SearchResult = {
-        chunkId: vr.chunkId,
-        documentId: chunk.documentId,
-        documentTitle: doc?.title || 'Unknown',
-        documentType: doc?.type || 'unknown',
-        content: includeContent ? chunk.content : '',
-        score: vr.score,
-        chunkIndex: chunk.chunkIndex
+        chunkId: item.chunkId,
+        documentId: item.documentId,
+        documentTitle: item.source.title,
+        documentType: item.source.type,
+        content: includeContent ? item.content : '',
+        score: item.score,
+        chunkIndex: item.chunkIndex,
+        locator: item.locator
       }
 
-      if (chunk.metadata) {
-        result.metadata = chunk.metadata
+      if (item.metadata) {
+        result.metadata = item.metadata
       }
 
-      results.push(result)
-    }
-
-    return results
+      return result
+    })
   }
 
   /**

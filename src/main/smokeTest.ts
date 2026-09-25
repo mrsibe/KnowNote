@@ -47,6 +47,7 @@ import { assignBlockIds, buildDocumentBlocks } from './services/blocks/documentB
 import { ChunkingService } from './services/ChunkingService'
 import { insertChunkBlocks, resolveChunkProvenance } from './services/chunkProvenance'
 import { KnowledgeService } from './services/KnowledgeService'
+import { DenseRetriever } from './services/retrieval'
 import type { EmbeddingService } from './services/EmbeddingService'
 
 export const SMOKE_TEST_FLAG = '--smoke-test'
@@ -115,6 +116,7 @@ function fakeEmbeddingService(dimensions = 16): EmbeddingService {
   // compiler on purpose, so a new call site here fails loudly at runtime.
   return {
     ensureReady: async () => undefined,
+    embed: async () => result(),
     embedBatch: async (texts: string[]) => texts.map(() => result()),
     getSpace: async () => ({
       id: 'smoke-embed-space',
@@ -501,6 +503,26 @@ async function runChecks(): Promise<string[]> {
     chunksAfter.length > 0 && after!.chunkCount === chunksAfter.length,
     're-index left the document without chunks'
   )
+
+  // Retrieval delivers provenance, not a bare chunk (#74). The re-index above
+  // just rebuilt chunks, embeddings, vectors and the chunk↔block mapping, so
+  // this drives the real DenseRetriever against them.
+  const evidence = await new DenseRetriever(fakeEmbeddingService()).search(
+    reindexNotebook,
+    'sample query'
+  )
+  assert(evidence.length > 0, 'DenseRetriever returned no evidence for an indexed notebook')
+  const first = evidence[0]
+  assert(first.documentId === reindexDocId, `evidence came from ${first.documentId}`)
+  assert(first.source.title.length > 0, 'evidence lost its source title')
+  assert(first.content.length > 0, 'evidence lost its content')
+  assert(first.locator.pageStart === 1, `evidence page was ${first.locator.pageStart}`)
+  assert(first.locator.blocks.length > 0, 'evidence carried no block locator')
+  assert(
+    first.locator.blocks.every((block) => block.page === 1),
+    'an evidence block lost its page'
+  )
+  pass('DenseRetriever returns retrieved evidence with a page/block locator')
 
   await knowledge.deleteDocument(reindexDocId)
   assert(

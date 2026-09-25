@@ -6,7 +6,7 @@
  * `resolveChunkProvenance()` 一次 join 同时拿到有序块区间与反规范化的页码区间。
  */
 
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { chunks, documentBlocks, chunkBlocks } from '../db/schema'
 import type { getDatabase } from '../db'
 import type { ChunkBlockSpan } from './ChunkingService'
@@ -84,15 +84,20 @@ export function insertChunkBlocks(db: Db, chunkId: string, spans: ChunkBlockSpan
 }
 
 /**
- * 解析一个 chunk 的来源：文档 id、页码区间，以及按文档顺序排列的块区间。
- * 一次 join chunks → chunk_blocks → document_blocks。chunk 不存在时返回 undefined。
+ * 批量解析多个 chunk 的来源。检索一次返回 topK 个 chunk，逐个调用
+ * `resolveChunkProvenance()` 会自然形成 N+1；这里用一次 join 取回全部映射，再在 JS 里
+ * 按 chunkId 分组。返回顺序与 `chunkIds` 无关，由 `Map` 承载。
  */
-export function resolveChunkProvenance(db: Db, chunkId: string): ChunkProvenance | undefined {
-  const chunk = db.select().from(chunks).where(eq(chunks.id, chunkId)).get()
-  if (!chunk) return undefined
+export function resolveChunksProvenance(db: Db, chunkIds: string[]): Map<string, ChunkProvenance> {
+  const result = new Map<string, ChunkProvenance>()
+  if (chunkIds.length === 0) return result
 
   const rows = db
     .select({
+      chunkId: chunks.id,
+      documentId: chunks.documentId,
+      pageStart: chunks.pageStart,
+      pageEnd: chunks.pageEnd,
       blockId: documentBlocks.id,
       kind: documentBlocks.kind,
       level: documentBlocks.level,
@@ -104,10 +109,65 @@ export function resolveChunkProvenance(db: Db, chunkId: string): ChunkProvenance
       startInBlock: chunkBlocks.startInBlock,
       endInBlock: chunkBlocks.endInBlock
     })
-    .from(chunkBlocks)
-    .innerJoin(documentBlocks, eq(chunkBlocks.blockId, documentBlocks.id))
-    .where(eq(chunkBlocks.chunkId, chunkId))
+    .from(chunks)
+    .leftJoin(chunkBlocks, eq(chunkBlocks.chunkId, chunks.id))
+    .leftJoin(documentBlocks, eq(chunkBlocks.blockId, documentBlocks.id))
+    .where(inArray(chunks.id, chunkIds))
     .all()
 
-  return projectChunkProvenance(chunkId, chunk.documentId, chunk.pageStart, chunk.pageEnd, rows)
+  const grouped = new Map<
+    string,
+    {
+      documentId: string
+      pageStart: number | null
+      pageEnd: number | null
+      rows: ChunkProvenanceRow[]
+    }
+  >()
+
+  for (const row of rows) {
+    let entry = grouped.get(row.chunkId)
+    if (!entry) {
+      entry = {
+        documentId: row.documentId,
+        pageStart: row.pageStart,
+        pageEnd: row.pageEnd,
+        rows: []
+      }
+      grouped.set(row.chunkId, entry)
+    }
+
+    // 没有映射的 chunk 仍然解析（blocks 为空），左连接因此会给出一个全 NULL 块
+    if (row.blockId === null || row.order === null) continue
+
+    entry.rows.push({
+      blockId: row.blockId,
+      kind: row.kind as BlockKind,
+      level: row.level,
+      page: row.page,
+      text: row.text ?? '',
+      startOffset: row.startOffset ?? 0,
+      endOffset: row.endOffset ?? 0,
+      order: row.order,
+      startInBlock: row.startInBlock ?? 0,
+      endInBlock: row.endInBlock ?? 0
+    })
+  }
+
+  for (const [chunkId, entry] of grouped) {
+    result.set(
+      chunkId,
+      projectChunkProvenance(chunkId, entry.documentId, entry.pageStart, entry.pageEnd, entry.rows)
+    )
+  }
+
+  return result
+}
+
+/**
+ * 解析一个 chunk 的来源：文档 id、页码区间，以及按文档顺序排列的块区间。
+ * 一次 join chunks → chunk_blocks → document_blocks。chunk 不存在时返回 undefined。
+ */
+export function resolveChunkProvenance(db: Db, chunkId: string): ChunkProvenance | undefined {
+  return resolveChunksProvenance(db, [chunkId]).get(chunkId)
 }
