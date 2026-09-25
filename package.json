@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "lint": "eslint --cache .",
     "check:design": "node scripts/check-design-tokens.mjs",
+    "check:version": "node scripts/check-version.mjs",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck:test": "tsc -p tsconfig.test.json",

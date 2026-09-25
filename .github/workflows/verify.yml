@@ -39,12 +39,23 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # check:version compares package.json against the newest release tag, and
+          # the default depth-1 checkout fetches no tags at all. fetch-tags brings
+          # the tag names without pulling the whole history in behind them.
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
+
+      # Deliberately before `npm ci`: it reads only package.json and the git tags,
+      # so a version that has fallen behind the newest release fails in seconds
+      # instead of after a full install.
+      - name: Version consistency
+        run: npm run check:version
 
       - name: Install dependencies
         run: npm ci
