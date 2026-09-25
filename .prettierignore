@@ -5,3 +5,11 @@ LICENSE.md
 tsconfig.json
 tsconfig.*.json
 src/main/db/migrations/meta
+
+# Generated, not hand-written. `scripts/eval.mjs` (via src/main/eval/run.ts) writes
+# both of these, and the committed copy is that output verbatim, so the formatter
+# must not be a second writer: `npm run format` reformatted them into a diff that
+# said nothing and left a dirty tree behind every time. Regenerate with
+# `npm run eval`; the baseline's readability is not the formatter's business.
+docs/eval/baseline-*.json
+docs/eval/baseline-*.md
