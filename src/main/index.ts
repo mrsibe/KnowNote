@@ -21,7 +21,15 @@ import { getStore } from './config/store'
 import { migrateProvidersToConnections } from './config/connectionMigration'
 import { isSmokeTestRequested, runSmokeTest } from './smokeTest'
 import { isEvalRequested, runEvalCli } from './eval/run'
+import {
+  registerDocumentProtocolHandler,
+  registerDocumentScheme
+} from './protocol/documentProtocol'
 import Logger from '../shared/utils/logger'
+
+// Scheme privileges must be registered before the app is ready, so this is a
+// module-scope call rather than part of the whenReady sequence.
+registerDocumentScheme()
 
 let connectionManager: ConnectionManager | null = null
 let embeddingService: EmbeddingService | null = null
@@ -69,6 +77,7 @@ app.whenReady().then(async () => {
   initDatabase()
   runMigrations()
   initVectorStore()
+  registerDocumentProtocolHandler()
   Logger.info('Main', 'Database initialized')
 
   // Initialize electron-store

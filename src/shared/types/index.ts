@@ -9,6 +9,9 @@ export * from './knowledge'
 // 导出聊天类型
 export * from './chat'
 
+// 导出来源阅读器契约类型
+export * from './source'
+
 // 导出 Result 错误处理类型
 export * from './result'
 

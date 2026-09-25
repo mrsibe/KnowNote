@@ -103,3 +103,33 @@ Rules:
 The harness is a main-process entry (`--eval-harness`), like the packaged smoke
 test, because the DB layer, vector store and loaders do not exist outside
 Electron. See `eval/README.md` for the dataset format and commands.
+
+## Source reader
+
+The reader is not "the PDF component". It is the surface that renders whatever
+structure a source has, behind one format-agnostic contract:
+
+```ts
+interface ReaderHandle {
+  openAt(anchor: ReaderAnchor): void
+  getSelection(): ReaderSelection | null
+}
+```
+
+`ReaderAnchor` is `{ documentId, page?, blockId?, startOffset?, endOffset? }`,
+and `ReaderSelection` is the same shape plus the selected `text`. PDF is the full
+implementation in v1.4 (pages, text layer, block overlay); every other format uses
+a text reader. Nothing downstream may branch on which one is mounted — #72
+(citation click) and #73 (excerpt to note) only use `openAt` / `getSelection`.
+
+Rules:
+
+- **Bytes are served by id, never by path.** `knownote-doc://docs/<documentId>` is
+  resolved against `documents.localFilePath` in the main process. The renderer
+  never constructs a filesystem path, and an unknown id is a 404.
+- **Blocks travel with the source.** `document_blocks` holds page, char span and
+  normalized bbox; `openAt({ page, blockId })` uses them to scroll and highlight,
+  so the reader does not re-derive geometry from chunk text.
+- **The text layer is real text.** pdfjs's `TextLayer` is rendered over the canvas
+  so `getSelection()` can map a DOM selection back to a source location; selecting
+  the canvas would give nothing.
