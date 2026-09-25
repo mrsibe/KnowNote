@@ -14,6 +14,17 @@ export interface NormalizedBox {
 }
 
 /**
+ * 页内块（分页文档的段落）。文本与偏移锚定整份规范内容（`documents.content`），
+ * bbox 归一化到页面。`PdfLoader` 逐段产出，找不到几何分组时回退到整页一块。
+ */
+export interface PageBlockInfo {
+  text: string
+  startOffset: number
+  endOffset: number
+  bbox?: NormalizedBox
+}
+
+/**
  * 页面信息（用于 PDF、PPT 等分页文档）
  */
 export interface PageInfo {
@@ -22,6 +33,7 @@ export interface PageInfo {
   startOffset: number // 在完整文本中的起始位置
   endOffset: number // 在完整文本中的结束位置
   bbox?: NormalizedBox // 页面文本的归一化包围盒（可选）
+  blocks?: PageBlockInfo[] // 页内段落块（可选；供 document_blocks 落到段落级）
   metadata?: {
     width?: number
     height?: number

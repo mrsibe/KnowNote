@@ -87,12 +87,34 @@ export function buildDocumentBlocks(source: BlockSource): DocumentBlockDraft[] {
 }
 
 /**
- * 分页文档：页偏移已经由 loader 保证与规范文本一致，块文本直接切出来。
+ * 分页文档：优先用 loader 已经分好的页内段落（PDF），每个段落一个块；loader 没有
+ * 提供页内块时（例如旧的 / 非 PDF 分页格式）回退到整页一块。页偏移已由 loader
+ * 保证与规范文本一致，块文本直接切出来。
  */
 function buildPageBlocks(content: string, pages: PageInfo[]): Omit<DocumentBlockDraft, 'order'>[] {
   const blocks: Omit<DocumentBlockDraft, 'order'>[] = []
 
   for (const page of pages) {
+    if (page.blocks && page.blocks.length > 0) {
+      for (const pageBlock of page.blocks) {
+        const text = content.slice(pageBlock.startOffset, pageBlock.endOffset)
+        if (text.trim().length === 0) continue
+
+        blocks.push({
+          kind: 'paragraph',
+          page: page.pageNumber,
+          level: null,
+          text,
+          // 用实际切出的文本长度回写 endOffset，避免 loader 的结尾空白把块撑出内容范围
+          startOffset: pageBlock.startOffset,
+          endOffset: pageBlock.startOffset + text.length,
+          bbox: pageBlock.bbox ?? null,
+          metadata: null
+        })
+      }
+      continue
+    }
+
     const text = content.slice(page.startOffset, page.endOffset)
     if (text.trim().length === 0) continue
 
@@ -101,7 +123,6 @@ function buildPageBlocks(content: string, pages: PageInfo[]): Omit<DocumentBlock
       page: page.pageNumber,
       level: null,
       text,
-      // 用实际切出的文本长度回写 endOffset，避免 loader 的结尾空白把块撑出内容范围
       startOffset: page.startOffset,
       endOffset: page.startOffset + text.length,
       bbox: page.bbox ?? null,
