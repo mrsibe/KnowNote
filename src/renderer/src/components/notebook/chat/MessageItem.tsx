@@ -16,7 +16,7 @@ import { useKnowledgeStore } from '../../../store/knowledgeStore'
 import { useNotebookStore } from '../../../store/notebookStore'
 import { useSourceAnchorNavigation } from '../../../hooks/useSourceAnchorNavigation'
 import { parseRetrievalStatus, sourcesForDisplay } from '../../../../../shared/utils/answerSources'
-import { parseCitations } from '../../../../../shared/utils/citations'
+import { parseCitations, citationDocumentExists } from '../../../../../shared/utils/citations'
 import { citationToSourceAnchor } from '../../../../../shared/utils/sourceAnchor'
 import { Button } from '../../ui/button'
 import { ScrollArea, ScrollBar } from '../../ui/scroll-area'
@@ -40,6 +40,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   const { currentNotebook } = useNotebookStore()
   const { openSourceAnchor } = useSourceAnchorNavigation()
   const documents = useKnowledgeStore((state) => state.documents)
+  const documentsLoaded = useKnowledgeStore((state) => state.documentsLoaded)
 
   // What this answer was built from. Read defensively: the metadata comes from the
   // database and may predate the shape (see shared/utils/answerSources.ts).
@@ -50,11 +51,11 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   const citations = parseCitations(message.metadata)
   const citationByIndex = new Map(citations.map((citation) => [citation.index, citation]))
 
-  // A chip is disabled only when the document is provably gone. An empty list is
-  // "not loaded / nothing imported yet", not "deleted", so it stays clickable and
-  // the reader falls back gracefully instead.
+  // A chip is disabled only once the library has been read and the document is
+  // provably absent. Before that (or after a failed load) the list is "unknown",
+  // not "deleted", so the chip stays clickable and the reader falls back.
   const documentExists = (documentId: string): boolean =>
-    documents.length === 0 || documents.some((document) => document.id === documentId)
+    citationDocumentExists(documents, documentsLoaded, documentId)
 
   const handleOpenCitation = (citation: (typeof citations)[number]): void => {
     openSourceAnchor(citationToSourceAnchor(citation))

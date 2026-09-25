@@ -304,9 +304,10 @@ export default function SourcePanel(): ReactElement {
 
   // reload / 冷启动：把 URL 里的定位水合进 store。这是「持久化的一份」与「运行时的一份」
   // 之间唯一的同步点；`sourceAnchorsEqual` 保证不会因为 query 重渲染而反复写入。
+  // 同步 null 同样重要：notebook 切换 / 外部 route change / 浏览器前进后退清掉 query 时，
+  // store 里不能继续留着一个 URL 已经不再指向的旧来源。
   useEffect(() => {
     const fromUrl = sourceAnchorFromSearchParams(searchParams)
-    if (!fromUrl) return
     if (sourceAnchorsEqual(useUIStore.getState().focusedSource, fromUrl)) return
     setFocusedSource(fromUrl)
   }, [searchParams, setFocusedSource])

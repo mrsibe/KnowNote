@@ -71,3 +71,21 @@ export const parseCitations = (metadata: unknown): Citation[] => {
     .filter((citation): citation is Citation => citation !== null)
     .sort((a, b) => a.index - b.index)
 }
+
+/**
+ * 一条 citation 的来源现在还能不能打开（#72）。
+ *
+ * `documentsLoaded` 是让空的列表变得无歧义的那个字段：
+ *
+ * - 还没读过列表 —— 空数组只意味着「不知道」，保持可点击，由阅读器侧优雅回退；
+ * - 成功读过列表 —— 空数组是真实答案（最后一个来源也被删了），chip 应禁用；
+ * - 读取失败 —— 同样视为「不知道」，不能把失败当成「来源已删除」的证据。
+ */
+export function citationDocumentExists(
+  documents: readonly { id: string }[],
+  documentsLoaded: boolean,
+  documentId: string
+): boolean {
+  if (!documentsLoaded) return true
+  return documents.some((document) => document.id === documentId)
+}

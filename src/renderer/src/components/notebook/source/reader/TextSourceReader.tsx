@@ -55,8 +55,10 @@ const TextSourceReader = forwardRef<ReaderHandle, TextSourceReaderProps>(functio
       const node = contentRef.current?.firstChild
       const container = scrollRef.current
       if (!node || start === null || !container) {
-        // 定位不到就清掉上一次的高亮，不要让旧高亮留在屏幕上。
+        // 定位不到就清掉上一次的高亮，并回到文本顶部：否则从一条 citation 切到 document-only
+        // anchor 时会清掉高亮、却停在旧滚动位置。
         setHighlightRects([])
+        container?.scrollTo({ top: 0, behavior: 'auto' })
         return
       }
 

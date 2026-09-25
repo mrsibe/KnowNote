@@ -128,8 +128,17 @@ test('resolveAnchor prefers the block id and keeps its page', () => {
   assert.equal(target.page, 1)
 })
 
-test('resolveAnchor lets an explicit page override the block page', () => {
-  const blocks = [block({ page: 3 })]
+test('resolveAnchor lets the matched block page win over a stale page hint', () => {
+  // 重新索引后块落到了第 4 页，而 citation 快照里还写着 page=5。必须信块，
+  // 否则会出现「高亮在第 4 页却滚到第 5 页」这种跳错页。
+  const blocks = [block({ page: 4 })]
+  const target = resolveAnchor(blocks, { documentId: 'doc_1', blockId: 'b1', page: 5 })
+  assert.equal(target.page, 4)
+  assert.equal(target.block?.id, 'b1')
+})
+
+test('resolveAnchor uses the page hint only when the block has no page of its own', () => {
+  const blocks = [block({ page: null })]
   const target = resolveAnchor(blocks, { documentId: 'doc_1', blockId: 'b1', page: 5 })
   assert.equal(target.page, 5)
   assert.equal(target.block?.id, 'b1')
@@ -146,6 +155,19 @@ test('resolveAnchor recovers from a stale block id through the offsets', () => {
   })
   assert.equal(target.block?.id, 'rebuilt')
   assert.equal(target.page, 1)
+})
+
+test('resolveAnchor follows the offset block page, not the page hint', () => {
+  const blocks = [block({ id: 'rebuilt', page: 4, startOffset: 100, endOffset: 119 })]
+  const target = resolveAnchor(blocks, {
+    documentId: 'doc_1',
+    blockId: 'stale-id',
+    page: 5,
+    startOffset: 105,
+    endOffset: 110
+  })
+  assert.equal(target.block?.id, 'rebuilt')
+  assert.equal(target.page, 4)
 })
 
 test('resolveAnchor falls back to the page when there is no block to highlight', () => {

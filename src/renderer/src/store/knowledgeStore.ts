@@ -97,7 +97,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
       const docs = await window.api.knowledge.getDocuments(notebookId)
       set({ documents: docs, isLoading: false, documentsLoaded: true })
     } catch (error) {
-      set({ error: (error as Error).message, isLoading: false, documentsLoaded: true })
+      set({ error: (error as Error).message, isLoading: false, documentsLoaded: false })
     }
   },
 

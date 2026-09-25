@@ -5,7 +5,7 @@ import {
   buildRAGContext,
   citationFromSearchResult
 } from '../src/main/services/citations.ts'
-import { parseCitations } from '../src/shared/utils/citations.ts'
+import { citationDocumentExists, parseCitations } from '../src/shared/utils/citations.ts'
 import type { SearchResult } from '../src/main/services/KnowledgeService.ts'
 
 /**
@@ -254,4 +254,29 @@ test('metadata that is absent, null or the wrong shape yields no citations', () 
   ]) {
     assert.deepEqual(parseCitations(metadata), [], JSON.stringify(metadata))
   }
+})
+
+/**
+ * 「来源已删除 → chip disabled」只有在读过列表之后才能成立。
+ *
+ * 空的列表有两个含义：还没加载（不知道）和确实一个都没有（读过了）。
+ * 把前者当成删除会把冷启动时所有历史 citation 都误判成失效引用。
+ */
+test('a citation source is presumed present until the list has been read', () => {
+  assert.equal(citationDocumentExists([], false, 'doc_1'), true)
+  assert.equal(citationDocumentExists([{ id: 'other' }], false, 'doc_1'), true)
+})
+
+test('after a successful load, only a listed document exists', () => {
+  assert.equal(citationDocumentExists([{ id: 'doc_1' }], true, 'doc_1'), true)
+  assert.equal(citationDocumentExists([{ id: 'other' }], true, 'doc_1'), false)
+})
+
+test('a loaded empty list means every citation source is gone', () => {
+  assert.equal(citationDocumentExists([], true, 'doc_1'), false)
+})
+
+test('a failed load is not evidence that the source was deleted', () => {
+  // loadDocuments() 失败时保持 documentsLoaded:false，而不是把失败当成空列表。
+  assert.equal(citationDocumentExists([], false, 'doc_1'), true)
 })
