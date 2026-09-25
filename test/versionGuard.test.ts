@@ -4,7 +4,13 @@ import { spawnSync } from 'node:child_process'
 import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { compareVersions, newestVersionTag, parseVersion } from '../scripts/check-version.mjs'
+import {
+  bareVersionTags,
+  comparePrerelease,
+  compareVersions,
+  newestVersionTag,
+  parseVersion
+} from '../scripts/check-version.mjs'
 
 /**
  * A version guard is a build gate, so a silent hole in it is worse than a missing
@@ -63,7 +69,55 @@ test('compareVersions orders numerically, not lexicographically', () => {
 test('a pre-release sorts below the release it precedes', () => {
   assert.ok(compareVersions(parseVersion('1.0.5-beta.1'), parseVersion('1.0.5')) < 0)
   assert.ok(compareVersions(parseVersion('1.0.5'), parseVersion('1.0.5-beta.1')) > 0)
-  assert.ok(compareVersions(parseVersion('1.0.5-alpha'), parseVersion('1.0.5-beta')) < 0)
+})
+
+/**
+ * Pre-release precedence cannot be a string comparison: `'beta.10' < 'beta.2'`
+ * lexicographically, but SemVer says `beta.10` is newer. Getting this wrong makes
+ * `newestVersionTag` pick the wrong tag, so the guard would validate against the
+ * wrong release. This project has shipped `v1.0.5-beta.1`, so the shape is real.
+ */
+
+test('pre-release identifiers follow SemVer precedence, not string order', () => {
+  const older = (a: string, b: string): void =>
+    assert.ok(comparePrerelease(a, b) < 0, `${a} < ${b}`)
+  const newer = (a: string, b: string): void =>
+    assert.ok(comparePrerelease(a, b) > 0, `${a} > ${b}`)
+
+  // The bug this pins: numeric identifiers compare numerically.
+  older('beta.2', 'beta.10')
+  newer('beta.10', 'beta.2')
+
+  // Alphanumeric identifiers compare lexically.
+  older('alpha', 'beta')
+
+  // Numeric identifiers always have lower precedence than alphanumeric ones.
+  older('1', 'alpha')
+  older('1', 'beta')
+  older('alpha.1', 'alpha.beta')
+
+  // A shorter set loses once every shared identifier matches.
+  older('beta', 'beta.1')
+  older('alpha', 'alpha.1')
+  older('alpha.1', 'alpha.1.1')
+
+  // And the equal / deeper cases.
+  assert.equal(comparePrerelease('beta.1', 'beta.1'), 0)
+  older('beta.1', 'beta.2')
+  older('beta.1.1', 'beta.2')
+})
+
+test('a pre-release comparison feeds the version comparison', () => {
+  const older = (a: string, b: string): void =>
+    assert.ok(compareVersions(parseVersion(a), parseVersion(b)) < 0, `${a} < ${b}`)
+
+  older('1.4.0-beta.2', '1.4.0-beta.10')
+  older('1.4.0-alpha', '1.4.0-beta')
+  older('1.4.0-1', '1.4.0-alpha')
+  older('1.4.0-beta', '1.4.0-beta.1')
+  older('1.4.0-beta.10', '1.4.0')
+  // The patch still dominates the pre-release: a later patch wins outright.
+  older('1.4.0-beta.10', '1.4.1-alpha')
 })
 
 test('newestVersionTag picks the highest version, including past a pre-release', () => {
@@ -77,18 +131,39 @@ test('newestVersionTag picks the highest version, including past a pre-release',
   assert.equal(newestVersionTag(['v1.0.5', 'v1.0.5-beta.1']), 'v1.0.5')
   assert.equal(newestVersionTag(['v1.0.5-beta.1', 'v1.0.5']), 'v1.0.5')
 
-  // Two-digit components are the case a lexicographic sort gets wrong.
+  // Two-digit components are the case a lexicographic sort gets wrong, in both
+  // the patch and the pre-release identifier.
   assert.equal(newestVersionTag(['v1.0.9', 'v1.0.10']), 'v1.0.10')
   assert.equal(newestVersionTag(['v1.0.10', 'v1.0.9']), 'v1.0.10')
-
-  // Accepts a bare tag too, and reports it back as given.
-  assert.equal(newestVersionTag(['1.2.0', 'v1.1.1']), '1.2.0')
+  assert.equal(newestVersionTag(['v1.4.0-beta.2', 'v1.4.0-beta.10']), 'v1.4.0-beta.10')
 })
 
 test('newestVersionTag ignores tags that are not versions', () => {
   assert.equal(newestVersionTag([]), null)
   assert.equal(newestVersionTag(['archive/ai-conversation', 'release-candidate']), null)
   assert.equal(newestVersionTag(['archive/ai-conversation', 'v1.2.0']), 'v1.2.0')
+})
+
+/**
+ * `release.yml` triggers on `tags: v*.*.*`, so a bare `1.2.3` is a tag no release
+ * is ever built from. Counting it as the newest release would fail every pull
+ * request against a version that was never published, so it is excluded and
+ * reported separately instead.
+ */
+
+test('a bare version tag is excluded from the release tags', () => {
+  assert.equal(newestVersionTag(['1.2.0', 'v1.1.1']), 'v1.1.1')
+  assert.equal(newestVersionTag(['1.2.0']), null)
+  assert.equal(newestVersionTag(['v1.1.1', '1.2.0']), 'v1.1.1')
+})
+
+test('bareVersionTags finds the version tags that are missing their prefix', () => {
+  assert.deepEqual(bareVersionTags(['v1.2.0']), [])
+  assert.deepEqual(bareVersionTags(['archive/ai-conversation', 'v1.2.0']), [])
+  assert.deepEqual(bareVersionTags(['1.2.0', 'v1.1.1']), ['1.2.0'])
+  assert.deepEqual(bareVersionTags(['2.0.0', '1.9.0', 'v1.1.1']), ['2.0.0', '1.9.0'])
+  // Not a version at all, so not reported as a misnamed release tag.
+  assert.deepEqual(bareVersionTags(['archive/ai-conversation', 'release-candidate']), [])
 })
 
 /**
@@ -131,6 +206,57 @@ test('a tag without the v prefix fails and explains why it is fatal', () => {
 
   assert.match(output, /wrong name/)
   assert.match(output, /v\*\.\*\.\*/)
+})
+
+/**
+ * The scenario this rule exists for: a bare `2.0.0` is pushed, `release.yml` never
+ * runs because it only listens for `v*.*.*`, and - if the tag were counted as a
+ * release - every pull request would then fail with "package.json is behind 2.0.0"
+ * over a version that was never published. Built in a real throwaway git
+ * repository, because the tag list comes from git.
+ */
+test('a bare version tag is reported, not mistaken for a release', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'knownote-version-bare-'))
+  try {
+    copyFileSync('scripts/check-version.mjs', join(dir, 'check-version.mjs'))
+    copyFileSync('package.json', join(dir, 'package.json'))
+
+    const git = (args: string[]): void => {
+      const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+      assert.equal(result.status, 0, `git ${args.join(' ')} failed: ${result.stderr}`)
+    }
+    git(['init', '--quiet'])
+    git([
+      '-c',
+      'user.email=test@example.com',
+      '-c',
+      'user.name=test',
+      'commit',
+      '--allow-empty',
+      '--quiet',
+      '-m',
+      'init'
+    ])
+    git(['tag', '2.0.0'])
+
+    const withoutActions = { ...process.env }
+    delete withoutActions.GITHUB_ACTIONS
+
+    const result = spawnSync('node', ['check-version.mjs'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: withoutActions
+    })
+    const output = `${result.stdout}${result.stderr}`
+
+    assert.notEqual(result.status, 0)
+    assert.match(output, /Unusable version tag/)
+    assert.match(output, /2\.0\.0/)
+    // The important half: it is never compared against as the newest release.
+    assert.doesNotMatch(output, /newest version tag/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test('the repository itself passes the guard', () => {

@@ -72,11 +72,60 @@ export const compareVersions = (a, b) => {
   if (a.prerelease === b.prerelease) return 0
   if (a.prerelease === null) return 1
   if (b.prerelease === null) return -1
-  return a.prerelease < b.prerelease ? -1 : 1
+  return comparePrerelease(a.prerelease, b.prerelease)
 }
 
 /**
- * Highest version among `tags` (any `v`-prefixed or bare version tag).
+ * SemVer pre-release precedence, identifier by identifier.
+ *
+ * This cannot be a string comparison. `beta.10` is **newer** than `beta.2`, but
+ * `'beta.10' < 'beta.2'` is true lexicographically, so a plain string comparison
+ * reports the wrong order - and then `newestVersionTag` picks the wrong tag and the
+ * guard validates against the wrong release. This project has shipped a
+ * pre-release before (`v1.0.5-beta.1`), so the shape is real rather than
+ * theoretical.
+ *
+ * SemVer 11.4, in order: identifiers are compared left to right; numeric
+ * identifiers compare numerically; numeric identifiers always have lower
+ * precedence than alphanumeric ones; and if every shared identifier is equal, the
+ * longer set wins.
+ *
+ * @returns {number} negative when `a` takes precedence below `b`.
+ */
+export const comparePrerelease = (a, b) => {
+  const left = a.split('.')
+  const right = b.split('.')
+  const length = Math.max(left.length, right.length)
+
+  for (let index = 0; index < length; index += 1) {
+    const aPart = left[index]
+    const bPart = right[index]
+
+    // `beta` < `beta.1`: a shorter set of identifiers loses once the shared ones match.
+    if (aPart === undefined) return -1
+    if (bPart === undefined) return 1
+    if (aPart === bPart) continue
+
+    const aNumeric = /^\d+$/.test(aPart)
+    const bNumeric = /^\d+$/.test(bPart)
+    if (aNumeric && bNumeric) return Number(aPart) - Number(bPart)
+    // `1` < `alpha`: numeric identifiers are always lower than alphanumeric ones.
+    if (aNumeric) return -1
+    if (bNumeric) return 1
+
+    return aPart < bPart ? -1 : 1
+  }
+
+  return 0
+}
+
+/**
+ * Highest release tag among `tags`.
+ *
+ * Only `v`-prefixed tags count. `release.yml` triggers on `tags: v*.*.*`, so a bare
+ * `1.2.3` is a tag no release will ever be built from - treating it as the newest
+ * release would red every pull request over a version that was never published.
+ * Such tags are reported separately by `bareVersionTags` instead.
  *
  * Takes the list rather than reading git, so the selection rule is testable. It
  * re-compares with `compareVersions` instead of trusting `git tag --sort`, so a
@@ -90,7 +139,8 @@ export const newestVersionTag = (tags) => {
   let bestParsed = null
 
   for (const tag of tags) {
-    const parsed = parseVersion(tag.replace(/^v/, ''))
+    if (!tag.startsWith('v')) continue
+    const parsed = parseVersion(tag.slice(1))
     if (!parsed) continue
     if (bestParsed === null || compareVersions(parsed, bestParsed) > 0) {
       best = tag
@@ -100,6 +150,16 @@ export const newestVersionTag = (tags) => {
 
   return best
 }
+
+/**
+ * Version tags that are missing their `v` prefix - a mistake rather than a release.
+ *
+ * `release.yml` triggers on `tags: v*.*.*`, so pushing a bare `2.0.0` publishes
+ * nothing at all. Left unreported it is also invisible: the tag exists on the
+ * remote and nobody learns that the release never happened.
+ */
+export const bareVersionTags = (tags) =>
+  tags.filter((tag) => !tag.startsWith('v') && parseVersion(tag) !== null)
 
 /**
  * Under Actions an `::error::` line becomes an annotation on the failed step, the
@@ -172,10 +232,11 @@ const checkTagMode = (version, tag) => {
   }
 
   const tagVersion = tag.replace(/^v/, '')
+  const missingPrefix = !tag.startsWith('v')
 
   // Right version, wrong tag name: the only problem is the missing `v`, which is
   // fatal rather than cosmetic because release.yml triggers on `v*.*.*`.
-  if (tagVersion === version) {
+  if (missingPrefix && tagVersion === version) {
     return fail(
       `Tag ${tag} has the right version but the wrong name: it must be ${expectedTag}.\n` +
         `  release.yml triggers on \`tags: v*.*.*\`, so \`${tag}\` would push nothing and\n` +
@@ -183,19 +244,41 @@ const checkTagMode = (version, tag) => {
     )
   }
 
-  return fail(
-    [
-      `Tag ${tag} does not match package.json ("version": "${version}").`,
-      `  electron-builder takes every artifact name and the updater feed from package.json,`,
-      `  so releasing this tag would publish a build whose version does not match its tag.`,
-      `  Pick one:`,
-      `    - you are releasing ${tagVersion}:  run \`npm version ${tagVersion}\` on main, merge it, then re-tag`,
-      `    - you are releasing ${version}:  delete this tag and tag ${expectedTag} instead`
-    ].join('\n')
-  )
+  const lines = [
+    `Tag ${tag} does not match package.json ("version": "${version}").`,
+    `  electron-builder takes every artifact name and the updater feed from package.json,`,
+    `  so releasing this tag would publish a build whose version does not match its tag.`,
+    `  Pick one:`,
+    `    - you are releasing ${tagVersion}:  run \`npm version ${tagVersion}\` on main, merge it, then re-tag`,
+    `    - you are releasing ${version}:  delete this tag and tag ${expectedTag} instead`
+  ]
+  if (missingPrefix) {
+    lines.push(
+      `  Note: the tag has no "v" prefix, so release.yml (on: tags: v*.*.*) would not run for it at all.`
+    )
+  }
+
+  return fail(lines.join('\n'))
 }
 
 const checkCompareMode = (version, tags) => {
+  // A bare version tag is a mistake: release.yml will never build from it, so it is
+  // invisible unless it is reported. It is also deliberately NOT counted as a
+  // release below, because otherwise a stray `2.0.0` tag would make every pull
+  // request fail against a version that was never published.
+  const bare = tags === null ? [] : bareVersionTags(tags)
+  if (bare.length > 0) {
+    return fail(
+      [
+        `Unusable version tag${bare.length === 1 ? '' : 's'}: ${bare.join(', ')}`,
+        `  release.yml triggers on \`tags: v*.*.*\`, so ${bare.length === 1 ? 'this tag' : 'these tags'} would publish no artifacts.`,
+        `  ${bare.length === 1 ? 'It is' : 'They are'} not counted as a release here, or every pull request would fail against a`,
+        `  version that was never published.`,
+        `  Delete ${bare.length === 1 ? 'it' : 'them'}, or rename to v<version>.`
+      ].join('\n')
+    )
+  }
+
   const latest = tags === null ? null : newestVersionTag(tags)
 
   if (latest === null) {
@@ -232,7 +315,7 @@ const checkCompareMode = (version, tags) => {
 
   if (compareVersions(packageParsed, latestParsed) < 0) {
     return fail(
-      `package.json is at ${version} but the newest release is ${latest}. ` +
+      `package.json is at ${version} but the newest version tag is ${latest}. ` +
         `The packaged app and its artifacts would claim a version older than what has ` +
         `already shipped, and the updater would ignore the newer release. ` +
         `Run \`npm version ${latestVersion}\` (or higher) to catch up.`
@@ -241,7 +324,7 @@ const checkCompareMode = (version, tags) => {
 
   const relation = compareVersions(packageParsed, latestParsed) === 0 ? 'matches' : 'is ahead of'
   return report(
-    `check:version — package.json ${version} ${relation} the newest tag ${latest}`,
+    `check:version — package.json ${version} ${relation} the newest version tag ${latest}`,
     false
   )
 }
