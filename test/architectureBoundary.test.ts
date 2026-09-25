@@ -39,13 +39,50 @@ const importSpecifiers = (source: string): string[] => {
   return [...source.matchAll(pattern)].map((match) => match[1])
 }
 
-/** 数据库层的入口：直接拿连接、Drizzle，或 Drizzle 的表定义。 */
+/**
+ * 数据库层的入口：直接拿连接、Drizzle，或 **`db` 目录下的任何东西**。
+ *
+ * 这里必须把整个 db 子树当作边界，而不是只列 `db` 和 `db/schema`。只匹配目录名本身
+ * 或固定后缀会让 `../db/queries` 漏过去 —— 而 `db/queries` 恰好就是
+ * `docs/architecture.md` 里记为「数据库直达」的那条 legacy 路径。一个漏掉自己文档里
+ * 点名情况的 guard，比没有这条规则更糟：它会让人相信一项未被执行的约束。
+ */
 const isDatabaseAccess = (specifier: string): boolean =>
   specifier === 'drizzle-orm' ||
   specifier.startsWith('drizzle-orm/') ||
-  /(^|\/)db$/.test(specifier) ||
-  specifier.endsWith('/db/schema') ||
-  specifier.endsWith('/db')
+  /(^|\/)db(?:\/|$)/.test(specifier)
+
+test('the database matcher covers the whole db subtree, not just its exact name', () => {
+  // The false negative this pins: `../db/queries` used to pass the scan even though
+  // architecture.md records `db/queries` as a database-reaching legacy path. Anything
+  // under the db directory is database access.
+  for (const specifier of [
+    '../db',
+    '../db/schema',
+    '../db/queries',
+    '../../db/foo',
+    'db',
+    'db/queries',
+    'drizzle-orm',
+    'drizzle-orm/sqlite-core'
+  ]) {
+    assert.equal(isDatabaseAccess(specifier), true, `should be flagged: ${specifier}`)
+  }
+
+  // It must not swallow legitimate imports either: a guard that fires on ordinary code
+  // is one people route around, which is worse than a narrow one.
+  for (const specifier of [
+    '../services/KnowledgeService',
+    '../../shared/utils/documentUrl',
+    '../../shared/utils/logger',
+    'electron',
+    'url',
+    'db-utils',
+    '@shared/dbx'
+  ]) {
+    assert.equal(isDatabaseAccess(specifier), false, `should not be flagged: ${specifier}`)
+  }
+})
 
 test('the protocol layer does not reach into the database', () => {
   const offenders: string[] = []
