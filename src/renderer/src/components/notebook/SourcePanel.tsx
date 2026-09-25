@@ -304,6 +304,20 @@ export default function SourcePanel(): ReactElement {
     setSelectedDocument(null)
   }
 
+  // 对话里的来源被点击时，在这里把对应文档打开。
+  // 右栏的对话和左栏的知识库是兄弟节点，所以这个请求走 uiStore 而不是 props。
+  //
+  // 纯派生，不用 effect：在 effect 里同步 setState 会引发级联渲染（本文件上面
+  // 那个 notebook 切换的复位用的是同一套“render 期间运算”的思路），而在 render
+  // 里写 store 会更糟。列表里的点击会把 store 里这个请求清掉，所以两者不会打架。
+  const focusedSourceDocumentId = useUIStore((state) => state.focusedSourceDocumentId)
+  const focusSourceDocument = useUIStore((state) => state.focusSourceDocument)
+
+  const focusedDocument = focusedSourceDocumentId
+    ? (documents.find((doc) => doc.id === focusedSourceDocumentId) ?? null)
+    : null
+  const openDocument = selectedDocument ?? focusedDocument
+
   // 处理文件上传
   const handleFileUpload = useCallback(async () => {
     if (!notebookId) return
@@ -419,18 +433,21 @@ export default function SourcePanel(): ReactElement {
       // 文本和笔记类型可以预览，直接显示预览页面
       if (document.type === 'text' || document.type === 'note') {
         setSelectedDocument(document)
+        // 列表里的选择优先，清掉对话那边可能还挂着的请求
+        focusSourceDocument(null)
       } else {
         // 其他类型（文件、URL）直接打开
         handleOpenSource(document.id)
       }
     },
-    [handleOpenSource]
+    [handleOpenSource, focusSourceDocument]
   )
 
   // 返回列表
   const handleBack = useCallback(() => {
     setSelectedDocument(null)
-  }, [])
+    focusSourceDocument(null)
+  }, [focusSourceDocument])
 
   // 处理弹窗提交
   const handleModalSubmit = useCallback(
@@ -448,13 +465,9 @@ export default function SourcePanel(): ReactElement {
 
   return (
     <Card className="flex h-full flex-col overflow-hidden">
-      {selectedDocument ? (
+      {openDocument ? (
         // 文档预览页面
-        <DocumentViewerPanel
-          key={selectedDocument.id}
-          document={selectedDocument}
-          onBack={handleBack}
-        />
+        <DocumentViewerPanel key={openDocument.id} document={openDocument} onBack={handleBack} />
       ) : (
         // 文档列表页面
         <>

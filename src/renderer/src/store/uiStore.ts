@@ -15,6 +15,17 @@ interface UIStore {
    */
   hasUnsavedNoteChanges: boolean
   setHasUnsavedNoteChanges: (dirty: boolean) => void
+
+  /**
+   * A document the reader asked to see, set when a source in the transcript is
+   * clicked. The transcript (centre panel) and the library (left panel) are
+   * siblings, so the request travels through the store rather than through props.
+   *
+   * `SourcePanel` consumes it once the document is in its list, so returning to
+   * the library later does not re-open it.
+   */
+  focusedSourceDocumentId: string | null
+  focusSourceDocument: (documentId: string | null) => void
 }
 
 export const useUIStore = create<UIStore>()((set) => ({
@@ -23,5 +34,8 @@ export const useUIStore = create<UIStore>()((set) => ({
   closeSettings: () => set({ isSettingsOpen: false }),
 
   hasUnsavedNoteChanges: false,
-  setHasUnsavedNoteChanges: (dirty) => set({ hasUnsavedNoteChanges: dirty })
+  setHasUnsavedNoteChanges: (dirty) => set({ hasUnsavedNoteChanges: dirty }),
+
+  focusedSourceDocumentId: null,
+  focusSourceDocument: (documentId) => set({ focusedSourceDocumentId: documentId })
 }))

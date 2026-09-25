@@ -216,6 +216,73 @@ Two rules for the composer and for leaving the workspace:
   through. The in-panel Back button is not special-cased — it uses the same
   state. A navigation path that skips this guard is a bug.
 
+### An answer shows what it was built from
+
+Implementation: `components/notebook/chat/AnswerSources.tsx`, fed by
+`chat_messages.metadata` (see [message metadata](#message-metadata)).
+
+Retrieval already knew which passages it used and threw the identity away: the
+prompt kept a title and some text, and `chunkId` / `documentId` were dropped. The
+answer therefore looked identical whether it came from the reader's documents or
+from nowhere, which is the one distinction this product cannot afford to lose.
+
+The region has three states, and they are three different statements — do not
+collapse them:
+
+| State            | Shown                                                         |
+| ---------------- | ------------------------------------------------------------- |
+| `used`           | A disclosure: "Based on N source passages" → the passages     |
+| `none`           | One T3 line: nothing from your sources was used               |
+| `failed`         | One T3 line: searching your sources failed                    |
+| no status at all | **Nothing** — an older message is "unknown", not "ungrounded" |
+
+Rules:
+
+- **The passage is quoted verbatim**, never summarised or truncated into a
+  paraphrase. It is the evidence; if it is too long to read, it is still too long
+  to invent.
+- Each passage sits in `bg-muted` — a recessed container inside the panel, per the
+  surface rules. The region is **not** a `Card`: cards inside panels nest, and this
+  belongs to the message, not beside it.
+- Density is the disclosure's job. The collapsed state is one line; the passages
+  are behind it.
+- Only after the turn ends. Rendering an empty evidence list mid-answer would read
+  as "nothing was used".
+- The ungrounded and failed lines are T3: they must be readable, and they must not
+  compete with the answer.
+
+### Message metadata
+
+The structured part of `chat_messages.metadata` is typed (`ChatMessageMetadata`
+in `shared/types/chat.ts`) and read **only** through
+`shared/utils/answerSources.ts`. Two rules:
+
+- **Parse defensively, drop per entry.** The column is an open JSON bag written by
+  whichever version of the app produced the message, so a reader never assumes a
+  shape. One malformed entry must not hide the passages that did survive: two
+  usable sources out of three still show two.
+- **"Not recorded" is not "none".** An answer from before this existed has no
+  status; saying it was ungrounded would accuse a grounded answer. Unknown
+  renders nothing.
+
+### Cross-panel requests
+
+The transcript (centre) and the library (left) are siblings, so a citation click
+cannot pass a prop. It writes to `uiStore` and `SourcePanel` derives from it **during
+render** — never in an effect:
+
+```tsx
+const openDocument = selectedDocument ?? focusedDocument
+```
+
+Two things this avoids, both of which were tried and rejected:
+
+- `setState` inside an effect to consume the request: the lint rule
+  `react-hooks/set-state-in-effect` fails the build, and it cascades renders.
+- Clearing the store request from inside render: writing to a store during render
+  notifies other components mid-render. The clear happens in the event handlers
+  instead (list click, Back), which is why the derivation needs no cleanup step.
+
 ### Geometry lives in a module, and it is tested
 
 The arithmetic above — `availableFrom`, `maxSideWidth`, the golden-ratio split, the
@@ -638,3 +705,20 @@ runs in the `Verify` workflow, before the build matrix.
 What it does **not** enforce, and therefore relies on review: the surface ladder
 (which surface a panel uses), accent discipline, spacing and density, and the
 four interaction states. Those are the rules a reviewer must hold the line on.
+
+## Locales
+
+`en-US` and `zh-CN` move together (CONTRIBUTING.md), and the check is **parity**:
+neither file may carry a key the other lacks.
+
+**One exception: plural forms.** English declares `key_one` / `key_other` and
+Chinese declares `key` alone with no suffix, which is the correct i18next shape and
+not a missing translation. This matters when pruning: a literal search for a key
+misses plural forms entirely, because `t('ankiCards', { count })` never renders the
+string `ankiCards_one` in source. Prune by hand for those, or keep them
+unconditionally.
+
+Two prunes have already found the same artefact: each locale file carried a block
+of English-only keys for surfaces that do not exist (an editor menubar, a notes /
+trash / tags feature). They were unreachable, and they made the app read as
+half-translated. Delete dead copy rather than translating it.

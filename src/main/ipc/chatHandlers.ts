@@ -2,35 +2,50 @@ import { ipcMain, IpcMainInvokeEvent } from 'electron'
 import * as queries from '../db/queries'
 import { ConnectionManager } from '../models/ConnectionManager'
 import { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
-import { KnowledgeService } from '../services/KnowledgeService'
+import { KnowledgeService, type SearchResult } from '../services/KnowledgeService'
 import { validateAndCleanMessages } from '../utils/messageValidator'
 import Logger from '../../shared/utils/logger'
+import type { AnswerSource, RetrievalStatus } from '../../shared/types/chat'
 import { ChatSchemas, validate } from './validation'
 
 // 管理活跃的流式请求
 const activeStreams = new Map<string, AbortController>()
 
 /**
- * 构建 RAG 上下文 prompt
+ * 构建 RAG 上下文 prompt，并把「这段回答基于哪些段落」一起交出来。
+ *
+ * 之前这里只取 `documentTitle` / `content` / `score` 三个字段，
+ * `chunkId`、`documentId`、`chunkIndex` 全部被丢掉 —— 于是回答交付之后，
+ * 界面上再也没有回到原文的路。prompt 文本保持不变，这里只是不再丢弃身份。
  */
-function buildRAGContext(
-  searchResults: Array<{
-    documentTitle: string
-    content: string
-    score: number
-  }>
-): string {
-  if (searchResults.length === 0) return ''
+function buildRAGContext(searchResults: SearchResult[]): {
+  context: string
+  sources: AnswerSource[]
+} {
+  if (searchResults.length === 0) return { context: '', sources: [] }
 
-  const contextParts = searchResults.map((result, index) => {
-    return `[来源 ${index + 1}: ${result.documentTitle}]\n${result.content}`
-  })
+  const sources: AnswerSource[] = searchResults.map((result, index) => ({
+    index: index + 1,
+    documentId: result.documentId,
+    documentTitle: result.documentTitle,
+    documentType: result.documentType,
+    chunkId: result.chunkId,
+    chunkIndex: result.chunkIndex,
+    content: result.content,
+    score: result.score
+  }))
 
-  return `以下是与用户问题相关的背景知识，请参考这些信息来回答：
+  const contextParts = sources.map(
+    (source) => `[来源 ${source.index}: ${source.documentTitle}]\n${source.content}`
+  )
+
+  const context = `以下是与用户问题相关的背景知识，请参考这些信息来回答：
 
 ${contextParts.join('\n\n---\n\n')}
 
 请基于以上背景知识回答用户的问题。如果背景知识不足以回答问题，请说明并尽力提供有帮助的回答。`
+
+  return { context, sources }
 }
 
 /**
@@ -125,7 +140,11 @@ export function registerChatHandlers(
     }
 
     // 3.2 RAG 增强：检索相关知识并注入上下文
-    // 只有在配置了 embedding connection 时才启用 RAG
+    // 只有在配置了 embedding connection 时才启用 RAG。
+    // 检索结果同时记录到消息上：以前检索失败只留一行日志，
+    // 于是「没有依据的回答」和「有依据的回答」在界面上完全无法区分。
+    let retrieval: RetrievalStatus = 'none'
+    let answerSources: AnswerSource[] = []
     try {
       const embeddingClient = await connectionManager.getEmbeddingClient()
 
@@ -138,7 +157,9 @@ export function registerChatHandlers(
           })
 
           if (searchResults.length > 0) {
-            const ragContext = buildRAGContext(searchResults)
+            const { context, sources } = buildRAGContext(searchResults)
+            retrieval = 'used'
+            answerSources = sources
             Logger.debug(
               'ChatHandlers',
               `RAG: Found ${searchResults.length} relevant chunks for query`
@@ -147,7 +168,7 @@ export function registerChatHandlers(
             // 将 RAG 上下文作为 system message 插入到消息列表开头
             messages.unshift({
               role: 'system',
-              content: ragContext
+              content: context
             })
           }
         }
@@ -155,9 +176,16 @@ export function registerChatHandlers(
         Logger.debug('ChatHandlers', 'RAG disabled: No embedding model configured')
       }
     } catch (error) {
-      // RAG 失败不应该阻止对话，只记录警告
+      // RAG 失败不应该阻止对话
+      retrieval = 'failed'
       Logger.warn('ChatHandlers', 'RAG search failed:', error)
     }
+
+    queries.updateMessageMetadata(assistantMessage.id, {
+      ...(assistantMessage.metadata ?? {}),
+      retrieval,
+      sources: answerSources
+    })
 
     // 4. 调用 Model Connection 流式生成
     const client = await connectionManager.getChatClient()

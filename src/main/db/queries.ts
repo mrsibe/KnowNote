@@ -1,6 +1,7 @@
 import { eq, desc, and } from 'drizzle-orm'
 import { getDatabase, executeCheckpoint, dropNotebookVectorTable } from './index'
 import { chatSessions, chatMessages, notebooks, notes, documents, items } from './schema'
+import type { ChatMessageMetadata } from '../../shared/types/chat'
 
 // ==================== Chat Sessions ====================
 
@@ -203,6 +204,18 @@ export function updateMessageContent(
   }
 
   db.update(chatMessages).set(updateData).where(eq(chatMessages.id, messageId)).run()
+}
+
+/**
+ * 更新消息的结构化元数据。
+ *
+ * 目前唯一的用途是把「这条回答基于哪些段落」写到助手消息上，
+ * 这样回答交付之后仍然可以回到原文（见 shared/types/chat.ts 的 AnswerSource）。
+ */
+export function updateMessageMetadata(messageId: string, metadata: ChatMessageMetadata) {
+  const db = getDatabase()
+
+  db.update(chatMessages).set({ metadata }).where(eq(chatMessages.id, messageId)).run()
 }
 
 // ==================== Notebooks ====================
