@@ -65,6 +65,13 @@ export class PdfLoader implements IDocumentLoader {
 
     try {
       // 加载 PDF 文档
+      //
+      // 这里刻意不建 AnnotationLayer，也不导入 `pdfjs-dist/web/*`（#121 / GHSA-hq66-cqwq-w95j）。
+      // 真正执行文档内 JS 的 `PDFScriptingManager` 只在 viewer build 里，而 `enableScripting`
+      // 也不在 `getDocument` 的参数里 —— 它在 AnnotationLayer / viewer 上。所以这条 API 路径
+      // **在当前检查过的调用点下漏洞路径不可达**，而这个前提由
+      // `test/pdfjsScriptingBoundary.test.ts` 守着：一旦有人把 annotation layer 或 viewer
+      // 拉进来，那个测试会失败。
       const loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(buffer),
         password: opts.password
@@ -136,8 +143,11 @@ export class PdfLoader implements IDocumentLoader {
       }
 
       // 清理文档
+      //
+      // `destroy()` 在 pdfjs-dist 6.x 从 `PDFDocumentProxy` 移到了
+      // `PDFDocumentLoadingTask`（doc 上只剩 `cleanup()`），所以这里销毁的是 loading task。
       await pdfDoc.cleanup()
-      await pdfDoc.destroy()
+      await loadingTask.destroy()
 
       return {
         content: fullText.trim(),
