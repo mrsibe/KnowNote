@@ -166,6 +166,10 @@ export const KnowledgeSchemas = {
     documentId: z.string().min(1, '文档 ID 不能为空')
   }),
 
+  getDocumentBlocks: z.object({
+    documentId: z.string().min(1, '文档 ID 不能为空')
+  }),
+
   deleteDocument: z.object({
     documentId: z.string().min(1, '文档 ID 不能为空')
   }),

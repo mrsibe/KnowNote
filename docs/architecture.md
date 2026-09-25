@@ -78,3 +78,58 @@ Rules:
 compatibility and delegates to the default retriever. `SearchResult` gained a
 `locator` field, which is populated from `RetrievedEvidence`; ranking, scores and
 the existing fields are unchanged.
+
+## Retrieval measurement
+
+Retrieval quality is a number before it is an opinion. `eval/` holds a committed
+corpus and a ground-truth dataset; `src/main/eval/` runs them through the normal
+ingestion path and the real `Retriever`, and writes
+`docs/eval/baseline-<version>.json` (deterministic) plus a markdown summary.
+
+Rules:
+
+- **Ground truth is corpus identity, not database identity.** A relevant location
+  is `{ document: <corpus-relative path>, page, block: <ordinal>, quote? }`. Runtime
+  `documentId`s are random and `blockId`s embed them, so a dataset keyed on them
+  would break — instead of measuring — a chunking or parser change.
+- **The baseline is frozen and the delta is explicit.** v1.5 experiments (#77,
+  #78) are reported as a delta against the committed baseline, with an
+  adopted-change threshold. A change that is not measured against it is not
+  adopted.
+- **`npm run eval` is offline.** Only `npm run eval:prepare` may download the
+  pinned model. The pinned revision is part of the embedding space identity, so a
+  model change is a baseline change.
+
+The harness is a main-process entry (`--eval-harness`), like the packaged smoke
+test, because the DB layer, vector store and loaders do not exist outside
+Electron. See `eval/README.md` for the dataset format and commands.
+
+## Source reader
+
+The reader is not "the PDF component". It is the surface that renders whatever
+structure a source has, behind one format-agnostic contract:
+
+```ts
+interface ReaderHandle {
+  openAt(anchor: ReaderAnchor): void
+  getSelection(): ReaderSelection | null
+}
+```
+
+`ReaderAnchor` is `{ documentId, page?, blockId?, startOffset?, endOffset? }`,
+and `ReaderSelection` is the same shape plus the selected `text`. PDF is the full
+implementation in v1.4 (pages, text layer, block overlay); every other format uses
+a text reader. Nothing downstream may branch on which one is mounted — #72
+(citation click) and #73 (excerpt to note) only use `openAt` / `getSelection`.
+
+Rules:
+
+- **Bytes are served by id, never by path.** `knownote-doc://docs/<documentId>` is
+  resolved against `documents.localFilePath` in the main process. The renderer
+  never constructs a filesystem path, and an unknown id is a 404.
+- **Blocks travel with the source.** `document_blocks` holds page, char span and
+  normalized bbox; `openAt({ page, blockId })` uses them to scroll and highlight,
+  so the reader does not re-derive geometry from chunk text.
+- **The text layer is real text.** pdfjs's `TextLayer` is rendered over the canvas
+  so `getSelection()` can map a DOM selection back to a source location; selecting
+  the canvas would give nothing.
