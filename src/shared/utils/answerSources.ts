@@ -80,17 +80,3 @@ export const sourcesForDisplay = (metadata: unknown): AnswerSource[] => {
   if (status === 'failed') return []
   return parseAnswerSources(metadata)
 }
-
-/**
- * Why the model stopped, or `null` when the message does not say.
- *
- * `length` is the value that matters to a reader: the provider ended the answer
- * at the output ceiling, so the text that arrived is incomplete. `null` keeps
- * "we did not record it" separate from any particular reason, the same way
- * `parseRetrievalStatus` does.
- */
-export const parseFinishReason = (metadata: unknown): string | null => {
-  if (!metadata || typeof metadata !== 'object') return null
-  const raw = (metadata as ChatMessageMetadata).finishReason
-  return isNonEmptyString(raw) ? raw : null
-}

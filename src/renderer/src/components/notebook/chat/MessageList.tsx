@@ -14,6 +14,7 @@ import MessageItem from './MessageItem'
 import { ScrollArea } from '../../ui/scroll-area'
 import { Button } from '../../ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '../../ui/empty'
+import { isAnswerLive } from '../../../../../shared/utils/answerState'
 // messageList.css 已合并到 effects.css（通过 main.css 全局导入）
 
 export interface MessageListHandle {
@@ -44,7 +45,8 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
   const { t } = useTranslation()
 
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : undefined
-  const isStreaming = Boolean(lastMessage?.isStreaming)
+  // The record says whether the turn is still arriving (#142).
+  const isStreaming = isAnswerLive(lastMessage?.status)
 
   useEffect(() => {
     // Announce the END of a turn, never its tokens. A live region on the

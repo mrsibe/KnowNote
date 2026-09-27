@@ -122,6 +122,30 @@ Offline is a **model-connection** concern, not a zone concern: zones read local
 data and never gate on connectivity. Only a chat turn and remote embeddings need
 the network, and both already carry their own unavailable state.
 
+#### What an answer says when it did not finish
+
+A turn's record carries its state (`chat_messages.status`), and the transcript
+renders from that record — never from whether a stream happens to be open
+(`shared/utils/answerState.ts` is the only place that maps one to the other). That is
+what makes the answer that is arriving and the same answer after a restart the same
+statement rather than two rendering paths that have to agree.
+
+Four states explain themselves in one muted line **beside** the answer; none is an
+error card, and none replaces the text that arrived:
+
+| `status`    | the line                                                       |
+| ----------- | -------------------------------------------------------------- |
+| `truncated` | the output ceiling ended it — a completion with a known defect |
+| `blocked`   | the provider refused it; not the model's own decision          |
+| `aborted`   | the reader stopped it                                          |
+| `failed`    | generation broke, with the reason                              |
+
+`completed` says nothing. A row written before the column existed says nothing
+either: unknown is not a claim, and it must not be rendered as one.
+
+The line is `text-xs text-subtle-foreground`, the treatment the retrieval lines
+already use — a state of the answer, quieter than the answer itself.
+
 ## Surfaces
 
 The app is a stack of opaque surfaces plus two translucent state fills. Higher

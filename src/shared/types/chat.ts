@@ -158,16 +158,10 @@ export interface ChatMessageMetadata {
    */
   citations?: Citation[]
   /**
-   * Why the model stopped, as the provider reported it (`stop`, `length`, …).
-   *
-   * `length` is the one the reader depends on: it means the output ceiling ended
-   * the answer, so what arrived is not the whole of it. Absent on messages
-   * written before the field existed — unknown, which is not the same statement
-   * as "finished".
+   * Token accounting, carried on the terminal chunk because the SDK emits no chunk
+   * of its own for it — see `ModelClient.streamChat`. Not part of the persisted
+   * metadata: the record has a `usage` column.
    */
-  finishReason?: string
-  /** Token accounting, carried on the terminal chunk because the SDK emits no
-   * chunk of its own for it. */
   usage?: ChatTokenUsage
   [key: string]: unknown
 }
@@ -180,8 +174,6 @@ export interface ChatMessage extends Omit<DBChatMessage, 'metadata' | 'reasoning
   notebookId?: string // 前端扩展字段，用于并发消息管理
   reasoningContent?: string | null // 可选的推理内容字段
   metadata?: ChatMessageMetadata
-  isStreaming?: boolean // 前端扩展字段，标识流式消息
-  isReasoningStreaming?: boolean // 前端扩展字段，推理过程是否在流式传输
 }
 
 /**

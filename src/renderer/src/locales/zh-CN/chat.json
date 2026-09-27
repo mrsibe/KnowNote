@@ -16,5 +16,8 @@
   "citationUnavailable": "来源已删除",
   "answerNotGrounded": "这条回答没有使用你来源中的任何段落。",
   "answerRetrievalFailed": "检索来源失败，这条回答没有依据你的来源。",
-  "answerTruncated": "回答达到模型输出长度上限，因此在这里被截断。"
+  "answerTruncated": "回答达到模型输出长度上限，因此在这里被截断。",
+  "answerBlocked": "提供方以内容策略为由拒绝了这次回答。",
+  "answerStopped": "回答已停止，上面是已生成的部分。",
+  "answerFailed": "生成中断：{{error}}"
 }

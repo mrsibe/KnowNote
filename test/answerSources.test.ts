@@ -2,7 +2,6 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   parseAnswerSources,
-  parseFinishReason,
   parseRetrievalStatus,
   sourcesForDisplay
 } from '../src/shared/utils/answerSources.ts'
@@ -126,17 +125,4 @@ test('what to display per status', () => {
   // nothing when the status is unknown).
   assert.equal(sourcesForDisplay({ sources: [source()] }).length, 1)
   assert.deepEqual(sourcesForDisplay(undefined), [])
-})
-
-test('the finish reason is read back so a truncated answer can say so', () => {
-  assert.equal(parseFinishReason({ finishReason: 'length' }), 'length')
-  assert.equal(parseFinishReason({ finishReason: 'stop' }), 'stop')
-})
-
-test('an unrecorded finish reason is null, which is not a reason to call it complete', () => {
-  // Messages written before the field existed say nothing about why they ended.
-  // Returning a value here would date every old answer as truncated.
-  for (const metadata of [undefined, null, {}, { finishReason: '' }, { finishReason: 7 }]) {
-    assert.equal(parseFinishReason(metadata), null, JSON.stringify(metadata))
-  }
 })

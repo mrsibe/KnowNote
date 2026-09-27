@@ -16,5 +16,8 @@
   "citationUnavailable": "Source no longer available",
   "answerNotGrounded": "No passages from your sources were used in this answer.",
   "answerRetrievalFailed": "Searching your sources failed, so this answer is not based on them.",
-  "answerTruncated": "The answer hit the model's output length limit, so it is cut off here."
+  "answerTruncated": "The answer hit the model's output length limit, so it is cut off here.",
+  "answerBlocked": "The provider refused this answer on content policy grounds.",
+  "answerStopped": "The answer was stopped; this is the part that had been written.",
+  "answerFailed": "Generation was interrupted: {{error}}"
 }

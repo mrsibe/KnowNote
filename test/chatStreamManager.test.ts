@@ -283,9 +283,14 @@ test('the SDK events are forwarded as they are, and the terminal chunk is not', 
   assert.equal(outcomeEvent?.outcome.status, 'completed')
   assert.equal(outcomeEvent?.finishReason, 'stop')
   assert.equal(outcomeEvent?.usage?.totalTokens, 8)
+
+  // One home for one fact: the provider's reason is on the outcome event and in the
+  // record's `finish_reason`, not copied into the provenance bag. It rode there from
+  // #137 to #142 only because the transcript had no status to render from.
   assert.equal(
     (outcomeEvent?.messageMetadata as ChatMessageMetadata | undefined)?.finishReason,
-    'stop'
+    undefined,
+    'the finish reason was written into the metadata bag again'
   )
 
   // Invariant 4: the write happens first, so a failed write cannot leave the

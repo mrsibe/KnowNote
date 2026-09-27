@@ -3,6 +3,11 @@ import assert from 'node:assert/strict'
 import type { UIMessageChunk } from 'ai'
 import { setupChatListeners, useChatStore } from '../src/renderer/src/store/chatStore.ts'
 import type { ChatMessage, ChatTurnEvent } from '../src/shared/types/chat.ts'
+import {
+  answerNoticeKey,
+  isAnswerLive,
+  keepsPartialAnswer
+} from '../src/shared/utils/answerState.ts'
 
 /**
  * The renderer's half of the stream protocol (#141).
@@ -46,14 +51,13 @@ const placeholder = (messageId: string): ChatMessage => ({
   role: 'assistant',
   content: '',
   reasoningContent: null,
-  status: 'streaming',
+  // `pending` until the first event arrives (#142).
+  status: 'pending',
   finishReason: null,
   error: null,
   usage: null,
   finishedAt: null,
-  createdAt: new Date(),
-  isStreaming: true,
-  isReasoningStreaming: true
+  createdAt: new Date()
 })
 
 /** A turn the renderer is following, as `sendMessage` would have registered it. */
@@ -96,10 +100,11 @@ test('the events assemble into the answer on screen', async () => {
 
   await waitFor(() => messageOf('msg_assemble')?.content === 'the answer')
 
-  // Still streaming: only the outcome event ends a turn, which is what keeps the
-  // renderer from claiming an ending the database has not recorded yet.
-  assert.equal(messageOf('msg_assemble')?.isStreaming, true)
+  // The first event is what turns "waiting" into "streaming", the same transition
+  // the execution makes in Main — and only the outcome event ends the turn, which is
+  // what keeps the renderer from claiming an ending the database has not recorded.
   assert.equal(messageOf('msg_assemble')?.status, 'streaming')
+  assert.equal(isAnswerLive(messageOf('msg_assemble')?.status), true)
 
   close()
 })
@@ -137,7 +142,7 @@ test('the outcome ends the turn and applies what it carried', async () => {
     messageMetadata: { retrieval: 'used', sources: [] }
   })
 
-  await waitFor(() => messageOf('msg_outcome')?.isStreaming === false)
+  await waitFor(() => messageOf('msg_outcome')?.status === 'truncated')
   const message = messageOf('msg_outcome')
   assert.equal(message?.content, 'the answer', 'the assembled answer was replaced')
   assert.equal(message?.status, 'truncated')
@@ -151,10 +156,16 @@ test('the outcome ends the turn and applies what it carried', async () => {
     'the notebook still looks like it is streaming'
   )
 
+  // What the reader sees now and what a reload shows are the same inputs, because
+  // the live-only overlay is gone and every field left is one a stored row has.
+  assert.equal(answerNoticeKey(message!), 'answerTruncated', 'the ended answer lost its notice')
+  assert.equal(isAnswerLive(message?.status), false)
+  assert.equal(keepsPartialAnswer(message?.status), true)
+
   close()
 })
 
-test('a failed turn shows the reason', async () => {
+test('a failed turn keeps the answer and adds the reason beside it', async () => {
   installApi()
   const close = setupChatListeners()
   seedTurn('msg_failed')
@@ -171,12 +182,15 @@ test('a failed turn shows the reason', async () => {
     messageMetadata: {}
   })
 
-  await waitFor(() => messageOf('msg_failed')?.isStreaming === false)
+  await waitFor(() => messageOf('msg_failed')?.status === 'failed')
   const message = messageOf('msg_failed')
-  // Until #142 renders the status itself, a failure reads the way it always has.
-  assert.equal(message?.content, '❌ Error: socket hang up')
-  assert.equal(message?.status, 'failed')
+
+  // What changed in #142: the part that arrived is kept, and the reason is a line
+  // beside it. It used to *replace* the answer, which threw away the only thing the
+  // reader had.
+  assert.equal(message?.content, 'half')
   assert.equal(message?.error?.message, 'socket hang up')
+  assert.equal(answerNoticeKey(message!), 'answerFailed')
 
   close()
 })

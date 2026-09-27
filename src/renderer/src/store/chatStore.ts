@@ -2,7 +2,9 @@ import { create } from 'zustand'
 import { readUIMessageStream } from 'ai'
 import type { UIMessage, UIMessageChunk } from 'ai'
 import type { ChatSession, ChatMessage } from '../types/notebook'
+import type { ChatTurnEvent } from '../../../shared/types/chat'
 import {
+  isReasoningLive,
   isSequenceContinuing,
   messageReasoning,
   messageText
@@ -23,6 +25,12 @@ interface StreamingTurn {
   lastSeq?: number
   /** Set once a gap has been seen: what is on screen is missing content. */
   sequenceGap?: boolean
+  /**
+   * Whether the model is still thinking, read from the assembled message rather
+   * than remembered from an event (#142). It is live-only state, which is why it
+   * lives on the turn and not on the message.
+   */
+  reasoningLive?: boolean
 }
 
 interface ChatStore {
@@ -70,6 +78,13 @@ interface ChatStore {
  */
 interface TurnAssembler {
   push: (chunk: UIMessageChunk) => void
+  /**
+   * Resolves once every event that has been pushed is assembled.
+   *
+   * The outcome event can arrive while these are still being processed, and the
+   * partial answer is exactly what must not be dropped when that happens (#142).
+   */
+  drained: Promise<void>
   close: () => void
 }
 
@@ -87,6 +102,10 @@ function feedAssembler(messageId: string, chunk: UIMessageChunk): void {
   if (!assembler) {
     let controller: ReadableStreamDefaultController<UIMessageChunk> | undefined
     let closed = false
+    let drained = (): void => {}
+    const assembled = new Promise<void>((resolve) => {
+      drained = resolve
+    })
     const stream = new ReadableStream<UIMessageChunk>({
       start: (created) => {
         controller = created
@@ -102,6 +121,8 @@ function feedAssembler(messageId: string, chunk: UIMessageChunk): void {
         // A malformed event must not take the transcript down with it: the turn's
         // outcome event still arrives and still closes the turn.
         console.error('[ChatStore] Failed to assemble a streaming answer:', error)
+      } finally {
+        drained()
       }
     })()
 
@@ -109,6 +130,7 @@ function feedAssembler(messageId: string, chunk: UIMessageChunk): void {
       push: (next) => {
         if (!closed) controller?.enqueue(next)
       },
+      drained: assembled,
       close: () => {
         if (closed) return
         closed = true
@@ -121,18 +143,57 @@ function feedAssembler(messageId: string, chunk: UIMessageChunk): void {
   assembler.push(chunk)
 }
 
-function closeAssembler(messageId: string): void {
-  assemblers.get(messageId)?.close()
-  assemblers.delete(messageId)
+/**
+ * Apply the turn's ending to the message it belongs to.
+ *
+ * Called only after the assembler has drained, so the partial answer is the finished
+ * one: the outcome event can arrive while the last chunks are still being assembled
+ * (#142), and applying it early would drop exactly the text a stopped or failed turn
+ * is supposed to keep.
+ */
+function applyOutcome(event: Extract<ChatTurnEvent, { type: 'outcome' }>): void {
+  const state = useChatStore.getState()
+  const turn = state.turns[event.messageId]
+
+  useChatStore.setState((current) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { [event.messageId]: _finished, ...turns } = current.turns
+    return {
+      turns,
+      messages: current.messages.map((message) =>
+        message.id === event.messageId
+          ? {
+              ...message,
+              // The partial answer is kept whatever the status: a stopped or failed
+              // turn is what the reader was left with, and the reason is a line
+              // beside it, not a replacement for it (#142).
+              content: messageText(turn?.message) || message.content,
+              status: event.outcome.status,
+              finishReason: event.finishReason ?? null,
+              error: event.outcome.status === 'failed' ? event.outcome.error : null,
+              usage: event.usage ?? null,
+              metadata: event.messageMetadata,
+              finishedAt: new Date()
+            }
+          : message
+      )
+    }
+  })
+
+  if (turn) state.setStreamingMessage(turn.notebookId, null)
+  assemblers.delete(event.messageId)
 }
 
 function applySnapshot(messageId: string, message: UIMessage): void {
   const text = messageText(message)
   const reasoningContent = messageReasoning(message)
+  const reasoningLive = isReasoningLive(message)
 
   useChatStore.setState((state) => {
     const turn = state.turns[messageId]
-    const turns = turn ? { ...state.turns, [messageId]: { ...turn, message } } : state.turns
+    const turns = turn
+      ? { ...state.turns, [messageId]: { ...turn, message, reasoningLive } }
+      : state.turns
 
     // Only touch the visible list when this is the message the reader is looking at;
     // a turn in another notebook still assembles so switching back is instant.
@@ -280,14 +341,14 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       role: 'assistant',
       content: '',
       reasoningContent: undefined,
-      status: 'streaming',
+      // `pending` until the first event arrives: the turn exists, the provider has
+      // not said anything yet (#142).
+      status: 'pending',
       finishReason: null,
       error: null,
       usage: null,
       finishedAt: null,
-      createdAt: new Date(),
-      isStreaming: true,
-      isReasoningStreaming: true
+      createdAt: new Date()
     }
     get().addMessage(assistantMessage)
     get().setStreamingMessage(notebookId, messageId)
@@ -366,15 +427,13 @@ export function setupChatListeners(): () => void {
 
         feedAssembler(event.messageId, event.event)
 
-        // The reasoning indicator is the one live detail the transcript reads from an
-        // event type rather than from the assembled message. #142 puts the state on
-        // the message; until then this keeps it as accurate as it was.
-        if (event.event.type === 'reasoning-start' || event.event.type === 'reasoning-end') {
-          const streamingReasoning = event.event.type === 'reasoning-start'
+        // The first event of a turn is what turns "waiting" into "streaming", the
+        // same transition the execution makes in Main.
+        if (event.event.type !== 'start') {
           useChatStore.setState((current) => ({
             messages: current.messages.map((message) =>
-              message.id === event.messageId
-                ? { ...message, isReasoningStreaming: streamingReasoning }
+              message.id === event.messageId && message.status === 'pending'
+                ? { ...message, status: 'streaming' }
                 : message
             )
           }))
@@ -383,43 +442,14 @@ export function setupChatListeners(): () => void {
       }
 
       case 'outcome': {
-        const state = useChatStore.getState()
-        const turn = state.turns[event.messageId]
-        const failure = event.outcome.status === 'failed' ? event.outcome.error.message : undefined
-
-        // Closing the assembler ends the stream the answer was assembled from.
-        closeAssembler(event.messageId)
-
-        useChatStore.setState((current) => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { [event.messageId]: _finished, ...turns } = current.turns
-          return {
-            turns,
-            messages: current.messages.map((message) =>
-              message.id === event.messageId
-                ? {
-                    ...message,
-                    // Until #142 renders the status itself, a failure reads the way it
-                    // always has: the reason replaces the partial answer.
-                    content:
-                      failure === undefined
-                        ? messageText(turn?.message) || message.content
-                        : `❌ Error: ${failure}`,
-                    isStreaming: false,
-                    isReasoningStreaming: false,
-                    status: event.outcome.status,
-                    finishReason: event.finishReason ?? null,
-                    error: event.outcome.status === 'failed' ? event.outcome.error : null,
-                    usage: event.usage ?? null,
-                    metadata: event.messageMetadata,
-                    finishedAt: new Date()
-                  }
-                : message
-            )
-          }
-        })
-
-        if (turn) state.setStreamingMessage(turn.notebookId, null)
+        const assembler = assemblers.get(event.messageId)
+        // Closing the stream ends the assembler; waiting for it to drain means the
+        // ending is applied to the finished answer.
+        assembler?.close()
+        void (async () => {
+          await assembler?.drained
+          applyOutcome(event)
+        })()
         break
       }
 

@@ -42,6 +42,17 @@ export const collectMessageText = async (
 }
 
 /**
+ * Whether the model is still thinking.
+ *
+ * Read from the assembled parts rather than remembered from
+ * `reasoning-start` / `reasoning-end` events: the SDK already tracks the state of
+ * the part it is building, so the renderer does not need a flag of its own for it
+ * (#142).
+ */
+export const isReasoningLive = (message: UIMessage | undefined): boolean =>
+  (message?.parts ?? []).some((part) => part.type === 'reasoning' && part.state === 'streaming')
+
+/**
  * The chunks that end a turn.
  *
  * They are not forwarded to the renderer: the manager decides what a turn was and

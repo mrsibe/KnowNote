@@ -368,6 +368,11 @@ export class ChatStreamManager {
    * (#70). With no markers at all the full evidence set stands — the model simply
    * did not use the marker convention. A partial answer is resolved the same way:
    * the markers it did emit still point at the passages it quoted.
+   *
+   * The provider's finish reason is **not** copied in here any more. It was a bridge
+   * from #137 to #142: the transcript had no status to render from, so the reason
+   * rode in the metadata bag. The record has a `finish_reason` column now, and one
+   * fact belongs in one place.
    */
   private finalizeMetadata(
     entry: TurnEntry,
@@ -375,12 +380,6 @@ export class ChatStreamManager {
   ): ChatMessageMetadata {
     const { execution, request } = entry
     let metadata: ChatMessageMetadata = baseMetadata
-
-    if (entry.finishReason !== undefined) {
-      // The copy the live renderer reads to explain a cut-off answer (#137). Until
-      // #142 renders the status itself, this is what the transcript shows.
-      metadata = { ...metadata, finishReason: entry.finishReason }
-    }
 
     const resolution = resolveCitations(messageText(entry.message), request.citationContexts)
     if (resolution.matches.length > 0) {

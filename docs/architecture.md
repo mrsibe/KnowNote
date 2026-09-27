@@ -54,15 +54,15 @@ chat turn lifecycle is no longer one of them (#140) — it goes through
 
 Added by #140. A running turn used to be an `AbortController` in a `Map` inside the
 `send-message` IPC handler, with the rest of its state in that handler's closure:
-nothing could answer "what is this turn doing", and what a turn *was* was decided in
+nothing could answer "what is this turn doing", and what a turn _was_ was decided in
 four separate callbacks (#138).
 
-| Role | What it is |
-| --- | --- |
-| The turn's state and rules | `ChatExecution` — `src/main/services/chat/ChatExecution.ts`: the status, the one terminal outcome, and the signal that cancels the provider call |
+| Role                           | What it is                                                                                                                                                     |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The turn's state and rules     | `ChatExecution` — `src/main/services/chat/ChatExecution.ts`: the status, the one terminal outcome, and the signal that cancels the provider call               |
 | The registry and the lifecycle | `ChatStreamManager` — `src/main/services/chat/ChatStreamManager.ts`: one entry per running turn, and the only place a turn is settled, persisted and announced |
-| Persistence port | `ChatTurnStore`, declared by the manager and implemented by `services/chat/turnStore.ts` over `db/queries` |
-| The answer | assembled by the SDK (`readUIMessageStream`) on **both** sides, from the same events — see below |
+| Persistence port               | `ChatTurnStore`, declared by the manager and implemented by `services/chat/turnStore.ts` over `db/queries`                                                     |
+| The answer                     | assembled by the SDK (`readUIMessageStream`) on **both** sides, from the same events — see below                                                               |
 
 The manager imports neither `db/queries` nor Electron. It reports what happened through
 an `emit` callback supplied per turn and writes through the store port, which is what
@@ -99,7 +99,7 @@ renderer              the persisted message
   not fit into, so it was dropped (#137), and that every future SDK event type would
   also fall out of. What arrives now is `UIMessageChunk`, verbatim.
 - **Terminal chunks are the exception.** `finish`, `error` and `abort` are not
-  forwarded: the manager makes one `outcome` statement *after* the write, carrying
+  forwarded: the manager makes one `outcome` statement _after_ the write, carrying
   the reason, the error and the usage. It is also what ends the consumer the renderer
   assembles with, so a stop is announced too — as `aborted`, which is not a claim
   that the answer finished (#139).

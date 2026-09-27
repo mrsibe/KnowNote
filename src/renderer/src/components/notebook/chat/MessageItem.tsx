@@ -16,16 +16,14 @@ import { useKnowledgeStore } from '../../../store/knowledgeStore'
 import { useNotebookStore } from '../../../store/notebookStore'
 import { useSourceAnchorNavigation } from '../../../hooks/useSourceAnchorNavigation'
 import { useUIStore } from '../../../store/uiStore'
-import {
-  parseFinishReason,
-  parseRetrievalStatus,
-  sourcesForDisplay
-} from '../../../../../shared/utils/answerSources'
+import { parseRetrievalStatus, sourcesForDisplay } from '../../../../../shared/utils/answerSources'
 import { parseCitations, sourceDocumentExists } from '../../../../../shared/utils/citations'
 import {
   citationToSourceAnchor,
   sourceAnchorsEqual
 } from '../../../../../shared/utils/sourceAnchor'
+import { answerNoticeKey, isAnswerLive } from '../../../../../shared/utils/answerState'
+import { useChatStore } from '../../../store/chatStore'
 import { Button } from '../../ui/button'
 import { ScrollArea, ScrollBar } from '../../ui/scroll-area'
 import 'highlight.js/styles/github-dark.css'
@@ -40,9 +38,14 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   const { t } = useTranslation(['common', 'chat'])
   const isUser = message.role === 'user'
   const isSystem = message.role === 'system'
-  const isStreaming = message.isStreaming || false
   const [copied, setCopied] = useState(false)
   const [addedToNote, setAddedToNote] = useState(false)
+
+  // Everything about the turn's state comes from the record (#142): the transcript
+  // renders from `status`, so the same message reads the same whether it is
+  // arriving or was reloaded from the database.
+  const isLive = isAnswerLive(message.status)
+  const noticeKey = answerNoticeKey(message)
 
   const { createNote } = useItemStore()
   const { currentNotebook } = useNotebookStore()
@@ -50,11 +53,9 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   const focusedSource = useUIStore((state) => state.focusedSource)
   const documents = useKnowledgeStore((state) => state.documents)
   const documentsLoaded = useKnowledgeStore((state) => state.documentsLoaded)
-
-  // Whether the model was cut off at its output ceiling. An answer that ends this
-  // way is not a whole one, and until this was shown the reader had no way to tell
-  // it apart from a finished answer: the turn simply stopped mid-sentence.
-  const isTruncated = parseFinishReason(message.metadata) === 'length'
+  // Whether the model is still thinking. The one live detail that is not on the
+  // message: it comes from the assembled answer, and only exists while one does.
+  const reasoningLive = useChatStore((state) => state.turns[message.id]?.reasoningLive ?? false)
 
   // What this answer was built from. Read defensively: the metadata comes from the
   // database and may predate the shape (see shared/utils/answerSources.ts).
@@ -187,10 +188,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
       <div className="flex flex-col gap-3 max-w-[85%] min-w-0">
         {/* Reasoning process display - only shown when reasoning content exists */}
         {message.reasoningContent && (
-          <ReasoningContent
-            content={message.reasoningContent}
-            isStreaming={message.isReasoningStreaming || false}
-          />
+          <ReasoningContent content={message.reasoningContent} isStreaming={reasoningLive} />
         )}
 
         {message.content ? (
@@ -236,13 +234,13 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
               {message.content}
             </ReactMarkdown>
             {/* Streaming message cursor */}
-            {isStreaming && (
+            {isLive && (
               <span className="inline-block w-2 h-4 ml-1 bg-muted-foreground animate-pulse" />
             )}
           </div>
         ) : (
           // Show cursor when message is empty and still streaming
-          isStreaming && (
+          isLive && (
             <div className="flex items-center gap-2 px-2">
               <span className="text-sm text-muted-foreground">{t('chat:thinking')}</span>
               <span className="inline-block w-2 h-4 bg-muted-foreground animate-pulse" />
@@ -252,7 +250,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
         {/* What the answer was built from. Only after the turn ends: during
             streaming there is nothing to show yet, and an empty evidence list
             mid-answer would read as "nothing was used". */}
-        {message.content && !isStreaming && (
+        {message.content && !isLive && (
           <AnswerSources
             sources={answerSources}
             retrieval={retrieval}
@@ -261,13 +259,16 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
             }
           />
         )}
-        {/* Why the answer stops where it does, when the model did not decide to
-            stop there itself. */}
-        {message.content && !isStreaming && isTruncated && (
-          <p className="px-2 text-xs text-subtle-foreground">{t('chat:answerTruncated')}</p>
+        {/* Why the answer stops where it does, when the model did not decide to stop
+            there itself. Beside the answer, never instead of it: the part that
+            arrived is what the reader was left with. */}
+        {!isLive && noticeKey && (
+          <p className="px-2 text-xs text-subtle-foreground">
+            {t(`chat:${noticeKey}`, { error: message.error?.message ?? '' })}
+          </p>
         )}
         {/* Action buttons - only shown when reply is complete and has content */}
-        {message.content && !isStreaming && (
+        {message.content && !isLive && (
           <div className="flex items-center gap-2 self-start ml-2">
             {/* Copy button */}
             <Button
