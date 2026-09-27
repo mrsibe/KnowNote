@@ -93,7 +93,11 @@ export type ChatExecutionOutcome =
   | { status: 'truncated' }
   | { status: 'blocked' }
   | { status: 'aborted'; reason: 'user' | 'shutdown' }
-  | { status: 'failed'; error: ChatExecutionError; reason: 'error' | 'throw' | 'unexpected_eof' }
+  | {
+      status: 'failed'
+      error: ChatExecutionError
+      reason: 'error' | 'unexpected_eof' | 'timeout'
+    }
 
 /** Token accounting for one turn. Fields are optional because providers omit them. */
 export interface ChatTokenUsage {

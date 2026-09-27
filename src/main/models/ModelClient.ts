@@ -15,7 +15,6 @@ import type { EmbeddingConfig, EmbeddingResult } from './types'
 import Logger from '../../shared/utils/logger'
 
 const DEFAULT_TEMPERATURE = 0.7
-const DEFAULT_MAX_TOKENS = 2048
 
 /**
  * One provider call, as a stream.
@@ -93,11 +92,16 @@ export class ModelClient {
   streamChat(messages: APIMessage[], options: { signal?: AbortSignal } = {}): ChatStream {
     Logger.debug('ModelClient', `Streaming with model: ${this.connection.modelId}`)
 
+    const maxOutputTokens = this.connection.maxOutputTokens
+
     const result = streamText({
       model: this.getAIModel(),
       messages: convertToCoreMessages(messages),
       temperature: DEFAULT_TEMPERATURE,
-      maxOutputTokens: DEFAULT_MAX_TOKENS,
+      // Only when the connection asks for a ceiling. Absent means the model's own
+      // default, which is what a reasoning model needs: its thinking shares this
+      // budget with the answer, so 2048 of them was a ceiling reached early (#150).
+      ...(maxOutputTokens !== undefined && { maxOutputTokens }),
       // Owned by the caller, so that stopping a turn actually cancels the provider
       // request rather than only recording that it was stopped.
       abortSignal: options.signal

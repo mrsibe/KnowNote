@@ -60,7 +60,7 @@ export const classifyFinishReason = (finishReason: string): ChatExecutionOutcome
 /** A turn that ended because something went wrong, and where it went wrong. */
 export const failedOutcome = (
   message: string,
-  reason: 'error' | 'unexpected_eof'
+  reason: 'error' | 'unexpected_eof' | 'timeout'
 ): ChatExecutionOutcome => ({ status: 'failed', error: { message }, reason })
 
 /**

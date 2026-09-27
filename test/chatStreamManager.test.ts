@@ -7,6 +7,7 @@ import {
   ChatStreamManager,
   type ChatTurnStore
 } from '../src/main/services/chat/ChatStreamManager.ts'
+import { MAX_ATTEMPTS } from '../src/main/services/chat/retryPolicy.ts'
 import type {
   ChatExecutionOutcome,
   ChatMessageMetadata,
@@ -121,6 +122,85 @@ function erroringClient(text: string): ModelClient {
   const client = new ModelClient('chat', connection)
   client.getAIModel = () => model
   return client
+}
+
+/**
+ * A provider whose first `failures` attempts die with `message`, and whose later
+ * attempts answer. Counts the calls, because "was it retried" is the point.
+ */
+function flakyClient(
+  failures: number,
+  message: string,
+  text: string
+): { client: ModelClient; calls: () => number } {
+  const model = new MockLanguageModelV2({
+    doStream: async () => {
+      const attempt = model.doStreamCalls.length
+      if (attempt <= failures) {
+        return {
+          stream: new ReadableStream({
+            async start(controller) {
+              controller.enqueue({ type: 'stream-start', warnings: [] })
+              await new Promise((resolve) => setTimeout(resolve, 5))
+              controller.error(new Error(message))
+            }
+          }) as never
+        }
+      }
+      return {
+        stream: simulateReadableStream({
+          chunks: [
+            { type: 'stream-start', warnings: [] },
+            ...textChunks(text),
+            finishChunk('stop')
+          ] as never[]
+        })
+      }
+    }
+  })
+  const client = new ModelClient('chat', connection)
+  client.getAIModel = () => model
+  return { client, calls: () => model.doStreamCalls.length }
+}
+
+/**
+ * A provider that sends an answer and then holds the connection open, which is what
+ * the idle deadline is for.
+ */
+function silentClient(text: string): { client: ModelClient; cancelled: () => boolean } {
+  let cancelled = false
+  const model = new MockLanguageModelV2({
+    doStream: async ({ abortSignal }) => ({
+      stream: new ReadableStream({
+        async start(controller) {
+          for (const chunk of [
+            { type: 'stream-start', warnings: [] },
+            ...textChunks(text)
+          ] as never[]) {
+            controller.enqueue(chunk)
+          }
+          await new Promise<void>((resolve) => {
+            if (!abortSignal || abortSignal.aborted) resolve()
+            else
+              abortSignal.addEventListener(
+                'abort',
+                () => {
+                  cancelled = true
+                  resolve()
+                },
+                { once: true }
+              )
+          })
+          // A real transport reports the cancellation by erroring the stream; a mock
+          // that just goes quiet would leave the reader waiting forever.
+          controller.error(new DOMException('The operation was aborted.', 'AbortError'))
+        }
+      }) as never
+    })
+  })
+  const client = new ModelClient('chat', connection)
+  client.getAIModel = () => model
+  return { client, cancelled: () => cancelled }
 }
 
 interface StoredTurn {
@@ -519,4 +599,104 @@ test('token accounting runs for every ending and never decides one', async () =>
     'the session switch was not announced'
   )
   assert.equal(turns.get(execution.messageId)?.outcome?.status, 'completed')
+})
+
+test('a transient failure before anything is shown is retried, and the answer arrives', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+  const provider = flakyClient(1, '429 Too Many Requests', 'the answer, second try')
+
+  const execution = manager.start({ ...turnRequest(provider.client), emit: browser.emit })
+  await browser.outcome
+
+  assert.equal(execution.status, 'completed', 'the retry did not produce an answer')
+  assert.equal(turns.get(execution.messageId)?.content, 'the answer, second try')
+  assert.equal(provider.calls(), 2, 'the turn was not attempted twice')
+  // Nothing of the first attempt reached the reader.
+  assert.equal(
+    browser.chunkTypes().includes('text-delta'),
+    true,
+    'the second attempt’s answer was never forwarded'
+  )
+})
+
+test('a transient failure after content has been shown is reported, not retried', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+
+  const execution = manager.start({
+    ...turnRequest(erroringClient('half an answer')),
+    emit: browser.emit
+  })
+  await browser.outcome
+
+  // 'socket hang up' is transient, but the reader already has half an answer: a
+  // second attempt would duplicate or silently replace it.
+  assert.equal(turns.get(execution.messageId)?.outcome?.status, 'failed')
+  assert.equal(turns.get(execution.messageId)?.content, 'half an answer')
+})
+
+test('a deterministic failure is not retried', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+  const provider = flakyClient(99, 'invalid api key', 'never')
+
+  const execution = manager.start({ ...turnRequest(provider.client), emit: browser.emit })
+  await browser.outcome
+
+  assert.equal(provider.calls(), 1, 'a deterministic failure was retried')
+  assert.equal(turns.get(execution.messageId)?.outcome?.status, 'failed')
+})
+
+test('retries are bounded, so a provider that is down is not hammered', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+  const provider = flakyClient(99, '503 Service Unavailable', 'never')
+
+  const execution = manager.start({ ...turnRequest(provider.client), emit: browser.emit })
+  await browser.outcome
+
+  assert.equal(provider.calls(), MAX_ATTEMPTS, 'the attempts were not bounded')
+  assert.equal(turns.get(execution.messageId)?.outcome?.status, 'failed')
+})
+
+test('a stream that goes quiet is cancelled and fails with a timeout', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service,
+    idleTimeoutMs: 30
+  })
+  const browser = collectEvents()
+  const provider = silentClient('half an answer, then silence')
+
+  const execution = manager.start({ ...turnRequest(provider.client), emit: browser.emit })
+  await browser.outcome
+
+  assert.equal(provider.cancelled(), true, 'the silent request was never cancelled')
+  const record = turns.get(execution.messageId)
+  assert.equal(record?.outcome?.status, 'failed')
+  assert.equal(
+    record?.content,
+    'half an answer, then silence',
+    'the deadline dropped the part that had arrived'
+  )
+  if (record?.outcome?.status !== 'failed') throw new Error('unreachable')
+  assert.equal(record.outcome.reason, 'timeout', 'the failure was not recorded as a timeout')
 })

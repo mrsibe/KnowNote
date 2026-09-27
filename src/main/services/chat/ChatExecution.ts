@@ -36,7 +36,13 @@ export class ChatExecution {
 
   private currentStatus: ChatExecutionStatus = 'pending'
   private settledOutcome: ChatExecutionOutcome | undefined
-  private readonly controller = new AbortController()
+  /**
+   * The attempt in flight.
+   *
+   * Replaced by `beginAttempt`, because a retry must not inherit a signal that a
+   * timeout or a cancel has already aborted (#150).
+   */
+  private attemptController = new AbortController()
 
   constructor(init: { id: string; messageId: string; sessionId: string; notebookId?: string }) {
     this.id = init.id
@@ -60,9 +66,31 @@ export class ChatExecution {
     return this.settledOutcome !== undefined
   }
 
-  /** Handed to the provider call, so a stop cancels the request itself. */
+  /** The signal of the attempt in flight. */
   get signal(): AbortSignal {
-    return this.controller.signal
+    return this.attemptController.signal
+  }
+
+  /**
+   * Open a fresh attempt, and hand back the signal that cancels it.
+   *
+   * Called before every provider call, including a retry: the previous attempt's
+   * signal is spent.
+   */
+  beginAttempt(): AbortSignal {
+    this.attemptController = new AbortController()
+    return this.attemptController.signal
+  }
+
+  /**
+   * Cancel the attempt in flight without deciding anything about the turn.
+   *
+   * The idle deadline uses this: stopping a request that has gone quiet is not a
+   * statement about what the turn was, and the attempt that was cancelled reports
+   * back as a failure the retry policy can look at (#150).
+   */
+  cancel(): void {
+    this.attemptController.abort()
   }
 
   /** The first chunk, which is what turns "waiting" into "streaming". */
@@ -95,7 +123,7 @@ export class ChatExecution {
     const settled = this.settle(abortedOutcome(reason))
     if (!settled) return null
 
-    this.controller.abort()
+    this.attemptController.abort()
     return settled
   }
 }

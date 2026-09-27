@@ -51,6 +51,29 @@ const clientFor = (chunks: LanguageModelV2StreamPart[]): ModelClient => {
   return client
 }
 
+/** Builds a client and hands back the model, so the call args can be inspected. */
+const inspectingClient = (
+  connectionOverride: Partial<ModelConnection>
+): { client: ModelClient; model: MockLanguageModelV2 } => {
+  const model = new MockLanguageModelV2({
+    doStream: async () => ({
+      stream: simulateReadableStream({
+        chunks: [
+          { type: 'stream-start', warnings: [] },
+          {
+            type: 'finish',
+            finishReason: 'stop',
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }
+          }
+        ] as never[]
+      })
+    })
+  })
+  const client = new ModelClient('chat', { ...connection, ...connectionOverride })
+  client.getAIModel = () => model
+  return { client, model }
+}
+
 test('the stream is the SDK’s own event stream, not a reduced protocol of ours', async () => {
   const client = clientFor([
     { type: 'reasoning-start', id: 'r1' },
@@ -185,4 +208,20 @@ test('the signal the caller passes is the one that cancels the request', async (
   // that the stream that ends is this one — the request the caller could cancel.
   await streaming
   assert.equal(seen.at(-1), 'abort', 'an aborted request did not end as an abort')
+})
+
+test('no ceiling is sent unless the connection asks for one', async () => {
+  // The reasoning-model case: thinking tokens share this budget, so a hard-coded
+  // default was a ceiling reached early (#150).
+  const withoutCeiling = inspectingClient({})
+  await collect(withoutCeiling.client.streamChat([{ role: 'user', content: 'hi' }]).events)
+  assert.equal(
+    withoutCeiling.model.doStreamCalls[0]?.maxOutputTokens,
+    undefined,
+    'a ceiling was sent for a connection that asked for none'
+  )
+
+  const withCeiling = inspectingClient({ maxOutputTokens: 8192 })
+  await collect(withCeiling.client.streamChat([{ role: 'user', content: 'hi' }]).events)
+  assert.equal(withCeiling.model.doStreamCalls[0]?.maxOutputTokens, 8192)
 })

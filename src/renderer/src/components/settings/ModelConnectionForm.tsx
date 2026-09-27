@@ -60,6 +60,12 @@ const EMPTY_CONNECTION: ModelConnection = {
   modelId: ''
 }
 
+/** A ceiling below 1 is not a ceiling; clearing the input means "automatic" (#150). */
+const toCeiling = (raw: string): number | undefined => {
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
 export default function ModelConnectionForm({
   capability,
   connection,
@@ -285,6 +291,42 @@ export default function ModelConnectionForm({
         )}
         {fetchError && <p className="text-sm text-destructive">{fetchError}</p>}
       </div>
+
+      {/* Output ceiling. Chat only: an embedding connection has no output (#150). */}
+      {capability === 'chat' && (
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-foreground">{t('maxOutputTokens')}</label>
+          <Select
+            value={value.maxOutputTokens === undefined ? 'automatic' : 'custom'}
+            onValueChange={(mode) =>
+              update({
+                maxOutputTokens: mode === 'automatic' ? undefined : (value.maxOutputTokens ?? 8192)
+              })
+            }
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue>
+                {value.maxOutputTokens === undefined
+                  ? t('maxOutputTokensAutomatic')
+                  : t('maxOutputTokensCustom')}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="automatic">{t('maxOutputTokensAutomatic')}</SelectItem>
+              <SelectItem value="custom">{t('maxOutputTokensCustom')}</SelectItem>
+            </SelectContent>
+          </Select>
+          {value.maxOutputTokens !== undefined && (
+            <Input
+              type="number"
+              min={1}
+              value={String(value.maxOutputTokens)}
+              onChange={(e) => update({ maxOutputTokens: toCeiling(e.target.value) })}
+            />
+          )}
+          <p className="text-xs text-muted-foreground">{t('maxOutputTokensHint')}</p>
+        </div>
+      )}
 
       {/* Test connection */}
       <div className="flex items-center gap-3">

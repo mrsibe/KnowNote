@@ -53,6 +53,26 @@ export const isReasoningLive = (message: UIMessage | undefined): boolean =>
   (message?.parts ?? []).some((part) => part.type === 'reasoning' && part.state === 'streaming')
 
 /**
+ * Whether a chunk carries something the reader would see.
+ *
+ * An allowlist of structural events rather than a list of content ones: anything the
+ * SDK adds later counts as content, which is the safe direction — a retry that
+ * should not have happened duplicates text, while one that should have and did not
+ * costs a wait (#150).
+ */
+const STRUCTURAL_CHUNKS = new Set<UIMessageChunk['type']>([
+  'start',
+  'start-step',
+  'finish-step',
+  'text-start',
+  'text-end',
+  'reasoning-start',
+  'reasoning-end'
+])
+
+export const carriesContent = (chunk: UIMessageChunk): boolean => !STRUCTURAL_CHUNKS.has(chunk.type)
+
+/**
  * The chunks that end a turn.
  *
  * They are not forwarded to the renderer: the manager decides what a turn was and

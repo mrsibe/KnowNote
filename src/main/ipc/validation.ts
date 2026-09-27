@@ -93,7 +93,9 @@ export const ConnectionSchemas = {
       protocol: z.enum(API_PROTOCOLS),
       baseUrl: z.string().min(1, 'Base URL 不能为空'),
       apiKey: z.string(),
-      modelId: z.string().min(1, 'Model ID 不能为空')
+      modelId: z.string().min(1, 'Model ID 不能为空'),
+      // Absent means "no ceiling": the provider's own default applies (#150).
+      maxOutputTokens: z.number().int().positive().optional()
     })
   }),
 

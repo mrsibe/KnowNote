@@ -12,7 +12,13 @@ import type {
 import type { Citation, CitationContext } from '../../../shared/types/citation'
 import { classifyTerminal, failedOutcome } from '../../../shared/utils/chatExecution'
 import { resolveCitations } from '../../../shared/utils/citationResolution'
-import { isTerminalChunk, messageReasoning, messageText } from '../../../shared/utils/uiMessage'
+import {
+  carriesContent,
+  isTerminalChunk,
+  messageReasoning,
+  messageText
+} from '../../../shared/utils/uiMessage'
+import { retryDelayMs, shouldRetry } from './retryPolicy'
 import { estimateTokens } from '../../../shared/utils/tokenEstimate'
 import Logger from '../../../shared/utils/logger'
 import { ChatExecution } from './ChatExecution'
@@ -58,6 +64,18 @@ import type { SessionAutoSwitchService } from '../SessionAutoSwitchService'
  *   was stopped.
  */
 
+/**
+ * How long a turn may produce nothing before its request is cancelled.
+ *
+ * Generous on purpose: this is for a stream that has died, not for a model that is
+ * slow to start. Every event resets it, so a reasoning model is never cut off
+ * mid-thought (#150).
+ */
+const IDLE_TIMEOUT_MS = 60_000
+
+/** Waits before the next attempt. */
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
 /** What the turn's persistence needs, as a port: see `turnStore.ts`. */
 export interface ChatTurnStore {
   createTurn(sessionId: string): { id: string }
@@ -100,6 +118,19 @@ interface TurnEntry {
   usage?: ChatTokenUsage
   /** The message of an `error` chunk, when the provider reported one mid-stream. */
   streamError?: string
+  /**
+   * Whether anything the reader would see has been forwarded.
+   *
+   * Sticky across attempts on purpose: once content has been sent, no later attempt
+   * may be started, whatever the failure (#150).
+   */
+  contentSent?: boolean
+  /** Set when the idle deadline cancelled the attempt, so its failure reads as one. */
+  timedOut?: boolean
+  /** The attempt in flight, 1-based; logged, and what the retry bound counts. */
+  attempts?: number
+  /** The watchdog for the attempt in flight. */
+  idle?: { reset: () => void; stop: () => void }
   /** Monotonic per execution, so a consumer can detect a gap. */
   seq: number
 }
@@ -112,6 +143,8 @@ export class ChatStreamManager {
     private readonly deps: {
       store: ChatTurnStore
       sessionAutoSwitchService: Pick<SessionAutoSwitchService, 'recordTokenUsageAndCheckSwitch'>
+      /** Overridable so a test does not have to wait a minute to see the deadline. */
+      idleTimeoutMs?: number
     }
   ) {}
 
@@ -199,40 +232,134 @@ export class ChatStreamManager {
     return executionId === undefined ? undefined : this.turns.get(executionId)
   }
 
+  /**
+   * Run the turn, attempting it again while the retry policy says so (#150).
+   *
+   * Each attempt is a fresh provider call with its own signal. A retry is only
+   * reachable while nothing has reached the reader, so the answer on screen is never
+   * duplicated or silently replaced by a second attempt.
+   */
   private async run(entry: TurnEntry): Promise<void> {
-    const { execution, request } = entry
-    const client = request.client
-    if (!client) return
+    for (let attempt = 1; ; attempt += 1) {
+      entry.attempts = attempt
+      const outcome = await this.attempt(entry)
 
-    try {
-      const { events } = client.streamChat(request.messages, { signal: execution.signal })
-      const [toRenderer, toAssemble] = events.tee()
+      // A stop the reader asked for has already settled the turn.
+      if (entry.execution.isSettled) return
 
-      await Promise.all([
-        this.forward(entry, toRenderer),
-        // The SDK assembles, and nothing here re-derives the message from deltas.
-        //
-        // Kept on the entry as each snapshot arrives rather than assigned once at the
-        // end: a turn can be stopped or fail while this branch is still running, and
-        // the part of the answer that had arrived is what gets persisted (#138
-        // invariant 5).
-        (async () => {
-          for await (const snapshot of readUIMessageStream({ stream: toAssemble })) {
-            entry.message = snapshot
-          }
-        })()
-      ])
-    } catch (error) {
-      // A transport error arrives as a rejection rather than as an event. The
-      // partial answer is kept, and the turn ends as a failure.
-      this.settleTurn(entry, failedOutcome((error as Error).message, 'error'))
+      if (shouldRetry({ outcome, attempt, contentSent: entry.contentSent === true })) {
+        const delay = retryDelayMs(attempt + 1)
+        Logger.warn(
+          'ChatStreamManager',
+          `Turn ${entry.execution.id} attempt ${attempt} failed (${outcome.status}${
+            outcome.status === 'failed' ? `: ${outcome.error.message}` : ''
+          }); retrying in ${delay}ms`
+        )
+        await wait(delay)
+        if (entry.execution.isSettled) return
+        continue
+      }
+
+      this.settleTurn(entry, outcome)
       return
     }
+  }
 
-    // The stream ended without being stopped. What that means is `classifyTerminal`'s
-    // decision: a `finish` chunk's reason, or — when no terminal chunk arrived at all
-    // — an EOF, which is not success (#138 invariant 1).
-    this.settleTurn(entry, this.outcomeFor(entry))
+  /**
+   * One provider call, from opening the attempt to its outcome.
+   *
+   * Nothing is settled here: a failure is a value the retry policy looks at, and the
+   * turn ends only once that policy has had its say.
+   */
+  private async attempt(entry: TurnEntry): Promise<ChatExecutionOutcome> {
+    const { execution, request } = entry
+    const client = request.client
+    if (!client) {
+      return failedOutcome('Chat model not configured, please configure in settings', 'error')
+    }
+
+    // Per-attempt facts, cleared so a retry cannot inherit the previous attempt's.
+    entry.message = undefined
+    entry.finishReason = undefined
+    entry.usage = undefined
+    entry.streamError = undefined
+    entry.timedOut = false
+
+    const signal = execution.beginAttempt()
+    entry.idle = this.watchIdle(entry)
+
+    let outcome: ChatExecutionOutcome
+    try {
+      const { events } = client.streamChat(request.messages, { signal })
+      const [toRenderer, toAssemble] = events.tee()
+      await Promise.all([this.forward(entry, toRenderer), this.assemble(entry, toAssemble)])
+      // The stream ended without being stopped. What that means is
+      // `classifyTerminal`'s decision: a `finish` chunk's reason, or — when no
+      // terminal chunk arrived at all — an EOF, which is not success (#138
+      // invariant 1).
+      outcome = this.outcomeFor(entry)
+    } catch (error) {
+      // A transport error arrives as a rejection: the partial answer is kept, and the
+      // failure is reported as the connection's.
+      outcome = failedOutcome((error as Error).message, 'error')
+    } finally {
+      entry.idle?.stop()
+      entry.idle = undefined
+    }
+
+    // However the cancellation surfaced — a rejected read, or the SDK turning it into
+    // an `abort` chunk — the reason this attempt failed is the deadline that cancelled
+    // it (#150).
+    return entry.timedOut ? failedOutcome('The model stopped responding.', 'timeout') : outcome
+  }
+
+  /**
+   * The SDK assembles; nothing here re-derives the message from deltas.
+   *
+   * Kept on the entry as each snapshot arrives rather than assigned once at the end:
+   * a turn can be stopped or fail while this is still running, and the part of the
+   * answer that had arrived is what gets persisted (#138 invariant 5).
+   */
+  private async assemble(entry: TurnEntry, stream: ReadableStream<UIMessageChunk>): Promise<void> {
+    for await (const snapshot of readUIMessageStream({ stream })) {
+      entry.message = snapshot
+    }
+  }
+
+  /**
+   * The deadline for a stream that has gone quiet.
+   *
+   * Reset by every event — reasoning deltas included, so a model that thinks for a
+   * long time is not killed mid-thought. It *cancels* rather than settling: whether a
+   * silent provider is worth trying again is the retry policy's decision, not the
+   * watchdog's.
+   */
+  private watchIdle(entry: TurnEntry): { reset: () => void; stop: () => void } {
+    let timer: NodeJS.Timeout
+
+    const onIdle = (): void => {
+      if (entry.execution.isSettled) return
+      Logger.warn(
+        'ChatStreamManager',
+        `Turn ${entry.execution.id} produced nothing for ${this.deps.idleTimeoutMs ?? IDLE_TIMEOUT_MS}ms; cancelling the request`
+      )
+      entry.timedOut = true
+      entry.execution.cancel()
+    }
+
+    const arm = (): void => {
+      timer = setTimeout(onIdle, this.deps.idleTimeoutMs ?? IDLE_TIMEOUT_MS)
+    }
+
+    arm()
+
+    return {
+      reset: () => {
+        clearTimeout(timer)
+        arm()
+      },
+      stop: () => clearTimeout(timer)
+    }
   }
 
   /**
@@ -258,6 +385,9 @@ export class ChatStreamManager {
         }
 
         entry.execution.begin()
+        entry.idle?.reset()
+        if (carriesContent(value)) entry.contentSent = true
+
         entry.seq += 1
         entry.request.emit({
           type: 'chunk',

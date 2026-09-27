@@ -48,6 +48,14 @@ export interface ModelConnection {
   baseUrl: string
   apiKey: string
   modelId: string
+  /**
+   * The ceiling on generated tokens, or absent for the model's own default.
+   *
+   * Absent is the default on purpose: a reasoning model's thinking shares this
+   * budget with its answer, so a ceiling that is right for one model is wrong for
+   * another — per-connection, like the model id itself.
+   */
+  maxOutputTokens?: number
 }
 
 /**
