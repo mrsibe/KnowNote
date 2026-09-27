@@ -14,12 +14,16 @@ import type { Citation, CitationContext } from '../../shared/types/citation'
 import { ChatSchemas, validate } from './validation'
 
 /**
- * One channel carries everything a turn has to say.
+ * What a continuation is asked for.
  *
- * The event goes over as it is: the envelope already carries the identity and the
- * sequence, and its payload is the SDK's own event, which this layer has no business
- * reading — that is what made the old reduced protocol drop events it did not know
- * (#141).
+ * English like the other internal prompts: it is an instruction to the model, not copy
+ * the reader sees.
+ */
+const CONTINUE_INSTRUCTION =
+  'Continue the answer from where it stopped. Do not repeat what has already been written, and do not restart it.'
+
+/**
+ * The renderer's view of a running turn: one channel, one shape.
  */
 const TURN_EVENT_CHANNEL = 'chat:turn-event'
 
@@ -38,6 +42,103 @@ export function registerChatHandlers(
     store: queriesTurnStore,
     sessionAutoSwitchService
   })
+
+  /**
+   * Retrieval for one question, in the shape every turn needs (#151: three callers).
+   *
+   * RAG only when an embedding backend is available — a remote connection or the
+   * built-in local model — and a failed search never blocks the answer: it is recorded
+   * as `failed`, so an ungrounded answer stays distinguishable from a grounded one.
+   */
+  const retrieve = async (
+    notebookId: string | undefined,
+    query: string
+  ): Promise<{
+    retrieval: RetrievalStatus
+    sources: AnswerSource[]
+    citations: Citation[]
+    citationContexts: CitationContext[]
+    context: string
+  }> => {
+    const empty = {
+      retrieval: 'none' as RetrievalStatus,
+      sources: [] as AnswerSource[],
+      citations: [] as Citation[],
+      citationContexts: [] as CitationContext[],
+      context: ''
+    }
+
+    try {
+      if (!notebookId || !(await knowledgeService.isEmbeddingAvailable())) {
+        Logger.debug('ChatHandlers', 'RAG disabled: no embedding backend or notebook')
+        return empty
+      }
+
+      const searchResults = await knowledgeService.search(notebookId, query, {
+        topK: 3,
+        threshold: 0.5
+      })
+      if (searchResults.length === 0) return empty
+
+      const { context, sources, citations } = buildRAGContext(searchResults)
+      Logger.debug('ChatHandlers', `RAG: Found ${searchResults.length} relevant chunks for query`)
+
+      return {
+        retrieval: 'used',
+        sources,
+        citations,
+        // The span a quote is checked against lives only in the locator, so carry it
+        // alongside the citation for validation (#70).
+        citationContexts: citations.map((citation, index) => ({
+          citation,
+          spanText: searchResults[index].locator.blocks.map((block) => block.text).join('\n')
+        })),
+        context
+      }
+    } catch (error) {
+      // A failed search must not block the answer; it changes what the answer is.
+      Logger.warn('ChatHandlers', 'RAG search failed:', error)
+      return { ...empty, retrieval: 'failed' }
+    }
+  }
+
+  /**
+   * The prompt for a turn that answers an existing question again (#151).
+   *
+   * Rebuilt from the session rather than remembered: the history up to and including
+   * the question, so a retry asks the same thing in the same context instead of
+   * continuing a conversation that has moved on.
+   */
+  const replayPrompt = async (target: {
+    id: string
+    sessionId: string
+    attemptOf?: string | null
+  }) => {
+    const history = queries.getMessagesBySession(target.sessionId)
+    const index = history.findIndex((message) => message.id === target.id)
+    if (index < 1) return null
+
+    // Start from the *question*, not from this attempt: re-asking what the previous
+    // attempt already said would turn a retry into a continuation of a failed answer.
+    const rootId = target.attemptOf ?? target.id
+    const rootIndex = history.findIndex((message) => message.id === rootId)
+    const upToQuestion = history.slice(0, rootIndex === -1 ? index : rootIndex)
+    const question = upToQuestion.findLast((message) => message.role === 'user')
+    if (!question) return null
+
+    let messages = upToQuestion.map((message) => ({
+      role: message.role,
+      content: message.content
+    }))
+    messages = validateAndCleanMessages(messages)
+    if (messages.length === 0) return null
+
+    const session = queries.getSessionById(target.sessionId)
+    const retrieved = await retrieve(session?.notebookId, question.content)
+    if (retrieved.context) messages.unshift({ role: 'system', content: retrieved.context })
+
+    return { messages, question: question.content, session, retrieved }
+  }
 
   // ==================== Chat Session ====================
   ipcMain.handle(
@@ -113,54 +214,11 @@ export function registerChatHandlers(
     //     由 manager 落库成 failed；handler 不再自己判定终态。
     messages = validateAndCleanMessages(messages)
 
-    // 3. RAG 增强：检索相关知识并注入上下文
-    // 只要 embedding 后端可用就启用 RAG（远程 connection 或内置本地模型）。
-    // 以前这里用 `getEmbeddingClient()` 判断，它只认远程 connection，本地模型
-    // 直接返回 null —— 于是默认配置下 RAG 被静默关闭，回答无依据也无引用。
-    // 检索结果同时记录到消息上：以前检索失败只留一行日志，
-    // 于是「没有依据的回答」和「有依据的回答」在界面上完全无法区分。
-    let retrieval: RetrievalStatus = 'none'
-    let answerSources: AnswerSource[] = []
-    let answerCitations: Citation[] = []
-    let citationContexts: CitationContext[] = []
-    try {
-      if (await knowledgeService.isEmbeddingAvailable()) {
-        if (session?.notebookId) {
-          const searchResults = await knowledgeService.search(session.notebookId, content, {
-            topK: 3,
-            threshold: 0.5
-          })
-
-          if (searchResults.length > 0) {
-            const { context, sources, citations } = buildRAGContext(searchResults)
-            retrieval = 'used'
-            answerSources = sources
-            answerCitations = citations
-            // The span a quote is checked against lives only in the locator, so
-            // carry it alongside the citation for validation (#70).
-            citationContexts = citations.map((citation, index) => ({
-              citation,
-              spanText: searchResults[index].locator.blocks.map((block) => block.text).join('\n')
-            }))
-            Logger.debug(
-              'ChatHandlers',
-              `RAG: Found ${searchResults.length} relevant chunks for query`
-            )
-
-            // 将 RAG 上下文作为 system message 插入到消息列表开头
-            messages.unshift({
-              role: 'system',
-              content: context
-            })
-          }
-        }
-      } else {
-        Logger.debug('ChatHandlers', 'RAG disabled: no embedding backend available')
-      }
-    } catch (error) {
-      // RAG 失败不应该阻止对话
-      retrieval = 'failed'
-      Logger.warn('ChatHandlers', 'RAG search failed:', error)
+    // 3. 检索：注入上下文，并把「这条回答基于什么」一并记下来（#69/#70）
+    const retrieved = await retrieve(session?.notebookId, content)
+    if (retrieved.context) {
+      // 将 RAG 上下文作为 system message 插入到消息列表开头
+      messages.unshift({ role: 'system', content: retrieved.context })
     }
 
     // 4. 这一轮交给 ChatStreamManager（#140）。生命周期、唯一终态、落库与通知都在那里；
@@ -172,10 +230,10 @@ export function registerChatHandlers(
       userContent: content,
       messages,
       client,
-      retrieval,
-      sources: answerSources,
-      citations: answerCitations,
-      citationContexts,
+      retrieval: retrieved.retrieval,
+      sources: retrieved.sources,
+      citations: retrieved.citations,
+      citationContexts: retrieved.citationContexts,
       emit: (turnEvent: ChatTurnEvent) => event.sender.send(TURN_EVENT_CHANNEL, turnEvent)
     })
 
@@ -196,4 +254,89 @@ export function registerChatHandlers(
       return { success: false, reason: 'No active stream found' }
     })
   )
+
+  // ==================== Retry / Continue ====================
+  /**
+   * Answer the same question again, as a sibling of the answer that stopped (#151).
+   *
+   * A new row, pointing at the *first* attempt of the group, so a third attempt joins
+   * the same group rather than nesting under the second, and the reader can still tell
+   * which answers are the same question asked again.
+   */
+  ipcMain.handle('retry-message', async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+    if (args.length === 0) throw new Error('IPC 调用缺少参数')
+    if (args.length > 1) {
+      throw new Error(`IPC 调用参数错误: 期望传递单个对象参数，但收到 ${args.length} 个参数`)
+    }
+
+    const { messageId } = ChatSchemas.retryMessage.parse(args[0])
+    const target = queries.getMessageById(messageId)
+    if (!target) return { success: false, error: 'Message not found' }
+
+    const prompt = await replayPrompt(target)
+    if (!prompt) return { success: false, error: 'Nothing to retry' }
+
+    const client = await connectionManager.getChatClient()
+    const execution = streamManager.start({
+      sessionId: target.sessionId,
+      notebookId: prompt.session?.notebookId,
+      attemptOf: target.attemptOf ?? target.id,
+      userContent: prompt.question,
+      messages: prompt.messages,
+      client,
+      retrieval: prompt.retrieved.retrieval,
+      sources: prompt.retrieved.sources,
+      citations: prompt.retrieved.citations,
+      citationContexts: prompt.retrieved.citationContexts,
+      emit: (turnEvent: ChatTurnEvent) => event.sender.send(TURN_EVENT_CHANNEL, turnEvent)
+    })
+
+    return { success: true, messageId: execution.messageId }
+  })
+
+  /**
+   * Continue an answer that stopped, into the same message (#151).
+   *
+   * The part that arrived seeds the new turn on both sides — here and in the renderer
+   * — so the message grows rather than being replaced by its continuation.
+   */
+  ipcMain.handle('continue-message', async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+    if (args.length === 0) throw new Error('IPC 调用缺少参数')
+    if (args.length > 1) {
+      throw new Error(`IPC 调用参数错误: 期望传递单个对象参数，但收到 ${args.length} 个参数`)
+    }
+
+    const { messageId } = ChatSchemas.continueMessage.parse(args[0])
+    const target = queries.getMessageById(messageId)
+    if (!target) return { success: false, error: 'Message not found' }
+
+    const prompt = await replayPrompt(target)
+    if (!prompt) return { success: false, error: 'Nothing to continue' }
+
+    const client = await connectionManager.getChatClient()
+    const execution = streamManager.start({
+      sessionId: target.sessionId,
+      notebookId: prompt.session?.notebookId,
+      resume: {
+        messageId: target.id,
+        text: target.content,
+        reasoning: target.reasoningContent ?? ''
+      },
+      userContent: prompt.question,
+      messages: [
+        ...prompt.messages,
+        // What had been written, then the instruction to carry on from it.
+        { role: 'assistant', content: target.content },
+        { role: 'user', content: CONTINUE_INSTRUCTION }
+      ],
+      client,
+      retrieval: prompt.retrieved.retrieval,
+      sources: prompt.retrieved.sources,
+      citations: prompt.retrieved.citations,
+      citationContexts: prompt.retrieved.citationContexts,
+      emit: (turnEvent: ChatTurnEvent) => event.sender.send(TURN_EVENT_CHANNEL, turnEvent)
+    })
+
+    return { success: true, messageId: execution.messageId }
+  })
 }

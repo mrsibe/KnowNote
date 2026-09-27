@@ -687,7 +687,9 @@ async function runChecks(): Promise<string[]> {
   // nothing else in the suite would notice it.
   const turnNotebook = queries.createNotebook('Smoke turn notebook')
   const turnSession = queries.createSession(turnNotebook.id, 'Smoke turn session')
-  const turnMessage = queries.createMessage(turnSession.id, 'assistant', '', undefined, 'streaming')
+  const turnMessage = queries.createMessage(turnSession.id, 'assistant', '', {
+    status: 'streaming'
+  })
   assert(turnMessage.status === 'streaming', `a new turn started as ${String(turnMessage.status)}`)
   assert(turnMessage.finishedAt === null, 'a turn had a finish time before it finished')
 
@@ -717,6 +719,17 @@ async function runChecks(): Promise<string[]> {
   )
   assert(storedTurn.finishedAt instanceof Date, 'the finish time did not survive the round trip')
   pass('a turn’s terminal outcome round trips through the database')
+
+  // A sibling attempt keeps its link to the question it answers (#151).
+  const sibling = queries.createMessage(turnSession.id, 'assistant', '', {
+    status: 'streaming',
+    attemptOf: turnMessage.id
+  })
+  assert(
+    queries.getMessageById(sibling.id)?.attemptOf === turnMessage.id,
+    'attempt_of did not survive the round trip'
+  )
+  pass('a retried answer keeps its link to the question it answers')
 
   queries.deleteSession(turnSession.id)
   await queries.deleteNotebook(turnNotebook.id)

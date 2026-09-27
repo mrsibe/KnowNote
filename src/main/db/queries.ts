@@ -160,8 +160,12 @@ export function createMessage(
   sessionId: string,
   role: 'user' | 'assistant' | 'system',
   content: string,
-  metadata?: Record<string, unknown>,
-  status?: ChatExecutionStatus
+  options: {
+    metadata?: Record<string, unknown>
+    status?: ChatExecutionStatus
+    /** The first attempt at this question, when this row is another one (#151). */
+    attemptOf?: string
+  } = {}
 ) {
   const db = getDatabase()
   const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`
@@ -174,8 +178,9 @@ export function createMessage(
       sessionId,
       role,
       content,
-      metadata,
-      status,
+      metadata: options.metadata,
+      status: options.status,
+      attemptOf: options.attemptOf,
       createdAt: now
     })
     .returning()
@@ -222,6 +227,13 @@ export function updateMessageContent(
  * 目前唯一的用途是把「这条回答基于哪些段落」写到助手消息上，
  * 这样回答交付之后仍然可以回到原文（见 shared/types/chat.ts 的 AnswerSource）。
  */
+/** One message by id, for the turns that answer an existing question again (#151). */
+export function getMessageById(messageId: string) {
+  const db = getDatabase()
+
+  return db.select().from(chatMessages).where(eq(chatMessages.id, messageId)).get()
+}
+
 export function updateMessageMetadata(messageId: string, metadata: ChatMessageMetadata) {
   const db = getDatabase()
 

@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
-import { BookPlus } from 'lucide-react'
+import { BookPlus, RotateCcw, Play } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ChatMessage } from '../../../types/notebook'
 import ReasoningContent from './ReasoningContent'
@@ -22,7 +22,7 @@ import {
   citationToSourceAnchor,
   sourceAnchorsEqual
 } from '../../../../../shared/utils/sourceAnchor'
-import { answerNoticeKey, isAnswerLive } from '../../../../../shared/utils/answerState'
+import { answerNoticeKey, canRecover, isAnswerLive } from '../../../../../shared/utils/answerState'
 import { useChatStore } from '../../../store/chatStore'
 import { Button } from '../../ui/button'
 import { ScrollArea, ScrollBar } from '../../ui/scroll-area'
@@ -56,6 +56,8 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   // Whether the model is still thinking. The one live detail that is not on the
   // message: it comes from the assembled answer, and only exists while one does.
   const reasoningLive = useChatStore((state) => state.turns[message.id]?.reasoningLive ?? false)
+  const retryMessage = useChatStore((state) => state.retryMessage)
+  const continueMessage = useChatStore((state) => state.continueMessage)
 
   // What this answer was built from. Read defensively: the metadata comes from the
   // database and may predate the shape (see shared/utils/answerSources.ts).
@@ -77,6 +79,16 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   }
 
   // Copy message content
+  // The two ways out of an answer that stopped (#151): carry on from what arrived, or
+  // ask the same question again beside it. Both need the notebook the turn belongs to.
+  const recoveryNotebookId = message.notebookId ?? currentNotebook?.id
+  const handleContinue = (): void => {
+    if (recoveryNotebookId) void continueMessage(recoveryNotebookId, message.id)
+  }
+  const handleRetry = (): void => {
+    if (recoveryNotebookId) void retryMessage(recoveryNotebookId, message.id)
+  }
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(message.content)
@@ -270,6 +282,29 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
         {/* Action buttons - only shown when reply is complete and has content */}
         {message.content && !isLive && (
           <div className="flex items-center gap-2 self-start ml-2">
+            {/* Recovery, when the answer stopped early and asking again may help */}
+            {canRecover(message.status) && (
+              <>
+                <Button
+                  onClick={handleContinue}
+                  variant="ghost"
+                  className="px-2 py-1 text-xs h-auto text-muted-foreground hover:text-foreground"
+                  title={t('chat:continueAnswer')}
+                >
+                  <Play className="w-3 h-3" />
+                  <span>{t('chat:continueAnswer')}</span>
+                </Button>
+                <Button
+                  onClick={handleRetry}
+                  variant="ghost"
+                  className="px-2 py-1 text-xs h-auto text-muted-foreground hover:text-foreground"
+                  title={t('chat:retryAnswer')}
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>{t('chat:retryAnswer')}</span>
+                </Button>
+              </>
+            )}
             {/* Copy button */}
             <Button
               onClick={handleCopy}

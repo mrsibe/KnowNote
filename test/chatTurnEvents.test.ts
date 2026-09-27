@@ -31,10 +31,23 @@ function installApi(): void {
           deliver = undefined
         }
       },
-      getActiveSession: async () => activeSession
+      getActiveSession: async () => activeSession,
+      retryMessage: async (messageId: string) => ({
+        success: true,
+        messageId: `msg_retry_of_${messageId}`
+      }),
+      continueMessage: async (messageId: string) => ({ success: true, messageId })
     }
   }
 }
+
+/** The seed the store builds for a continuation, mirrored for the test. */
+const seedOf = (message: ChatMessage): never =>
+  ({
+    id: message.id,
+    role: 'assistant',
+    parts: [{ type: 'text', text: message.content, state: 'done' }]
+  }) as never
 
 const waitFor = async (condition: () => boolean, timeoutMs = 1000): Promise<void> => {
   const deadline = Date.now() + timeoutMs
@@ -57,6 +70,7 @@ const placeholder = (messageId: string): ChatMessage => ({
   error: null,
   usage: null,
   finishedAt: null,
+  attemptOf: null,
   createdAt: new Date()
 })
 
@@ -207,6 +221,64 @@ test('an automatic session switch follows the turn', async () => {
   deliver?.({ type: 'session-auto-switched', sessionId: 'session_1', newSessionId: 'session_2' })
 
   await waitFor(() => useChatStore.getState().currentSession?.id === 'session_2')
+
+  close()
+})
+
+test('a continuation appends to the answer on screen instead of replacing it', async () => {
+  installApi()
+  const close = setupChatListeners()
+  seedTurn('msg_continue')
+
+  // The store registers the turn with the answer as its seed (as `continueMessage`
+  // does), so the assembler starts from what the reader can already see (#151).
+  const existing = placeholder('msg_continue')
+  const withAnswer: ChatMessage = { ...existing, content: 'the beginning. ', status: 'aborted' }
+  useChatStore.setState({
+    messages: [withAnswer],
+    turns: { msg_continue: { notebookId: 'notebook_1', message: seedOf(withAnswer) } }
+  })
+
+  deliver?.(chunk('msg_continue', 1, { type: 'text-start', id: 't1' }))
+  deliver?.(chunk('msg_continue', 2, { type: 'text-delta', id: 't1', delta: 'and the rest' }))
+  deliver?.(chunk('msg_continue', 3, { type: 'text-end', id: 't1' }))
+
+  await waitFor(() => messageOf('msg_continue')?.content === 'the beginning. and the rest')
+
+  close()
+})
+
+test('a retry adds a sibling that points at the question it answers', async () => {
+  installApi()
+  const close = setupChatListeners()
+  seedTurn('msg_first_attempt')
+
+  const original = messageOf('msg_first_attempt')!
+  useChatStore.setState({
+    messages: [{ ...original, content: 'half', status: 'failed' }],
+    // The action needs the session the question belongs to.
+    currentSession: { id: 'session_1', notebookId: 'notebook_1', title: 't' } as never
+  })
+
+  await useChatStore.getState().retryMessage('notebook_1', 'msg_first_attempt')
+
+  const sibling = messageOf('msg_retry_of_msg_first_attempt')
+  assert.equal(sibling?.status, 'pending', 'the sibling did not start as a pending turn')
+  assert.equal(
+    sibling?.attemptOf,
+    'msg_first_attempt',
+    'the sibling does not point at the question it answers'
+  )
+  assert.equal(
+    useChatStore.getState().turns['msg_retry_of_msg_first_attempt']?.notebookId,
+    'notebook_1',
+    'the sibling’s turn was not registered'
+  )
+  assert.equal(
+    messageOf('msg_first_attempt')?.content,
+    'half',
+    'the attempt that failed was changed'
+  )
 
   close()
 })

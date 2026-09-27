@@ -232,6 +232,14 @@ export const ChatSchemas = {
     sessionId: z.string().min(1, '会话 ID 不能为空')
   }),
 
+  retryMessage: z.object({
+    messageId: z.string().min(1, '消息 ID 不能为空')
+  }),
+
+  continueMessage: z.object({
+    messageId: z.string().min(1, '消息 ID 不能为空')
+  }),
+
   getMessages: z.object({
     sessionId: z.string().min(1, '会话 ID 不能为空')
   }),

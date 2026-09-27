@@ -19,5 +19,7 @@
   "answerTruncated": "The answer hit the model's output length limit, so it is cut off here.",
   "answerBlocked": "The provider refused this answer on content policy grounds.",
   "answerStopped": "The answer was stopped; this is the part that had been written.",
-  "answerFailed": "Generation was interrupted: {{error}}"
+  "answerFailed": "Generation was interrupted: {{error}}",
+  "continueAnswer": "Continue",
+  "retryAnswer": "Retry"
 }

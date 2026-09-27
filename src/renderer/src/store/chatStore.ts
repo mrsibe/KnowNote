@@ -68,6 +68,10 @@ interface ChatStore {
   createSession: (notebookId: string, title: string) => Promise<ChatSession>
   sendMessage: (sessionId: string, content: string) => Promise<void>
   abortMessage: (notebookId: string) => Promise<void>
+  /** Answer the same question again, as a sibling of an answer that stopped (#151). */
+  retryMessage: (notebookId: string, messageId: string) => Promise<void>
+  /** Continue an answer that stopped, into the same message (#151). */
+  continueMessage: (notebookId: string, messageId: string) => Promise<void>
 }
 
 /**
@@ -95,6 +99,26 @@ interface TurnAssembler {
  */
 const assemblers = new Map<string, TurnAssembler>()
 
+/**
+ * What the overlay knows before the first event of a turn arrives.
+ *
+ * Nothing for a fresh answer; the answer itself for a continuation, so the assembler
+ * appends to it instead of replacing it (#151) — the same seed Main gives its own
+ * assembler, built from the same record.
+ */
+const seedFromMessage = (message: ChatMessage): UIMessage => ({
+  id: message.id,
+  role: 'assistant',
+  parts: [
+    ...(message.reasoningContent
+      ? [{ type: 'reasoning' as const, text: message.reasoningContent, state: 'done' as const }]
+      : []),
+    ...(message.content
+      ? [{ type: 'text' as const, text: message.content, state: 'done' as const }]
+      : [])
+  ]
+})
+
 /** Push an event into the assembling message, and show the snapshot it produces. */
 function feedAssembler(messageId: string, chunk: UIMessageChunk): void {
   let assembler = assemblers.get(messageId)
@@ -106,6 +130,7 @@ function feedAssembler(messageId: string, chunk: UIMessageChunk): void {
     const assembled = new Promise<void>((resolve) => {
       drained = resolve
     })
+    const seed = useChatStore.getState().turns[messageId]?.message
     const stream = new ReadableStream<UIMessageChunk>({
       start: (created) => {
         controller = created
@@ -114,7 +139,10 @@ function feedAssembler(messageId: string, chunk: UIMessageChunk): void {
 
     void (async () => {
       try {
-        for await (const message of readUIMessageStream({ stream })) {
+        for await (const message of readUIMessageStream({
+          stream,
+          ...(seed && { message: seed })
+        })) {
           applySnapshot(messageId, message)
         }
       } catch (error) {
@@ -324,6 +352,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       error: null,
       usage: null,
       finishedAt: null,
+      attemptOf: null,
       createdAt: new Date()
     }
     get().addMessage(userMessage)
@@ -348,6 +377,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       error: null,
       usage: null,
       finishedAt: null,
+      attemptOf: null,
       createdAt: new Date()
     }
     get().addMessage(assistantMessage)
@@ -357,6 +387,65 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     set((state) => ({
       turns: { ...state.turns, [messageId]: { notebookId } }
     }))
+  },
+
+  retryMessage: async (notebookId, messageId) => {
+    const state = get()
+    const sessionId = state.currentSession?.id
+    const original = state.messages.find((message) => message.id === messageId)
+    if (!sessionId || !original) return
+
+    const result = await window.api.retryMessage(messageId)
+    if (!result.success || !result.messageId) {
+      console.error('[ChatStore] Failed to retry the answer:', result.error)
+      return
+    }
+
+    // A sibling: a new answer to the same question, next to the one that stopped. It
+    // points at the group's first attempt, so a third attempt joins the same group.
+    get().addMessage({
+      id: result.messageId,
+      sessionId,
+      notebookId,
+      role: 'assistant',
+      content: '',
+      reasoningContent: undefined,
+      status: 'pending',
+      finishReason: null,
+      error: null,
+      usage: null,
+      finishedAt: null,
+      attemptOf: original.attemptOf ?? original.id,
+      createdAt: new Date()
+    })
+    get().setStreamingMessage(notebookId, result.messageId)
+    set((current) => ({
+      turns: { ...current.turns, [result.messageId!]: { notebookId } }
+    }))
+  },
+
+  continueMessage: async (notebookId, messageId) => {
+    const message = get().messages.find((item) => item.id === messageId)
+    if (!message) return
+
+    // Register the turn with the answer as its seed, and hand the message back to the
+    // live state: what comes next is appended to it, not written elsewhere.
+    set((current) => ({
+      turns: {
+        ...current.turns,
+        [messageId]: { notebookId, message: seedFromMessage(message) }
+      },
+      messages: current.messages.map((item) =>
+        item.id === messageId ? { ...item, status: 'pending' } : item
+      )
+    }))
+    get().setStreamingMessage(notebookId, messageId)
+
+    const result = await window.api.continueMessage(messageId)
+    if (!result.success) {
+      console.error('[ChatStore] Failed to continue the answer:', result.error)
+      return
+    }
   },
 
   abortMessage: async (notebookId: string) => {

@@ -102,6 +102,19 @@ const api = {
   sendMessage: (sessionId: string, content: string) =>
     invokeWithTimeout('send-message', 60000, { sessionId, content }), // 60秒超时（流式消息可能较长）
   abortMessage: (messageId: string) => invokeWithTimeout('abort-message', 5000, { messageId }),
+  // 对同一个问题再答一次（兄弟回答），或接着已生成的部分继续（#151）
+  retryMessage: (messageId: string) =>
+    invokeWithTimeout<{ success: boolean; messageId?: string; error?: string }>(
+      'retry-message',
+      60000,
+      { messageId }
+    ),
+  continueMessage: (messageId: string) =>
+    invokeWithTimeout<{ success: boolean; messageId?: string; error?: string }>(
+      'continue-message',
+      60000,
+      { messageId }
+    ),
 
   // 流式回合监听：SDK 自己的事件，加上结束这一轮的唯一 outcome（#141）
   onTurnEvent: (callback: (event: ChatTurnEvent) => void) => {

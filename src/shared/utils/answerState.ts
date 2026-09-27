@@ -59,3 +59,14 @@ export const answerNoticeKey = (
  */
 export const keepsPartialAnswer = (status: ChatExecutionStatus | null | undefined): boolean =>
   status === 'truncated' || status === 'blocked' || status === 'aborted' || status === 'failed'
+
+/**
+ * Whether asking again could help.
+ *
+ * `truncated`, `aborted` and `failed` are all "the answer stopped early": the reader
+ * can continue from what arrived or ask the question again (#151). `blocked` is not
+ * one of them — the provider refused, and a second identical request would be refused
+ * the same way.
+ */
+export const canRecover = (status: ChatExecutionStatus | null | undefined): boolean =>
+  status === 'truncated' || status === 'aborted' || status === 'failed'

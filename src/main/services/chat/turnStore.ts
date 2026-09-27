@@ -11,8 +11,8 @@ import type { ChatTurnStore } from './ChatStreamManager'
  * really stored.
  */
 export const queriesTurnStore: ChatTurnStore = {
-  createTurn: (sessionId) =>
-    queries.createMessage(sessionId, 'assistant', '', undefined, 'streaming'),
+  createTurn: (sessionId, attemptOf) =>
+    queries.createMessage(sessionId, 'assistant', '', { status: 'streaming', attemptOf }),
   saveTurnMetadata: (messageId, metadata) => queries.updateMessageMetadata(messageId, metadata),
   saveTurnContent: (messageId, content, reasoningContent) =>
     queries.updateMessageContent(messageId, content, reasoningContent),

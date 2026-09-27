@@ -78,7 +78,7 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 
 /** What the turn's persistence needs, as a port: see `turnStore.ts`. */
 export interface ChatTurnStore {
-  createTurn(sessionId: string): { id: string }
+  createTurn(sessionId: string, attemptOf?: string): { id: string }
   saveTurnMetadata(messageId: string, metadata: ChatMessageMetadata): void
   saveTurnContent(messageId: string, content: string, reasoningContent: string): void
   saveTurnOutcome(
@@ -92,6 +92,16 @@ export interface ChatTurnStore {
 export interface ChatTurnRequest {
   sessionId: string
   notebookId?: string
+  /** The first attempt at this question, when this turn is another one (#151). */
+  attemptOf?: string
+  /**
+   * Continue into an answer that already exists instead of opening a new message.
+   *
+   * The text that arrived seeds the accumulator, so what gets persisted is the whole
+   * of what the reader has seen — the part before, plus the continuation — rather
+   * than the continuation alone.
+   */
+  resume?: { messageId: string; text: string; reasoning: string }
   /** The message the user sent, for the token estimate when no usage is reported. */
   userContent: string
   /** The prompt as it was assembled, retrieval included. Empty means nothing to send. */
@@ -135,6 +145,29 @@ interface TurnEntry {
   seq: number
 }
 
+/**
+ * What the accumulator starts from.
+ *
+ * Nothing for a new answer; for a continuation, the answer as it was when the reader
+ * asked for more — so the message that gets written is the whole of it, and the
+ * renderer, which seeds its own assembler the same way, shows the same text.
+ */
+const seedMessage = (entry: TurnEntry): UIMessage | undefined => {
+  const resume = entry.request.resume
+  if (!resume) return undefined
+
+  return {
+    id: resume.messageId,
+    role: 'assistant',
+    parts: [
+      ...(resume.reasoning
+        ? [{ type: 'reasoning' as const, text: resume.reasoning, state: 'done' as const }]
+        : []),
+      ...(resume.text ? [{ type: 'text' as const, text: resume.text, state: 'done' as const }] : [])
+    ]
+  }
+}
+
 export class ChatStreamManager {
   private readonly turns = new Map<string, TurnEntry>()
   private readonly turnIdByMessageId = new Map<string, string>()
@@ -161,7 +194,11 @@ export class ChatStreamManager {
    * through the terminal bookkeeping in this class.
    */
   start(request: ChatTurnRequest): ChatExecution {
-    const turn = this.deps.store.createTurn(request.sessionId)
+    // A continuation writes into the answer it is continuing; only a new answer — or a
+    // sibling attempt at the same question — opens a row (#151).
+    const turn = request.resume
+      ? { id: request.resume.messageId }
+      : this.deps.store.createTurn(request.sessionId, request.attemptOf)
 
     const baseMetadata: ChatMessageMetadata = {
       retrieval: request.retrieval,
@@ -278,8 +315,9 @@ export class ChatStreamManager {
       return failedOutcome('Chat model not configured, please configure in settings', 'error')
     }
 
-    // Per-attempt facts, cleared so a retry cannot inherit the previous attempt's.
-    entry.message = undefined
+    // Per-attempt facts, cleared so a retry cannot inherit the previous attempt's —
+    // except the seed, which a continuation starts from again.
+    entry.message = seedMessage(entry)
     entry.finishReason = undefined
     entry.usage = undefined
     entry.streamError = undefined
@@ -321,7 +359,12 @@ export class ChatStreamManager {
    * answer that had arrived is what gets persisted (#138 invariant 5).
    */
   private async assemble(entry: TurnEntry, stream: ReadableStream<UIMessageChunk>): Promise<void> {
-    for await (const snapshot of readUIMessageStream({ stream })) {
+    // `message` seeds the assembler: nothing for a fresh answer, the part that had
+    // already arrived for a continuation (#151), so what is persisted is the whole of
+    // what the reader has seen.
+    const seed = seedMessage(entry)
+
+    for await (const snapshot of readUIMessageStream({ stream, ...(seed && { message: seed }) })) {
       entry.message = snapshot
     }
   }

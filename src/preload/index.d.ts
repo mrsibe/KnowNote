@@ -200,6 +200,14 @@ declare global {
       getMessages: (sessionId: string) => Promise<ChatMessage[]>
       sendMessage: (sessionId: string, content: string) => Promise<string>
       abortMessage: (messageId: string) => Promise<{ success: boolean; reason?: string }>
+      /** Answer the same question again, as a sibling of the failed answer (#151). */
+      retryMessage: (
+        messageId: string
+      ) => Promise<{ success: boolean; messageId?: string; error?: string }>
+      /** Continue an answer that stopped, into the same message (#151). */
+      continueMessage: (
+        messageId: string
+      ) => Promise<{ success: boolean; messageId?: string; error?: string }>
 
       // 流式回合监听：SDK 自己的事件，加上结束这一轮的唯一 outcome（#141）
       onTurnEvent: (callback: (event: ChatTurnEvent) => void) => () => void

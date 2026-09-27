@@ -82,6 +82,11 @@ export const chatMessages = sqliteTable(
     error: text('error', { mode: 'json' }).$type<ChatExecutionError>(),
     usage: text('usage', { mode: 'json' }).$type<ChatTokenUsage>(),
     finishedAt: integer('finished_at', { mode: 'timestamp' }),
+    // The first attempt at the same question, for a retried answer (#151). NULL means
+    // this is itself a first attempt. No foreign key on purpose: deleting one attempt
+    // must not take its siblings with it, and a dangling id is only ever used to group
+    // rows that live and die with the same session.
+    attemptOf: text('attempt_of'),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({

@@ -205,6 +205,8 @@ function silentClient(text: string): { client: ModelClient; cancelled: () => boo
 
 interface StoredTurn {
   messageId: string
+  /** The group this row belongs to, when it is another attempt at a question. */
+  attemptOf?: string
   content?: string
   reasoningContent?: string
   metadata?: ChatMessageMetadata
@@ -219,9 +221,9 @@ function fakeStore(log: string[] = []) {
   let counter = 0
 
   const store: ChatTurnStore = {
-    createTurn: () => {
+    createTurn: (_sessionId, attemptOf) => {
       const id = `msg_${++counter}`
-      turns.set(id, { messageId: id })
+      turns.set(id, { messageId: id, attemptOf })
       log.push(`create:${id}`)
       return { id }
     },
@@ -699,4 +701,55 @@ test('a stream that goes quiet is cancelled and fails with a timeout', async () 
   )
   if (record?.outcome?.status !== 'failed') throw new Error('unreachable')
   assert.equal(record.outcome.reason, 'timeout', 'the failure was not recorded as a timeout')
+})
+
+test('a retry points at the first attempt of the group, not at the one before it', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+
+  const execution = manager.start({
+    ...turnRequest(scriptedClient([...textChunks('another attempt'), finishChunk('stop')])),
+    attemptOf: 'msg_first',
+    emit: browser.emit
+  })
+
+  await browser.outcome
+
+  assert.equal(
+    turns.get(execution.messageId)?.attemptOf,
+    'msg_first',
+    'the sibling was not linked to the question it answers'
+  )
+})
+
+test('a continuation writes into the answer it continues, and keeps what was there', async () => {
+  const { store, turns } = fakeStore()
+  // The answer being continued already exists: the turn writes into it instead of
+  // opening a row of its own (#151).
+  turns.set('msg_existing', { messageId: 'msg_existing', content: 'the beginning, ' })
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+
+  const execution = manager.start({
+    ...turnRequest(scriptedClient([...textChunks('and the rest'), finishChunk('stop')])),
+    resume: { messageId: 'msg_existing', text: 'the beginning, ', reasoning: '' },
+    emit: browser.emit
+  })
+
+  await browser.outcome
+
+  assert.equal(execution.messageId, 'msg_existing', 'the continuation opened a second message')
+  assert.equal(
+    turns.get('msg_existing')?.content,
+    'the beginning, and the rest',
+    'the continuation replaced the answer instead of extending it'
+  )
+  assert.equal(turns.size, 1, 'the continuation created another row')
 })
