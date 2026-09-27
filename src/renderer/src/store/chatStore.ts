@@ -148,12 +148,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     const notebookId = session.notebookId
 
     // 2. 添加用户消息到 UI
+    //    用户消息没有一轮对话，所以没有 execution 状态：null 表示“不适用”，
+    //    与 assistant 的“还没结束”是两件事。
     const userMessage: ChatMessage = {
       id: `temp_user_${Date.now()}`,
       sessionId,
       notebookId,
       role: 'user',
       content,
+      status: null,
+      finishReason: null,
+      error: null,
+      usage: null,
+      finishedAt: null,
       createdAt: new Date()
     }
     get().addMessage(userMessage)
@@ -162,6 +169,8 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     const messageId = await window.api.sendMessage(sessionId, content)
 
     // 4. 添加 assistant 消息占位符（包含推理字段）
+    //    终态（status / finishReason / error）在回合结束时才会到达，这里只是占位；
+    //    后端那一行此刻已经是 streaming。
     const assistantMessage: ChatMessage = {
       id: messageId,
       sessionId,
@@ -169,6 +178,11 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       role: 'assistant',
       content: '',
       reasoningContent: undefined,
+      status: 'streaming',
+      finishReason: null,
+      error: null,
+      usage: null,
+      finishedAt: null,
       createdAt: new Date(),
       isStreaming: true,
       isReasoningStreaming: true

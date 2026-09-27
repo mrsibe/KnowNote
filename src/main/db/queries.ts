@@ -1,7 +1,12 @@
 import { eq, desc, and } from 'drizzle-orm'
 import { getDatabase, executeCheckpoint, dropNotebookVectorTable } from './index'
 import { chatSessions, chatMessages, notebooks, notes, documents, items } from './schema'
-import type { ChatMessageMetadata } from '../../shared/types/chat'
+import type {
+  ChatMessageMetadata,
+  ChatExecutionOutcome,
+  ChatExecutionStatus,
+  ChatTokenUsage
+} from '../../shared/types/chat'
 
 // ==================== Chat Sessions ====================
 
@@ -147,12 +152,16 @@ export function updateSessionSummary(
 
 /**
  * 创建新消息
+ *
+ * `status` 只由 assistant 的一轮对话写入（见 #138）：用户消息没有 execution，
+ * 所以保持 NULL，而 NULL 的含义是「没有这个字段」，不是 `completed`。
  */
 export function createMessage(
   sessionId: string,
   role: 'user' | 'assistant' | 'system',
   content: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  status?: ChatExecutionStatus
 ) {
   const db = getDatabase()
   const id = `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`
@@ -166,6 +175,7 @@ export function createMessage(
       role,
       content,
       metadata,
+      status,
       createdAt: now
     })
     .returning()
@@ -216,6 +226,39 @@ export function updateMessageMetadata(messageId: string, metadata: ChatMessageMe
   const db = getDatabase()
 
   db.update(chatMessages).set({ metadata }).where(eq(chatMessages.id, messageId)).run()
+}
+
+/**
+ * 写入一轮对话的最终状态（#138 / #139）。
+ *
+ * 一个回合只能有一个 terminal outcome，写在这里的那一个就是事实：`status` 是
+ * KnowNote 的产品语义（对话里怎么显示这一轮），`finishReason` 是 provider 的原话，
+ * 两者分开存 —— provider 可以以产品必须解释的方式结束（`length` 是“回答不完整”，
+ * 不是失败），一个回合也可以完全没有 provider 的结束语（连接断了）。
+ *
+ * `error` 只在 `failed` 时写入：其它状态带着一个陈旧的错误比不带更误导。
+ *
+ * 这里是唯一写 terminal 状态的地方 —— 调用方必须先落库、再告诉 renderer
+ * （见 epic #138 的 invariant 4）。
+ */
+export function finishMessageTurn(
+  messageId: string,
+  outcome: ChatExecutionOutcome,
+  finishReason: string | undefined,
+  usage: ChatTokenUsage | undefined
+): void {
+  const db = getDatabase()
+
+  db.update(chatMessages)
+    .set({
+      status: outcome.status,
+      finishReason: finishReason ?? null,
+      error: outcome.status === 'failed' ? outcome.error : null,
+      usage: usage ?? null,
+      finishedAt: new Date()
+    })
+    .where(eq(chatMessages.id, messageId))
+    .run()
 }
 
 // ==================== Notebooks ====================

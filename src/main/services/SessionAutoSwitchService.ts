@@ -115,19 +115,24 @@ Please provide summary:`
             content: summaryPrompt
           }
         ],
-        // onChunk
-        (chunk) => {
-          summaryContent += chunk.content
-        },
-        // onError
-        (error) => {
-          Logger.error('SessionAutoSwitch', 'Failed to generate summary:', error)
-          // Fallback: return simple summary
-          resolve(`This conversation contains ${messages.length} messages.`)
-        },
-        // onComplete
-        () => {
-          resolve(summaryContent.trim())
+        {
+          onChunk: (chunk) => {
+            summaryContent += chunk.content
+          },
+          onError: (error) => {
+            Logger.error('SessionAutoSwitch', 'Failed to generate summary:', error)
+            // Fallback: return simple summary
+            resolve(`This conversation contains ${messages.length} messages.`)
+          },
+          // Never aborted here: this call owns a fresh controller and nothing
+          // cancels it. Resolving keeps the switch from hanging if it ever were.
+          onAbort: () => {
+            Logger.warn('SessionAutoSwitch', 'Summary generation was aborted')
+            resolve(`This conversation contains ${messages.length} messages.`)
+          },
+          onComplete: () => {
+            resolve(summaryContent.trim())
+          }
         }
       )
     })

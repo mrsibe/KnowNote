@@ -54,6 +54,8 @@ import { assignBlockIds, buildDocumentBlocks } from './services/blocks/documentB
 import { ChunkingService } from './services/ChunkingService'
 import { insertChunkBlocks, resolveChunkProvenance } from './services/chunkProvenance'
 import { KnowledgeService } from './services/KnowledgeService'
+import * as queries from './db/queries'
+import { failedOutcome } from '../shared/utils/chatExecution'
 import { DenseRetriever } from './services/retrieval'
 import { documentUrl } from '../shared/utils/documentUrl'
 import { PDFJS_ASSET_DIRS } from '../shared/utils/pdfjsAssets'
@@ -675,6 +677,49 @@ async function runChecks(): Promise<string[]> {
     'evidence lost the paragraph bbox needed to highlight it (#72)'
   )
   pass('DenseRetriever returns retrieved evidence with a page/block locator')
+
+  // --- a turn's outcome survives the database ---------------------------------
+  // Every chat turn now ends in exactly one terminal outcome (#139), and that
+  // outcome is part of the message record. Two of the new columns are JSON and one
+  // is a timestamp, so what this proves is the round trip through Drizzle on the
+  // sqlite the *packaged* app ships: a value that writes as one type and reads
+  // back as another is a silent break in every status the transcript renders, and
+  // nothing else in the suite would notice it.
+  const turnNotebook = queries.createNotebook('Smoke turn notebook')
+  const turnSession = queries.createSession(turnNotebook.id, 'Smoke turn session')
+  const turnMessage = queries.createMessage(turnSession.id, 'assistant', '', undefined, 'streaming')
+  assert(turnMessage.status === 'streaming', `a new turn started as ${String(turnMessage.status)}`)
+  assert(turnMessage.finishedAt === null, 'a turn had a finish time before it finished')
+
+  queries.updateMessageContent(turnMessage.id, 'a partial answer')
+  queries.finishMessageTurn(
+    turnMessage.id,
+    failedOutcome('upstream provider returned 500', 'error'),
+    'error',
+    { promptTokens: 12, completionTokens: 34, totalTokens: 46 }
+  )
+
+  const storedTurn = queries.getMessagesBySession(turnSession.id)[0]
+  assert(Boolean(storedTurn), 'the stored turn disappeared')
+  assert(storedTurn.status === 'failed', `a failed turn was stored as ${String(storedTurn.status)}`)
+  assert(
+    storedTurn.finishReason === 'error',
+    `the provider reason was stored as ${String(storedTurn.finishReason)}`
+  )
+  assert(
+    storedTurn.error?.message === 'upstream provider returned 500',
+    'the stored error lost its message'
+  )
+  assert(storedTurn.usage?.totalTokens === 46, 'the stored usage lost its token count')
+  assert(
+    storedTurn.content === 'a partial answer',
+    'a failed turn lost the partial answer it had produced'
+  )
+  assert(storedTurn.finishedAt instanceof Date, 'the finish time did not survive the round trip')
+  pass('a turn’s terminal outcome round trips through the database')
+
+  queries.deleteSession(turnSession.id)
+  await queries.deleteNotebook(turnNotebook.id)
 
   // Documents imported before `documents.structure` existed have NULL there.
   // Re-indexing them must recover the structure from the local copy *before*

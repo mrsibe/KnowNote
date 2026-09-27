@@ -1,5 +1,10 @@
 import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core'
 import type { QuizQuestion } from '../../shared/types/quiz'
+import type {
+  ChatExecutionError,
+  ChatExecutionStatus,
+  ChatTokenUsage
+} from '../../shared/types/chat'
 import type { DocumentStructure } from '../services/loaders/types'
 
 /**
@@ -66,6 +71,17 @@ export const chatMessages = sqliteTable(
     content: text('content').notNull(),
     reasoningContent: text('reasoning_content'), // DeepSeek Reasoner 推理过程内容
     metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
+    // How the turn ended, in KnowNote's vocabulary (see shared/types/chat.ts).
+    // Nullable on purpose: rows written before this column existed are *unknown*,
+    // which is not the same statement as 'completed'. Only an assistant turn is
+    // ever written with a status; a user message has no execution.
+    status: text('status').$type<ChatExecutionStatus>(),
+    // The provider's own terminal reason, kept beside the status so nothing the
+    // provider said is lost when the two disagree (`length` is a real answer).
+    finishReason: text('finish_reason'),
+    error: text('error', { mode: 'json' }).$type<ChatExecutionError>(),
+    usage: text('usage', { mode: 'json' }).$type<ChatTokenUsage>(),
+    finishedAt: integer('finished_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
@@ -85,7 +101,6 @@ export type NewChatSession = typeof chatSessions.$inferInsert
 
 export type ChatMessage = typeof chatMessages.$inferSelect
 export type NewChatMessage = typeof chatMessages.$inferInsert
-
 /**
  * 笔记表
  * 存储每个笔记本下的笔记

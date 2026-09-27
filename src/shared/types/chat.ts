@@ -53,6 +53,55 @@ export interface AnswerSource {
 export type RetrievalStatus = 'used' | 'none' | 'failed'
 
 /**
+ * How a turn ended, in KnowNote's vocabulary.
+ *
+ * Deliberately not the provider's `finishReason`: that value is a fact about the
+ * model call, this one is what the product says happened to the turn, and the
+ * transcript renders from it. They are stored as two fields because a provider
+ * can end a turn in a way the product has to explain (`length` is a completion
+ * whose answer is incomplete, not a failure) and because a turn can end without
+ * the provider saying anything at all (a dropped connection).
+ *
+ * `null` on a stored message means the turn predates this field: unknown, which
+ * is not the same statement as `completed`.
+ */
+export type ChatExecutionStatus =
+  'pending' | 'streaming' | 'completed' | 'truncated' | 'blocked' | 'aborted' | 'failed'
+
+/** Only the statuses a turn can settle on; a turn cannot *end* in `pending` / `streaming`. */
+export type TerminalChatExecutionStatus = Exclude<ChatExecutionStatus, 'pending' | 'streaming'>
+
+/**
+ * A failure the transcript can show. Only a message for now: classifying the
+ * error (`auth` / `rate_limit` / `timeout` …) only matters once something acts on
+ * it, which is the reliability work (#143).
+ */
+export interface ChatExecutionError {
+  message: string
+}
+
+/**
+ * The single terminal statement about a turn.
+ *
+ * `reason` on `failed` says where it came from, which is the difference between
+ * "the provider told us it failed" and "the stream ended and nobody said
+ * anything" — the case the old code could not tell apart from success.
+ */
+export type ChatExecutionOutcome =
+  | { status: 'completed' }
+  | { status: 'truncated' }
+  | { status: 'blocked' }
+  | { status: 'aborted'; reason: 'user' | 'shutdown' }
+  | { status: 'failed'; error: ChatExecutionError; reason: 'error' | 'throw' | 'unexpected_eof' }
+
+/** Token accounting for one turn. Fields are optional because providers omit them. */
+export interface ChatTokenUsage {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+}
+
+/**
  * The structured part of `chat_messages.metadata`.
  *
  * The column is an open JSON bag, so the index signature is honest rather than a

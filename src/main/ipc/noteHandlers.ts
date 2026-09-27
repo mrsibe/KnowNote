@@ -31,14 +31,21 @@ async function generateNoteTitle(
           content: `Please generate a title for the following content:\n\n${content.slice(0, 500)}`
         }
       ],
-      (chunk) => {
-        generatedTitle += chunk.content
-      },
-      (error) => {
-        Logger.error('NoteHandlers', 'Failed to generate title:', error)
-      },
-      () => {
-        // Complete
+      {
+        onChunk: (chunk) => {
+          generatedTitle += chunk.content
+        },
+        onError: (error) => {
+          Logger.error('NoteHandlers', 'Failed to generate title:', error)
+        },
+        // Never aborted here: this call owns a fresh controller and nothing
+        // cancels it, so an abort would be a bug worth not swallowing.
+        onAbort: () => {
+          Logger.warn('NoteHandlers', 'Title generation was aborted')
+        },
+        onComplete: () => {
+          // Complete
+        }
       }
     )
 
