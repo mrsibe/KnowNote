@@ -1,5 +1,29 @@
 import { create } from 'zustand'
+import { readUIMessageStream } from 'ai'
+import type { UIMessage, UIMessageChunk } from 'ai'
 import type { ChatSession, ChatMessage } from '../types/notebook'
+import {
+  isSequenceContinuing,
+  messageReasoning,
+  messageText
+} from '../../../shared/utils/uiMessage'
+
+/**
+ * A turn the renderer is following.
+ *
+ * `message` is the answer as the SDK assembled it, from the same event stream Main
+ * assembles from (#141). Nothing here re-derives text from deltas — the reason the
+ * old store kept a `messageToNotebook` map of concatenated strings was that it was
+ * doing the merging itself.
+ */
+interface StreamingTurn {
+  notebookId: string
+  message?: UIMessage
+  /** The last sequence number received, so a gap can be noticed. */
+  lastSeq?: number
+  /** Set once a gap has been seen: what is on screen is missing content. */
+  sequenceGap?: boolean
+}
 
 interface ChatStore {
   // Current session
@@ -14,11 +38,9 @@ interface ChatStore {
   // Streaming message status: managed by notebookId
   streamingMessages: Record<string, string>
 
-  // messageId -> {notebookId, content, reasoningContent} mapping, used to clean up streaming status and restore content after switching notebook
-  messageToNotebook: Record<
-    string,
-    { notebookId: string; content: string; reasoningContent: string }
-  >
+  // messageId -> the running turn. Used to clean up streaming status, to restore an
+  // in-flight answer after switching notebook, and to detect a gap in the stream.
+  turns: Record<string, StreamingTurn>
 
   // Actions
   setCurrentSession: (session: ChatSession | null) => void
@@ -40,12 +62,96 @@ interface ChatStore {
   abortMessage: (notebookId: string) => Promise<void>
 }
 
+/**
+ * The assembler for one message's chunk stream.
+ *
+ * The SDK turns a stream of events into a `UIMessage`; the renderer needs the same
+ * one Main persists, so it uses the same function rather than its own merge (#141).
+ */
+interface TurnAssembler {
+  push: (chunk: UIMessageChunk) => void
+  close: () => void
+}
+
+/**
+ * Assemblers live here rather than in store state: a stream controller is
+ * machinery, not something a component renders, and putting it in state would make
+ * every event notify every subscriber with a new object.
+ */
+const assemblers = new Map<string, TurnAssembler>()
+
+/** Push an event into the assembling message, and show the snapshot it produces. */
+function feedAssembler(messageId: string, chunk: UIMessageChunk): void {
+  let assembler = assemblers.get(messageId)
+
+  if (!assembler) {
+    let controller: ReadableStreamDefaultController<UIMessageChunk> | undefined
+    let closed = false
+    const stream = new ReadableStream<UIMessageChunk>({
+      start: (created) => {
+        controller = created
+      }
+    })
+
+    void (async () => {
+      try {
+        for await (const message of readUIMessageStream({ stream })) {
+          applySnapshot(messageId, message)
+        }
+      } catch (error) {
+        // A malformed event must not take the transcript down with it: the turn's
+        // outcome event still arrives and still closes the turn.
+        console.error('[ChatStore] Failed to assemble a streaming answer:', error)
+      }
+    })()
+
+    assembler = {
+      push: (next) => {
+        if (!closed) controller?.enqueue(next)
+      },
+      close: () => {
+        if (closed) return
+        closed = true
+        controller?.close()
+      }
+    }
+    assemblers.set(messageId, assembler)
+  }
+
+  assembler.push(chunk)
+}
+
+function closeAssembler(messageId: string): void {
+  assemblers.get(messageId)?.close()
+  assemblers.delete(messageId)
+}
+
+function applySnapshot(messageId: string, message: UIMessage): void {
+  const text = messageText(message)
+  const reasoningContent = messageReasoning(message)
+
+  useChatStore.setState((state) => {
+    const turn = state.turns[messageId]
+    const turns = turn ? { ...state.turns, [messageId]: { ...turn, message } } : state.turns
+
+    // Only touch the visible list when this is the message the reader is looking at;
+    // a turn in another notebook still assembles so switching back is instant.
+    const messages = state.messages.some((item) => item.id === messageId)
+      ? state.messages.map((item) =>
+          item.id === messageId ? { ...item, content: text, reasoningContent } : item
+        )
+      : state.messages
+
+    return { turns, messages }
+  })
+}
+
 export const useChatStore = create<ChatStore>()((set, get) => ({
   currentSession: null,
   sessions: [],
   messages: [],
   streamingMessages: {},
-  messageToNotebook: {},
+  turns: {},
 
   setCurrentSession: (session) => set({ currentSession: session }),
   setSessions: (sessions) => set({ sessions }),
@@ -68,28 +174,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       )
     })),
 
+  // 设置流式消息状态
   setStreamingMessage: (notebookId, messageId) =>
     set((state) => {
-      const newStreamingMessages = { ...state.streamingMessages }
-
+      const newS = { ...state.streamingMessages }
       if (messageId) {
-        // 设置该Notebook的流式消息
-        newStreamingMessages[notebookId] = messageId
+        newS[notebookId] = messageId
       } else {
-        // 清除该Notebook的流式消息
-        delete newStreamingMessages[notebookId]
+        delete newS[notebookId]
       }
-
-      return {
-        streamingMessages: newStreamingMessages,
-        messages: state.messages.map((msg) => ({
-          ...msg,
-          isStreaming: msg.id === messageId && !!messageId,
-          isReasoningStreaming: msg.id === messageId && !!messageId
-        }))
-      }
+      return { streamingMessages: newS }
     }),
 
+  // 检查指定 notebook 是否有消息正在流式传输
   isNotebookStreaming: (notebookId) => {
     const state = get()
     return !!state.streamingMessages[notebookId]
@@ -117,13 +214,18 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   loadMessages: async (sessionId) => {
     const dbMessages = await window.api.getMessages(sessionId)
 
-    // 从缓存中恢复正在流式传输的消息内容
+    // An answer that is still arriving is not in the database yet: restore it from
+    // the turn the renderer is assembling, so switching notebook does not blank it.
     const state = get()
     const messages = dbMessages.map((msg: ChatMessage) => {
-      const cached = state.messageToNotebook[msg.id]
-      if (cached && cached.content) {
-        // 如果缓存中有内容，说明这条消息正在流式传输，使用缓存的内容
-        return { ...msg, content: cached.content, isStreaming: true }
+      const turn = state.turns[msg.id]
+      if (turn?.message) {
+        return {
+          ...msg,
+          content: messageText(turn.message),
+          reasoningContent: messageReasoning(turn.message),
+          isStreaming: true
+        }
       }
       return msg
     })
@@ -190,12 +292,9 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     get().addMessage(assistantMessage)
     get().setStreamingMessage(notebookId, messageId)
 
-    // 5. 初始化缓存，记录 messageId -> {notebookId, content, reasoningContent}
+    // 5. 登记这一轮：事件到达时靠它找到 notebookId，并在 reload 时恢复内容
     set((state) => ({
-      messageToNotebook: {
-        ...state.messageToNotebook,
-        [messageId]: { notebookId, content: '', reasoningContent: '' }
-      }
+      turns: { ...state.turns, [messageId]: { notebookId } }
     }))
   },
 
@@ -209,8 +308,6 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     }
 
     try {
-      console.log('[ChatStore] Aborting message:', messageId)
-
       // 乐观更新: 立即标记消息为非流式
       set((state) => ({
         messages: state.messages.map((msg) =>
@@ -218,19 +315,13 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
         )
       }))
 
-      // 调用 IPC 中止请求
+      // 调用 IPC 中止请求。后端先记录 aborted 再取消上游请求，所以随后的 AbortError
+      // 不会再改写这一轮的终态（#141）。
       const result = await window.api.abortMessage(messageId)
 
       if (result.success) {
-        console.log('[ChatStore] Message aborted successfully')
-
         // 立即清理流状态
         state.setStreamingMessage(notebookId, null)
-
-        // 清理缓存
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { [messageId]: _removed, ...rest } = state.messageToNotebook
-        set({ messageToNotebook: rest })
       } else {
         console.warn('[ChatStore] Failed to abort:', result.reason)
       }
@@ -241,158 +332,114 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 }))
 
 /**
- * 设置流式消息监听器（基于 AI SDK 流式协议）
- * 在应用启动时调用一次
- * 返回清理函数
+ * 设置流式回合监听器（#141）。
+ * 在应用启动时调用一次，返回清理函数。
+ *
+ * One channel carries everything a turn says: the SDK's own events, forwarded
+ * verbatim, and the single outcome that ends it. The renderer therefore cannot lose
+ * an event type it does not know about — it hands them all to the SDK's assembler.
  */
-export function setupChatListeners() {
-  // 监听流式消息片段（AI SDK fullStream 格式）
-  const cleanupChunk = window.api.onMessageChunk((data) => {
-    const { messageId, type, content, messageMetadata } = data
-    const store = useChatStore.getState()
+export function setupChatListeners(): () => void {
+  const cleanupTurn = window.api.onTurnEvent((event) => {
+    switch (event.type) {
+      case 'chunk': {
+        const state = useChatStore.getState()
+        const turn = state.turns[event.messageId]
 
-    const cached = store.messageToNotebook[messageId]
-    if (!cached) return
-
-    // 处理不同类型的流式部分
-    switch (type) {
-      case 'reasoning-start':
-        // 推理块开始，标记推理状态
-        useChatStore.setState((state) => ({
-          messages: state.messages.map((msg) =>
-            msg.id === messageId ? { ...msg, isReasoningStreaming: true } : msg
+        // A gap means content was lost on the way. Nothing replays yet, so say so
+        // rather than showing an answer that is quietly short.
+        if (turn && !isSequenceContinuing(turn.lastSeq, event.seq)) {
+          console.warn(
+            `[ChatStore] missing events for ${event.messageId}: expected ${(turn.lastSeq ?? 0) + 1}, got ${event.seq}`
           )
-        }))
-        break
+          useChatStore.setState((current) => ({
+            turns: {
+              ...current.turns,
+              [event.messageId]: { ...turn, lastSeq: event.seq, sequenceGap: true }
+            }
+          }))
+        } else if (turn) {
+          useChatStore.setState((current) => ({
+            turns: { ...current.turns, [event.messageId]: { ...turn, lastSeq: event.seq } }
+          }))
+        }
 
-      case 'reasoning-delta': {
-        // 推理增量内容
-        const newReasoningContent = cached.reasoningContent + content
-        useChatStore.setState((state) => ({
-          messageToNotebook: {
-            ...state.messageToNotebook,
-            [messageId]: { ...cached, reasoningContent: newReasoningContent }
+        feedAssembler(event.messageId, event.event)
+
+        // The reasoning indicator is the one live detail the transcript reads from an
+        // event type rather than from the assembled message. #142 puts the state on
+        // the message; until then this keeps it as accurate as it was.
+        if (event.event.type === 'reasoning-start' || event.event.type === 'reasoning-end') {
+          const streamingReasoning = event.event.type === 'reasoning-start'
+          useChatStore.setState((current) => ({
+            messages: current.messages.map((message) =>
+              message.id === event.messageId
+                ? { ...message, isReasoningStreaming: streamingReasoning }
+                : message
+            )
+          }))
+        }
+        break
+      }
+
+      case 'outcome': {
+        const state = useChatStore.getState()
+        const turn = state.turns[event.messageId]
+        const failure = event.outcome.status === 'failed' ? event.outcome.error.message : undefined
+
+        // Closing the assembler ends the stream the answer was assembled from.
+        closeAssembler(event.messageId)
+
+        useChatStore.setState((current) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { [event.messageId]: _finished, ...turns } = current.turns
+          return {
+            turns,
+            messages: current.messages.map((message) =>
+              message.id === event.messageId
+                ? {
+                    ...message,
+                    // Until #142 renders the status itself, a failure reads the way it
+                    // always has: the reason replaces the partial answer.
+                    content:
+                      failure === undefined
+                        ? messageText(turn?.message) || message.content
+                        : `❌ Error: ${failure}`,
+                    isStreaming: false,
+                    isReasoningStreaming: false,
+                    status: event.outcome.status,
+                    finishReason: event.finishReason ?? null,
+                    error: event.outcome.status === 'failed' ? event.outcome.error : null,
+                    usage: event.usage ?? null,
+                    metadata: event.messageMetadata,
+                    finishedAt: new Date()
+                  }
+                : message
+            )
           }
-        }))
+        })
 
-        // 如果消息在当前视图中，更新推理内容
-        if (store.messages.some((m) => m.id === messageId)) {
-          useChatStore.setState((state) => ({
-            messages: state.messages.map((msg) =>
-              msg.id === messageId ? { ...msg, reasoningContent: newReasoningContent } : msg
-            )
-          }))
-        }
+        if (turn) state.setStreamingMessage(turn.notebookId, null)
         break
       }
 
-      case 'reasoning-end':
-        // 推理块结束
-        useChatStore.setState((state) => ({
-          messages: state.messages.map((msg) =>
-            msg.id === messageId ? { ...msg, isReasoningStreaming: false } : msg
-          )
-        }))
-        break
+      // Session 自动切换
+      case 'session-auto-switched': {
+        void (async () => {
+          const state = useChatStore.getState()
+          if (!state.currentSession) return
 
-      case 'text-delta': {
-        // 文本增量内容（最终答案）
-        const newTextContent = cached.content + content
-        useChatStore.setState((state) => ({
-          messageToNotebook: {
-            ...state.messageToNotebook,
-            [messageId]: { ...cached, content: newTextContent }
+          const newSession = await window.api.getActiveSession(state.currentSession.notebookId)
+          if (newSession && newSession.id === event.newSessionId) {
+            state.setCurrentSession(newSession)
           }
-        }))
-
-        // 如果消息在当前视图中，更新文本内容
-        if (store.messages.some((m) => m.id === messageId)) {
-          useChatStore.setState((state) => ({
-            messages: state.messages.map((msg) =>
-              msg.id === messageId ? { ...msg, content: newTextContent } : msg
-            )
-          }))
-        }
-        break
-      }
-
-      case 'finish': {
-        // 流式传输完成
-        store.setStreamingMessage(cached.notebookId, null)
-
-        // Provenance (retrieval status, sources, citations) is written to the DB
-        // before the model call, so the in-memory message never saw it. Apply it
-        // now, or the answer stays un-citable until the session is reloaded.
-        if (messageMetadata) {
-          useChatStore.setState((state) => ({
-            messages: state.messages.map((msg) =>
-              msg.id === messageId ? { ...msg, metadata: messageMetadata } : msg
-            )
-          }))
-        }
-
-        // 清理缓存
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { [messageId]: _removed, ...rest } = store.messageToNotebook
-        useChatStore.setState({ messageToNotebook: rest })
+        })()
         break
       }
     }
   })
 
-  // 监听错误
-  const cleanupError = window.api.onMessageError((data) => {
-    const { messageId, error } = data
-    const store = useChatStore.getState()
-
-    const errorContent = `❌ Error: ${error}`
-
-    // Update cache
-    const cached = store.messageToNotebook[messageId]
-    if (cached) {
-      useChatStore.setState((state) => ({
-        messageToNotebook: {
-          ...state.messageToNotebook,
-          [messageId]: { ...cached, content: errorContent }
-        }
-      }))
-
-      // If message is in current messages, also update it
-      const message = store.messages.find((m) => m.id === messageId)
-      if (message) {
-        store.updateMessageContent(messageId, errorContent)
-      }
-
-      // Clear streaming status and cache
-      store.setStreamingMessage(cached.notebookId, null)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { [messageId]: _removed, ...rest } = store.messageToNotebook
-      useChatStore.setState({ messageToNotebook: rest })
-    }
-  })
-
-  // Listen for session auto switch
-  const cleanupAutoSwitch = window.api.onSessionAutoSwitched(async (data) => {
-    const { newSessionId } = data
-    const store = useChatStore.getState()
-
-    console.log(`[ChatStore] Session auto-switched to: ${newSessionId}`)
-
-    // Silently switch to new session
-    if (store.currentSession) {
-      const newSession = await window.api.getActiveSession(store.currentSession.notebookId)
-
-      if (newSession && newSession.id === newSessionId) {
-        // Silently switch to new session, keep current message display, user unaware
-        store.setCurrentSession(newSession)
-      }
-    }
-  })
-
-  // Return cleanup function
   return () => {
-    cleanupChunk()
-    cleanupError()
-    cleanupAutoSwitch()
+    cleanupTurn()
   }
 }

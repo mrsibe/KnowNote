@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { EmbeddingDownloadProgress } from '../shared/types'
+import type { ChatTurnEvent } from '../shared/types/chat'
 
 /**
  * IPC 调用超时包装函数
@@ -101,25 +103,12 @@ const api = {
     invokeWithTimeout('send-message', 60000, { sessionId, content }), // 60秒超时（流式消息可能较长）
   abortMessage: (messageId: string) => invokeWithTimeout('abort-message', 5000, { messageId }),
 
-  // 流式消息监听
-  onMessageChunk: (callback: (data: any) => void) => {
-    const listener = (_event: any, data: any) => callback(data)
-    ipcRenderer.on('message-chunk', listener)
+  // 流式回合监听：SDK 自己的事件，加上结束这一轮的唯一 outcome（#141）
+  onTurnEvent: (callback: (event: ChatTurnEvent) => void) => {
+    const listener = (_event: IpcRendererEvent, turnEvent: ChatTurnEvent) => callback(turnEvent)
+    ipcRenderer.on('chat:turn-event', listener)
     // 返回清理函数
-    return () => ipcRenderer.removeListener('message-chunk', listener)
-  },
-
-  onMessageError: (callback: (data: any) => void) => {
-    const listener = (_event: any, data: any) => callback(data)
-    ipcRenderer.on('message-error', listener)
-    return () => ipcRenderer.removeListener('message-error', listener)
-  },
-
-  // Session 自动切换监听
-  onSessionAutoSwitched: (callback: (data: any) => void) => {
-    const listener = (_event: any, data: any) => callback(data)
-    ipcRenderer.on('session-auto-switched', listener)
-    return () => ipcRenderer.removeListener('session-auto-switched', listener)
+    return () => ipcRenderer.removeListener('chat:turn-event', listener)
   },
 
   // Model Connection 相关

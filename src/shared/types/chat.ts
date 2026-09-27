@@ -10,6 +10,7 @@ import type {
   ChatMessage as DBChatMessage
 } from '../../main/db/schema'
 import type { Citation } from './citation'
+import type { UIMessageChunk } from 'ai'
 
 /**
  * 聊天会话接口（完整版）
@@ -102,6 +103,43 @@ export interface ChatTokenUsage {
 }
 
 /**
+ * One event of a running turn, as it crosses the process boundary.
+ *
+ * The `chunk` variant carries the AI SDK's own UI event **verbatim**: a reduced
+ * protocol of our own (`text-delta | reasoning-delta | finish`) is what made an
+ * `error` part silently disappear (#137) and what made every future SDK event type
+ * another silent drop. Only the three chunks that *end* a turn are not forwarded —
+ * `finish`, `error`, `abort` — because the manager owns the terminal statement and
+ * emits `outcome` for them after the turn is persisted (#138 invariant 4) and
+ * everything they carried (reason, error message, status) is on that event.
+ *
+ * `seq` is monotonic per execution, so a consumer can tell a delivered stream from
+ * a stream with a hole in it.
+ */
+export type ChatTurnEvent =
+  | {
+      type: 'chunk'
+      executionId: string
+      messageId: string
+      seq: number
+      event: UIMessageChunk
+    }
+  | {
+      type: 'outcome'
+      executionId: string
+      messageId: string
+      seq: number
+      outcome: ChatExecutionOutcome
+      /** The provider's own terminal reason, when it named one. */
+      finishReason?: string
+      usage?: ChatTokenUsage
+      /** The provenance the renderer's in-memory message has not seen yet. */
+      messageMetadata: ChatMessageMetadata
+    }
+  /** Not about one turn's stream, but it is a turn's ending that triggers it. */
+  | { type: 'session-auto-switched'; sessionId: string; newSessionId: string }
+
+/**
  * The structured part of `chat_messages.metadata`.
  *
  * The column is an open JSON bag, so the index signature is honest rather than a
@@ -128,6 +166,9 @@ export interface ChatMessageMetadata {
    * as "finished".
    */
   finishReason?: string
+  /** Token accounting, carried on the terminal chunk because the SDK emits no
+   * chunk of its own for it. */
+  usage?: ChatTokenUsage
   [key: string]: unknown
 }
 

@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { ChatSession, ChatMessage, ChatMessageMetadata } from '../shared/types/chat'
+import type { ChatSession, ChatMessage, ChatTurnEvent } from '../shared/types/chat'
 import type {
   Notebook,
   Note,
@@ -201,24 +201,8 @@ declare global {
       sendMessage: (sessionId: string, content: string) => Promise<string>
       abortMessage: (messageId: string) => Promise<{ success: boolean; reason?: string }>
 
-      // 流式消息监听（AI SDK 流式协议格式）
-      onMessageChunk: (
-        callback: (data: {
-          messageId: string
-          type: 'reasoning-start' | 'reasoning-delta' | 'reasoning-end' | 'text-delta' | 'finish'
-          content?: string
-          reasoningId?: string
-          metadata?: any
-          /** Persisted `chat_messages.metadata` for the finished answer. */
-          messageMetadata?: ChatMessageMetadata
-        }) => void
-      ) => () => void
-      onMessageError: (callback: (data: { messageId: string; error: string }) => void) => () => void
-
-      // Session 自动切换监听
-      onSessionAutoSwitched: (
-        callback: (data: { oldSessionId: string; newSessionId: string }) => void
-      ) => () => void
+      // 流式回合监听：SDK 自己的事件，加上结束这一轮的唯一 outcome（#141）
+      onTurnEvent: (callback: (event: ChatTurnEvent) => void) => () => void
 
       // Model Connection 相关
       connections: {

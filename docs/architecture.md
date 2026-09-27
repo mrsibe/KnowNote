@@ -59,27 +59,57 @@ four separate callbacks (#138).
 
 | Role | What it is |
 | --- | --- |
-| The turn's state and rules | `ChatExecution` — `src/main/services/chat/ChatExecution.ts`: accumulated answer, the provider's reason and usage, and the one terminal outcome |
+| The turn's state and rules | `ChatExecution` — `src/main/services/chat/ChatExecution.ts`: the status, the one terminal outcome, and the signal that cancels the provider call |
 | The registry and the lifecycle | `ChatStreamManager` — `src/main/services/chat/ChatStreamManager.ts`: one entry per running turn, and the only place a turn is settled, persisted and announced |
 | Persistence port | `ChatTurnStore`, declared by the manager and implemented by `services/chat/turnStore.ts` over `db/queries` |
+| The answer | assembled by the SDK (`readUIMessageStream`) on **both** sides, from the same events — see below |
 
 The manager imports neither `db/queries` nor Electron. It reports what happened through
 an `emit` callback supplied per turn and writes through the store port, which is what
-lets `test/chatStreamManager.test.ts` drive a whole turn — chunks in, one persisted
+lets `test/chatStreamManager.test.ts` drive a whole turn — events in, one persisted
 record out — without a database or an Electron process.
 
 Invariants, each tested in that file:
 
 1. A turn ends exactly once. The first terminal signal wins and every later one is
-dropped, including a stop that arrives after the answer is already complete.
+   dropped, including a stop that arrives after the answer is already complete.
 2. A stop is recorded **before** the signal is cancelled, so the `AbortError` that
-   comes back out of the SDK cannot re-label the turn.
+   comes back out of the SDK cannot re-label the turn. The signal belongs to the
+   execution, so a stop cancels the provider request and not just the bookkeeping.
 3. The terminal state is persisted **before** the renderer is told the turn ended.
 4. A failed or stopped turn keeps the partial answer it produced.
 
-What the renderer receives is not this seam's business yet: #141 replaces the reduced
-`message-chunk` / `message-error` events with the SDK's own chunk stream, and #142 makes
-the transcript render from the persisted status.
+#### The stream protocol (#141)
+
+The wire carries the AI SDK's own events, and one event ends the turn:
+
+```text
+ModelClient.streamChat()          the SDK's UI event stream
+        │
+      tee()
+   ┌────┴─────────────────┐
+   ↓                      ↓
+forward + seq         readUIMessageStream
+   ↓                      ↓
+renderer              the persisted message
+```
+
+- **No reduced protocol.** The events before this were
+  `text-delta | reasoning-delta | finish`: a shape of our own that an `error` part did
+  not fit into, so it was dropped (#137), and that every future SDK event type would
+  also fall out of. What arrives now is `UIMessageChunk`, verbatim.
+- **Terminal chunks are the exception.** `finish`, `error` and `abort` are not
+  forwarded: the manager makes one `outcome` statement *after* the write, carrying
+  the reason, the error and the usage. It is also what ends the consumer the renderer
+  assembles with, so a stop is announced too — as `aborted`, which is not a claim
+  that the answer finished (#139).
+- **The SDK touches two files.** Invariant 7 of #138 says the SDK lives behind the
+  main-process service, and the renderer does need an assembler: the alternatives are
+  shipping the whole message on every keystroke or writing a second merge. So the
+  exceptions are `ModelClient` and `shared/utils/uiMessage.ts` — and the renderer bundle
+  grew by ~290 kB for it. Upgrading the SDK is a change to those two files.
+- **`seq` is monotonic per execution**, and a consumer that sees a gap records it.
+  Nothing replays yet.
 
 ### Call paths
 

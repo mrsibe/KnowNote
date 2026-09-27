@@ -1,10 +1,11 @@
-import { ipcMain, IpcMainInvokeEvent, WebContents } from 'electron'
+import { ipcMain, IpcMainInvokeEvent } from 'electron'
 import * as queries from '../db/queries'
 import { ConnectionManager } from '../models/ConnectionManager'
 import type { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
 import { KnowledgeService } from '../services/KnowledgeService'
 import { buildRAGContext } from '../services/citations'
-import { ChatStreamManager, type ChatStreamEvent } from '../services/chat/ChatStreamManager'
+import { ChatStreamManager } from '../services/chat/ChatStreamManager'
+import type { ChatTurnEvent } from '../../shared/types/chat'
 import { queriesTurnStore } from '../services/chat/turnStore'
 import { validateAndCleanMessages } from '../utils/messageValidator'
 import Logger from '../../shared/utils/logger'
@@ -13,68 +14,14 @@ import type { Citation, CitationContext } from '../../shared/types/citation'
 import { ChatSchemas, validate } from './validation'
 
 /**
- * The manager's events, put on the wire in exactly the shape the renderer already
- * receives. Changing that shape is #141's job; this PR must not.
+ * One channel carries everything a turn has to say.
+ *
+ * The event goes over as it is: the envelope already carries the identity and the
+ * sequence, and its payload is the SDK's own event, which this layer has no business
+ * reading — that is what made the old reduced protocol drop events it did not know
+ * (#141).
  */
-function forwardToRenderer(sender: WebContents, event: ChatStreamEvent): void {
-  const { messageId } = event
-
-  switch (event.type) {
-    case 'text-delta':
-      sender.send('message-chunk', { messageId, type: 'text-delta', content: event.content })
-      break
-
-    case 'reasoning-start':
-      sender.send('message-chunk', {
-        messageId,
-        type: 'reasoning-start',
-        reasoningId: event.reasoningId
-      })
-      break
-
-    case 'reasoning-delta':
-      sender.send('message-chunk', {
-        messageId,
-        type: 'reasoning-delta',
-        content: event.content,
-        reasoningId: event.reasoningId
-      })
-      break
-
-    case 'reasoning-end':
-      sender.send('message-chunk', {
-        messageId,
-        type: 'reasoning-end',
-        reasoningId: event.reasoningId
-      })
-      break
-
-    case 'finish':
-      sender.send('message-chunk', {
-        messageId,
-        type: 'finish',
-        // 这一个 chunk 的 metadata 没有读取方（renderer 只读 `messageMetadata`），
-        // 所以只带终态原因与用量；provider 的事实另有 finish_reason 列。
-        metadata: { finishReason: event.finishReason, usage: event.usage },
-        // The renderer's in-memory message never sees the DB row written before
-        // streaming, so the persisted provenance rides along here or the answer
-        // loses its citations until the session is reloaded.
-        messageMetadata: event.messageMetadata
-      })
-      break
-
-    case 'error':
-      sender.send('message-error', { messageId, error: event.error })
-      break
-
-    case 'session-auto-switched':
-      sender.send('session-auto-switched', {
-        oldSessionId: event.sessionId,
-        newSessionId: event.newSessionId
-      })
-      break
-  }
-}
+const TURN_EVENT_CHANNEL = 'chat:turn-event'
 
 /**
  * Register chat-related IPC Handlers
@@ -229,7 +176,7 @@ export function registerChatHandlers(
       sources: answerSources,
       citations: answerCitations,
       citationContexts,
-      emit: (streamEvent) => forwardToRenderer(event.sender, streamEvent)
+      emit: (turnEvent: ChatTurnEvent) => event.sender.send(TURN_EVENT_CHANNEL, turnEvent)
     })
 
     // Return messageId immediately so frontend can continue

@@ -1,73 +1,64 @@
-import type { APIMessage, ChatMessageMetadata, ChatTokenUsage } from '../../../shared/types/chat'
-import type { ChatExecutionOutcome } from '../../../shared/types/chat'
-import type { AnswerSource, RetrievalStatus } from '../../../shared/types/chat'
+import { readUIMessageStream } from 'ai'
+import type { UIMessage, UIMessageChunk } from 'ai'
+import type {
+  APIMessage,
+  AnswerSource,
+  ChatExecutionOutcome,
+  ChatMessageMetadata,
+  ChatTokenUsage,
+  ChatTurnEvent,
+  RetrievalStatus
+} from '../../../shared/types/chat'
 import type { Citation, CitationContext } from '../../../shared/types/citation'
 import { classifyTerminal, failedOutcome } from '../../../shared/utils/chatExecution'
 import { resolveCitations } from '../../../shared/utils/citationResolution'
+import { isTerminalChunk, messageReasoning, messageText } from '../../../shared/utils/uiMessage'
 import { estimateTokens } from '../../../shared/utils/tokenEstimate'
 import Logger from '../../../shared/utils/logger'
 import { ChatExecution } from './ChatExecution'
-import type { ChatStreamHandlers, ModelClient } from '../../models/ModelClient'
+import type { ModelClient } from '../../models/ModelClient'
 import type { SessionAutoSwitchService } from '../SessionAutoSwitchService'
 
 /**
- * The Main process owns the turn (#140).
+ * The Main process owns the turn (#140), and the wire carries the SDK's own events
+ * (#141).
  *
- * Before this, the live state of every turn was an `AbortController` in a `Map`
- * inside the `send-message` IPC handler, and everything else about it — the
- * accumulated text, the usage, whether it had ended — was a local variable in that
- * handler's closure. Nothing could be asked about a turn, and the decision about
- * what it *was* was smeared across four callbacks (#138).
+ * #140 gave a turn one owner: one entry per running turn, one place where it is
+ * settled, persisted and announced. This is the other half — what actually crosses
+ * the process boundary. Before, KnowNote flattened the SDK's event stream into a
+ * reduced protocol of its own (`text-delta | reasoning-delta | finish`) and the
+ * renderer re-assembled text and reasoning from it. That reduction is what made an
+ * `error` part silently disappear (#137) and it would have made every future SDK
+ * event type another silent drop.
  *
- * Now one object per turn lives here, and every ending goes through
- * `settleTurn` → `complete` in this file:
+ * Now the events are forwarded verbatim, and both sides assemble them with the
+ * SDK's own `readUIMessageStream`:
  *
- * - a stop the renderer asked for (`abort`),
- * - a stream that reported an error, ended, or just broke,
- * - a turn that could not start at all (no prompt, no chat model).
+ * ```text
+ * ModelClient.streamChat()          the SDK's UI event stream
+ *        │
+ *      tee()
+ *   ┌────┴──────────────────┐
+ *   ↓                       ↓
+ * forward + seq          readUIMessageStream
+ *   ↓                       ↓
+ * renderer               the persisted message
+ * ```
  *
- * That is what makes the epic's invariants hold rather than being conventions: the
- * terminal state is persisted before the renderer is told anything (invariant 4),
- * a turn that has ended is removed so a late signal cannot re-label it
- * (invariant 2), and a failed or stopped turn keeps the partial answer it had
- * (invariant 5).
+ * Three consequences worth stating, because each one is a decision:
  *
- * Not in this PR, deliberately: the chunk-stream protocol (#141) and the renderer
- * overlay (#142). The events forwarded here are exactly the ones the renderer
- * already receives.
+ * - **The answer is assembled once, here, by the SDK.** Nothing re-derives it from
+ *   deltas, which is the epic's sixth invariant.
+ * - **The terminal chunks (`finish`, `error`, `abort`) are not forwarded.** The
+ *   manager owns the terminal statement, and it emits `outcome` *after* the turn is
+ *   persisted (#138 invariant 4). Everything those chunks carried — the reason, the
+ *   error message — is on that event, so the reader loses nothing.
+ * - **A stop cancels the request.** The execution's signal is what `streamChat` is
+ *   given, so `abort` now stops the provider call rather than only recording that it
+ *   was stopped.
  */
 
-/**
- * What the turn has to tell the outside world. Deliberately not Electron-shaped:
- * the manager says what happened, the IPC layer decides how that is put on the
- * wire.
- */
-type ChatStreamEventBody =
-  | { type: 'text-delta'; content: string }
-  | { type: 'reasoning-start'; reasoningId?: string }
-  | { type: 'reasoning-delta'; content: string; reasoningId?: string }
-  | { type: 'reasoning-end'; reasoningId?: string }
-  | {
-      type: 'finish'
-      finishReason?: string
-      usage?: ChatTokenUsage
-      /** The provenance the renderer's in-memory message has not seen yet. */
-      messageMetadata: ChatMessageMetadata
-    }
-  | { type: 'error'; error: string }
-  /** Not about the stream, but it is this turn's ending that triggers it. */
-  | { type: 'session-auto-switched'; sessionId: string; newSessionId: string }
-
-/** Every event is about exactly one message, which is what the wire needs. */
-export type ChatStreamEvent = { messageId: string } & ChatStreamEventBody
-
-/**
- * The persistence a turn needs, as a port rather than a direct `queries` import.
- *
- * The lifecycle is the part worth testing — "chunks in, one persisted record out" —
- * and four methods are what makes that possible without a database or Electron.
- * `queriesTurnStore` below is the real implementation.
- */
+/** What the turn's persistence needs, as a port: see `turnStore.ts`. */
 export interface ChatTurnStore {
   createTurn(sessionId: string): { id: string }
   saveTurnMetadata(messageId: string, metadata: ChatMessageMetadata): void
@@ -94,13 +85,23 @@ export interface ChatTurnRequest {
   citations: Citation[]
   /** Bounds for validating the `[n]` markers the answer may use (#70). */
   citationContexts: CitationContext[]
-  emit: (event: ChatStreamEvent) => void
+  emit: (event: ChatTurnEvent) => void
 }
 
 interface TurnEntry {
   execution: ChatExecution
   request: ChatTurnRequest
   baseMetadata: ChatMessageMetadata
+  /** The answer, as the SDK assembled it. The only place it accumulates. */
+  message?: UIMessage
+  /** The provider's terminal reason, when it named one. */
+  finishReason?: string
+  /** What the provider reported on the terminal chunk. */
+  usage?: ChatTokenUsage
+  /** The message of an `error` chunk, when the provider reported one mid-stream. */
+  streamError?: string
+  /** Monotonic per execution, so a consumer can detect a gap. */
+  seq: number
 }
 
 export class ChatStreamManager {
@@ -145,7 +146,7 @@ export class ChatStreamManager {
       notebookId: request.notebookId
     })
 
-    const entry: TurnEntry = { execution, request, baseMetadata }
+    const entry: TurnEntry = { execution, request, baseMetadata, seq: 0 }
     this.turns.set(execution.id, entry)
     this.turnIdByMessageId.set(execution.messageId, execution.id)
 
@@ -163,15 +164,14 @@ export class ChatStreamManager {
       return execution
     }
 
-    void this.run(entry, request)
+    void this.run(entry)
 
     return execution
   }
 
   /** The running turn for a message, which is the identity the renderer knows. */
   getByMessageId(messageId: string): ChatExecution | undefined {
-    const executionId = this.turnIdByMessageId.get(messageId)
-    return executionId === undefined ? undefined : this.turns.get(executionId)?.execution
+    return this.entryByMessageId(messageId)?.execution
   }
 
   /**
@@ -184,8 +184,9 @@ export class ChatStreamManager {
     const entry = this.entryByMessageId(messageId)
     if (!entry) return false
 
-    // Recording the outcome before cancelling upstream is the point: the
-    // AbortError that comes back must not get to decide what this turn was.
+    // Recording the outcome before cancelling is the point: the AbortError that
+    // comes back must not get to decide what this turn was. Cancelling the signal
+    // the provider call was given is what makes the stop real (#141).
     const settled = entry.execution.abort(reason)
     if (!settled) return false
 
@@ -198,79 +199,111 @@ export class ChatStreamManager {
     return executionId === undefined ? undefined : this.turns.get(executionId)
   }
 
-  /**
-   * Tell the outside world something about a running turn.
-   *
-   * The message id is attached here rather than by the caller, so a request can
-   * emit during `start()` — the turns that cannot begin at all — without the
-   * caller needing the execution it is still being constructed from.
-   */
-  private forward(entry: TurnEntry, event: ChatStreamEventBody): void {
-    entry.request.emit({ messageId: entry.execution.messageId, ...event })
-  }
-
-  private async run(entry: TurnEntry, request: ChatTurnRequest): Promise<void> {
+  private async run(entry: TurnEntry): Promise<void> {
+    const { execution, request } = entry
     const client = request.client
     if (!client) return
 
     try {
-      await client.sendMessageStream(request.messages, this.handlersFor(entry))
+      const { events } = client.streamChat(request.messages, { signal: execution.signal })
+      const [toRenderer, toAssemble] = events.tee()
+
+      await Promise.all([
+        this.forward(entry, toRenderer),
+        // The SDK assembles, and nothing here re-derives the message from deltas.
+        //
+        // Kept on the entry as each snapshot arrives rather than assigned once at the
+        // end: a turn can be stopped or fail while this branch is still running, and
+        // the part of the answer that had arrived is what gets persisted (#138
+        // invariant 5).
+        (async () => {
+          for await (const snapshot of readUIMessageStream({ stream: toAssemble })) {
+            entry.message = snapshot
+          }
+        })()
+      ])
     } catch (error) {
-      // `sendMessageStream` reports through its handlers; a throw here means the
-      // wiring itself failed, and the turn must not be left running.
+      // A transport error arrives as a rejection rather than as an event. The
+      // partial answer is kept, and the turn ends as a failure.
       this.settleTurn(entry, failedOutcome((error as Error).message, 'error'))
+      return
+    }
+
+    // The stream ended without being stopped. What that means is `classifyTerminal`'s
+    // decision: a `finish` chunk's reason, or — when no terminal chunk arrived at all
+    // — an EOF, which is not success (#138 invariant 1).
+    this.settleTurn(entry, this.outcomeFor(entry))
+  }
+
+  /**
+   * Forward the events, and record the ones that end the turn.
+   *
+   * The forwarded sequence is the renderer's only view of the stream, so it stops
+   * the moment the turn is settled: after a stop, nothing else belongs on the wire.
+   */
+  private async forward(entry: TurnEntry, stream: ReadableStream<UIMessageChunk>): Promise<void> {
+    const reader = stream.getReader()
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        if (!value) continue
+
+        if (entry.execution.isSettled) break
+
+        if (isTerminalChunk(value)) {
+          this.recordTerminalChunk(entry, value)
+          continue
+        }
+
+        entry.execution.begin()
+        entry.seq += 1
+        entry.request.emit({
+          type: 'chunk',
+          executionId: entry.execution.id,
+          messageId: entry.execution.messageId,
+          seq: entry.seq,
+          event: value
+        })
+      }
+    } finally {
+      reader.releaseLock()
     }
   }
 
-  private handlersFor(entry: TurnEntry): ChatStreamHandlers {
-    const { execution } = entry
-
-    return {
-      onChunk: (chunk) => {
-        const { metadata, content, done } = chunk
-
-        if (metadata?.reasoningStart) {
-          this.forward(entry, { type: 'reasoning-start', reasoningId: metadata.reasoningId })
-          return
-        }
-        if (metadata?.isReasoning) {
-          execution.appendReasoning(content)
-          this.forward(entry, {
-            type: 'reasoning-delta',
-            content,
-            reasoningId: metadata.reasoningId
-          })
-          return
-        }
-        if (metadata?.reasoningEnd) {
-          this.forward(entry, { type: 'reasoning-end', reasoningId: metadata.reasoningId })
-          return
-        }
-        if (content) {
-          execution.appendText(content)
-          this.forward(entry, { type: 'text-delta', content })
-          return
-        }
-
-        if (!done) return
-
-        // The terminal chunk. What it means for the turn is `classifyTerminal`'s
-        // decision, and the reason and usage are recorded with it either way.
-        this.settleTurn(entry, classifyTerminal(metadata?.finishReason), {
-          finishReason: metadata?.finishReason,
-          usage: metadata?.usage
-        })
-      },
-      onError: (error, reason) => {
-        this.settleTurn(entry, failedOutcome(error.message, reason))
-      },
-      onAbort: () => {
-        // The stream noticed the cancel. Either `abort()` already settled this
-        // turn — in which case this is noise — or something else cancelled the
-        // signal, which is still a stop.
-        this.settleTurn(entry, failedOutcome('The turn was stopped', 'error'))
-      }
+  /**
+   * Keep what a terminal chunk carried, without forwarding it.
+   *
+   * The renderer hears about the end from the manager's `outcome` event, after the
+   * write, so a `finish` chunk reaching it first would be a claim the database has
+   * not made yet.
+   */
+  private recordTerminalChunk(entry: TurnEntry, chunk: UIMessageChunk): void {
+    if (chunk.type === 'finish') {
+      entry.finishReason = chunk.finishReason
+      // Usage rides on the terminal chunk's metadata: the UI protocol has no chunk
+      // of its own for it (see `ModelClient.streamChat`).
+      const usage = (chunk.messageMetadata as { usage?: ChatTokenUsage } | undefined)?.usage
+      if (usage) entry.usage = usage
+      return
     }
+
+    if (chunk.type === 'error') {
+      entry.streamError = chunk.errorText
+      return
+    }
+
+    // `abort`. A stop the reader asked for has already settled this turn, so the
+    // outcome was decided; reaching here means the transport aborted on its own.
+    entry.streamError = 'The stream was aborted before the answer was complete.'
+  }
+
+  private outcomeFor(entry: TurnEntry): ChatExecutionOutcome {
+    if (entry.streamError !== undefined) {
+      return failedOutcome(entry.streamError, 'error')
+    }
+    return classifyTerminal(entry.finishReason)
   }
 
   /**
@@ -280,43 +313,50 @@ export class ChatStreamManager {
    * told it ended, in that order (#138 invariant 4): a write that fails must not
    * leave the transcript claiming a turn the database does not have.
    */
-  private settleTurn(
-    entry: TurnEntry,
-    outcome: ChatExecutionOutcome,
-    facts: { finishReason?: string; usage?: ChatTokenUsage } = {}
-  ): void {
+  private settleTurn(entry: TurnEntry, outcome: ChatExecutionOutcome): void {
     // `null` means the turn had already ended: a signal that arrived after the
     // decision, which must not re-label an answer the reader already has.
-    const settled = entry.execution.settle(outcome, facts)
+    const settled = entry.execution.settle(outcome)
     if (!settled) return
 
     this.complete(entry, settled)
   }
 
   private complete(entry: TurnEntry, settled: ChatExecutionOutcome): void {
-    const { execution, baseMetadata } = entry
+    const { execution, request, baseMetadata } = entry
 
-    const metadata = this.finalizeMetadata(entry, baseMetadata, settled)
+    const metadata = this.finalizeMetadata(entry, baseMetadata)
 
     this.deps.store.saveTurnContent(
       execution.messageId,
-      execution.content,
-      execution.reasoningContent
+      messageText(entry.message),
+      messageReasoning(entry.message)
     )
     this.deps.store.saveTurnMetadata(execution.messageId, metadata)
-    this.deps.store.saveTurnOutcome(
-      execution.messageId,
-      settled,
-      execution.finishReason,
-      execution.usage
-    )
+    this.deps.store.saveTurnOutcome(execution.messageId, settled, entry.finishReason, entry.usage)
 
-    // Removed before the announcement so a late signal from the stream cannot find
+    // Removed before the announcement so a late event from the stream cannot find
     // this turn and cannot start a second life for it.
     this.turns.delete(execution.id)
     this.turnIdByMessageId.delete(execution.messageId)
 
-    this.announce(entry, settled, metadata)
+    // The one thing the renderer is told about the ending, whatever the status:
+    // it is also what closes the consumer it assembled the answer with. A stop is
+    // included — #139 chose not to announce one because the renderer had already
+    // cleared its state, but a pushed stream needs an end, and `aborted` is not a
+    // claim that the answer finished.
+    entry.seq += 1
+    request.emit({
+      type: 'outcome',
+      executionId: execution.id,
+      messageId: execution.messageId,
+      seq: entry.seq,
+      outcome: settled,
+      finishReason: entry.finishReason,
+      usage: entry.usage,
+      messageMetadata: metadata
+    })
+
     void this.accountTokens(entry, settled)
   }
 
@@ -331,19 +371,18 @@ export class ChatStreamManager {
    */
   private finalizeMetadata(
     entry: TurnEntry,
-    baseMetadata: ChatMessageMetadata,
-    settled: ChatExecutionOutcome
+    baseMetadata: ChatMessageMetadata
   ): ChatMessageMetadata {
     const { execution, request } = entry
     let metadata: ChatMessageMetadata = baseMetadata
 
-    if (execution.finishReason !== undefined) {
-      // The copy the live renderer reads to explain a cut-off answer (#137). #142
-      // puts the terminal state on the wire and this stops being written twice.
-      metadata = { ...metadata, finishReason: execution.finishReason }
+    if (entry.finishReason !== undefined) {
+      // The copy the live renderer reads to explain a cut-off answer (#137). Until
+      // #142 renders the status itself, this is what the transcript shows.
+      metadata = { ...metadata, finishReason: entry.finishReason }
     }
 
-    const resolution = resolveCitations(execution.content, request.citationContexts)
+    const resolution = resolveCitations(messageText(entry.message), request.citationContexts)
     if (resolution.matches.length > 0) {
       const grounded: Citation[] = []
       for (const match of resolution.resolved) {
@@ -354,40 +393,11 @@ export class ChatStreamManager {
 
     Logger.debug(
       'ChatStreamManager',
-      `Turn ${execution.id} ended: ${settled.status}` +
-        (execution.finishReason === undefined ? '' : ` (${execution.finishReason})`)
+      `Turn ${execution.id} ended: ${execution.outcome?.status}` +
+        (entry.finishReason === undefined ? '' : ` (${entry.finishReason})`)
     )
 
     return metadata
-  }
-
-  /**
-   * Tell the renderer the turn ended — after it is in the database.
-   *
-   * `aborted` is not announced: stopping is something the renderer asked for, and
-   * it cleared its streaming state when it did. A second state change it did not
-   * ask for is how "stopped" used to look like "finished" (#139). The persisted
-   * status is what a reload reads (#142).
-   */
-  private announce(
-    entry: TurnEntry,
-    settled: ChatExecutionOutcome,
-    metadata: ChatMessageMetadata
-  ): void {
-    const { execution } = entry
-
-    if (settled.status === 'failed') {
-      this.forward(entry, { type: 'error', error: settled.error.message })
-      return
-    }
-    if (settled.status === 'aborted') return
-
-    this.forward(entry, {
-      type: 'finish',
-      finishReason: execution.finishReason,
-      usage: execution.usage,
-      messageMetadata: metadata
-    })
   }
 
   /**
@@ -397,12 +407,12 @@ export class ChatStreamManager {
    * usage falls back to the estimate rather than being skipped.
    */
   private async accountTokens(entry: TurnEntry, settled: ChatExecutionOutcome): Promise<void> {
-    const { execution, request } = entry
+    const { request } = entry
 
     try {
       const tokensUsed =
-        execution.usage?.totalTokens ??
-        estimateTokens(request.userContent) + estimateTokens(execution.content)
+        entry.usage?.totalTokens ??
+        estimateTokens(request.userContent) + estimateTokens(messageText(entry.message))
 
       Logger.debug(
         'ChatStreamManager',
@@ -415,7 +425,7 @@ export class ChatStreamManager {
       )
 
       if (newSessionId) {
-        this.forward(entry, {
+        request.emit({
           type: 'session-auto-switched',
           sessionId: request.sessionId,
           newSessionId

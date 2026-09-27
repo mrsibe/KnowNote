@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { createNote, getNotesByNotebook, getNoteById, updateNote, deleteNote } from '../db/queries'
 import { ConnectionManager } from '../models/ConnectionManager'
+import { collectMessageText } from '../../shared/utils/uiMessage'
 import Logger from '../../shared/utils/logger'
 import { NoteSchemas, validate } from './validation'
 
@@ -17,37 +18,23 @@ async function generateNoteTitle(
       return 'Untitled Note'
     }
 
-    let generatedTitle = ''
-
-    await client.sendMessageStream(
-      [
-        {
-          role: 'system',
-          content:
-            "You are a title generation assistant. Please generate a concise title based on the user's content, no more than 20 characters, without using quotes or other symbols to wrap it."
-        },
-        {
-          role: 'user',
-          content: `Please generate a title for the following content:\n\n${content.slice(0, 500)}`
-        }
-      ],
+    // One-shot generation: it has no turn to own, so there is no signal to pass and
+    // no handler to wire. This used to `await sendMessageStream(...)` and read the
+    // accumulated title straight away — which returned before a single token had
+    // arrived, so the title was almost always empty. Awaiting the assembled text is
+    // what the old callback shape could not express.
+    const { events } = client.streamChat([
       {
-        onChunk: (chunk) => {
-          generatedTitle += chunk.content
-        },
-        onError: (error) => {
-          Logger.error('NoteHandlers', 'Failed to generate title:', error)
-        },
-        // Never aborted here: this call owns a fresh controller and nothing
-        // cancels it, so an abort would be a bug worth not swallowing.
-        onAbort: () => {
-          Logger.warn('NoteHandlers', 'Title generation was aborted')
-        },
-        onComplete: () => {
-          // Complete
-        }
+        role: 'system',
+        content:
+          "You are a title generation assistant. Please generate a concise title based on the user's content, no more than 20 characters, without using quotes or other symbols to wrap it."
+      },
+      {
+        role: 'user',
+        content: `Please generate a title for the following content:\n\n${content.slice(0, 500)}`
       }
-    )
+    ])
+    const generatedTitle = await collectMessageText(events)
 
     return generatedTitle.trim() || 'Untitled Note'
   } catch (error) {
