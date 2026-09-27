@@ -69,6 +69,7 @@ export class ModelClient {
     const modelId = this.connection.modelId
 
     ;(async () => {
+      let streamFailed = false
       try {
         Logger.debug('ModelClient', `Streaming with model: ${modelId}`)
 
@@ -86,6 +87,11 @@ export class ModelClient {
             Logger.debug('ModelClient', 'Stream aborted by user')
             break
           }
+
+          // The turn already ended when the provider reported a failure inside the
+          // stream. Keep draining so the SDK's own stream state settles, but emit
+          // nothing further: the error, not a completion, is the outcome.
+          if (streamFailed) continue
 
           switch (part.type) {
             case 'reasoning-start':
@@ -115,8 +121,29 @@ export class ModelClient {
             case 'text-delta':
               onChunk({ content: part.text, done: false })
               break
+
+            // `fullStream` only *throws* the errors that stop the stream, such as
+            // network errors; a provider that reports a failure inside a
+            // streaming response (rate limit, upstream 5xx, content filter)
+            // arrives here as an `error` part instead. Ignoring that part meant
+            // the loop fell through to the `done` chunk below, so a broken stream
+            // was reported to the renderer — and persisted — as an answer that
+            // finished normally, with the truncated text as its content. What the
+            // reader saw was the answer stopping for no stated reason.
+            case 'error': {
+              streamFailed = true
+              const failure =
+                part.error instanceof Error ? part.error : new Error(String(part.error))
+              Logger.error('ModelClient', 'Stream error part:', failure)
+              onError(failure)
+              break
+            }
           }
         }
+
+        // The error went to `onError` when it arrived, so this must not also
+        // report a completed answer.
+        if (streamFailed) return
 
         const finalResult = await result
         const usage = await finalResult.usage

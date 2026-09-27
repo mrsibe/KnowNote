@@ -238,12 +238,21 @@ export function registerChatHandlers(
           // as a clickable source (#70). With no markers at all, keep the full
           // evidence set — the model simply did not use the marker convention.
           const resolution = resolveCitations(fullTextContent, citationContexts)
+
+          // Why the turn ended rides with the same metadata the citations do,
+          // because that is the copy the renderer keeps and the one written back
+          // to the database. Without it, an answer the output ceiling cut off is
+          // indistinguishable from a whole one (see `parseFinishReason`).
+          const finishReason = metadata?.finishReason
+          resolvedMetadata =
+            typeof finishReason === 'string' ? { ...answerMetadata, finishReason } : answerMetadata
+
           if (resolution.matches.length > 0) {
             const grounded: Citation[] = []
             for (const match of resolution.resolved) {
               if (match.citation) grounded.push(match.citation)
             }
-            resolvedMetadata = { ...answerMetadata, citations: grounded }
+            resolvedMetadata = { ...resolvedMetadata, citations: grounded }
           }
 
           // 发送完成事件

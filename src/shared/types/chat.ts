@@ -70,6 +70,15 @@ export interface ChatMessageMetadata {
    * points. Both are snapshots written when the answer was produced.
    */
   citations?: Citation[]
+  /**
+   * Why the model stopped, as the provider reported it (`stop`, `length`, …).
+   *
+   * `length` is the one the reader depends on: it means the output ceiling ended
+   * the answer, so what arrived is not the whole of it. Absent on messages
+   * written before the field existed — unknown, which is not the same statement
+   * as "finished".
+   */
+  finishReason?: string
   [key: string]: unknown
 }
 

@@ -16,7 +16,11 @@ import { useKnowledgeStore } from '../../../store/knowledgeStore'
 import { useNotebookStore } from '../../../store/notebookStore'
 import { useSourceAnchorNavigation } from '../../../hooks/useSourceAnchorNavigation'
 import { useUIStore } from '../../../store/uiStore'
-import { parseRetrievalStatus, sourcesForDisplay } from '../../../../../shared/utils/answerSources'
+import {
+  parseFinishReason,
+  parseRetrievalStatus,
+  sourcesForDisplay
+} from '../../../../../shared/utils/answerSources'
 import { parseCitations, sourceDocumentExists } from '../../../../../shared/utils/citations'
 import {
   citationToSourceAnchor,
@@ -46,6 +50,11 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   const focusedSource = useUIStore((state) => state.focusedSource)
   const documents = useKnowledgeStore((state) => state.documents)
   const documentsLoaded = useKnowledgeStore((state) => state.documentsLoaded)
+
+  // Whether the model was cut off at its output ceiling. An answer that ends this
+  // way is not a whole one, and until this was shown the reader had no way to tell
+  // it apart from a finished answer: the turn simply stopped mid-sentence.
+  const isTruncated = parseFinishReason(message.metadata) === 'length'
 
   // What this answer was built from. Read defensively: the metadata comes from the
   // database and may predate the shape (see shared/utils/answerSources.ts).
@@ -251,6 +260,11 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
               openSourceAnchor({ documentId, location: { documentId } }, origin)
             }
           />
+        )}
+        {/* Why the answer stops where it does, when the model did not decide to
+            stop there itself. */}
+        {message.content && !isStreaming && isTruncated && (
+          <p className="px-2 text-xs text-subtle-foreground">{t('chat:answerTruncated')}</p>
         )}
         {/* Action buttons - only shown when reply is complete and has content */}
         {message.content && !isStreaming && (
