@@ -1,30 +1,80 @@
-import { ipcMain, IpcMainInvokeEvent } from 'electron'
+import { ipcMain, IpcMainInvokeEvent, WebContents } from 'electron'
 import * as queries from '../db/queries'
 import { ConnectionManager } from '../models/ConnectionManager'
-import { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
+import type { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
 import { KnowledgeService } from '../services/KnowledgeService'
 import { buildRAGContext } from '../services/citations'
+import { ChatStreamManager, type ChatStreamEvent } from '../services/chat/ChatStreamManager'
+import { queriesTurnStore } from '../services/chat/turnStore'
 import { validateAndCleanMessages } from '../utils/messageValidator'
 import Logger from '../../shared/utils/logger'
-import { resolveCitations } from '../../shared/utils/citationResolution'
-import {
-  abortedOutcome,
-  classifyTerminal,
-  failedOutcome,
-  settleOutcome
-} from '../../shared/utils/chatExecution'
-import type {
-  AnswerSource,
-  ChatExecutionOutcome,
-  ChatMessageMetadata,
-  ChatTokenUsage,
-  RetrievalStatus
-} from '../../shared/types/chat'
+import type { AnswerSource, RetrievalStatus } from '../../shared/types/chat'
 import type { Citation, CitationContext } from '../../shared/types/citation'
 import { ChatSchemas, validate } from './validation'
 
-// 管理活跃的流式请求
-const activeStreams = new Map<string, AbortController>()
+/**
+ * The manager's events, put on the wire in exactly the shape the renderer already
+ * receives. Changing that shape is #141's job; this PR must not.
+ */
+function forwardToRenderer(sender: WebContents, event: ChatStreamEvent): void {
+  const { messageId } = event
+
+  switch (event.type) {
+    case 'text-delta':
+      sender.send('message-chunk', { messageId, type: 'text-delta', content: event.content })
+      break
+
+    case 'reasoning-start':
+      sender.send('message-chunk', {
+        messageId,
+        type: 'reasoning-start',
+        reasoningId: event.reasoningId
+      })
+      break
+
+    case 'reasoning-delta':
+      sender.send('message-chunk', {
+        messageId,
+        type: 'reasoning-delta',
+        content: event.content,
+        reasoningId: event.reasoningId
+      })
+      break
+
+    case 'reasoning-end':
+      sender.send('message-chunk', {
+        messageId,
+        type: 'reasoning-end',
+        reasoningId: event.reasoningId
+      })
+      break
+
+    case 'finish':
+      sender.send('message-chunk', {
+        messageId,
+        type: 'finish',
+        // 这一个 chunk 的 metadata 没有读取方（renderer 只读 `messageMetadata`），
+        // 所以只带终态原因与用量；provider 的事实另有 finish_reason 列。
+        metadata: { finishReason: event.finishReason, usage: event.usage },
+        // The renderer's in-memory message never sees the DB row written before
+        // streaming, so the persisted provenance rides along here or the answer
+        // loses its citations until the session is reloaded.
+        messageMetadata: event.messageMetadata
+      })
+      break
+
+    case 'error':
+      sender.send('message-error', { messageId, error: event.error })
+      break
+
+    case 'session-auto-switched':
+      sender.send('session-auto-switched', {
+        oldSessionId: event.sessionId,
+        newSessionId: event.newSessionId
+      })
+      break
+  }
+}
 
 /**
  * Register chat-related IPC Handlers
@@ -34,6 +84,14 @@ export function registerChatHandlers(
   sessionAutoSwitchService: SessionAutoSwitchService,
   knowledgeService: KnowledgeService
 ) {
+  // The Main process owns every running turn (#140). This handler assembles the
+  // prompt and hands the turn over; the lifecycle, the persistence and the
+  // notifications belong to the manager.
+  const streamManager = new ChatStreamManager({
+    store: queriesTurnStore,
+    sessionAutoSwitchService
+  })
+
   // ==================== Chat Session ====================
   ipcMain.handle(
     'create-chat-session',
@@ -95,137 +153,20 @@ export function registerChatHandlers(
     // 1. 保存用户消息
     queries.createMessage(sessionId, 'user', content)
 
-    // 2. 创建 assistant 消息行。这一行同时就是这一轮的记录（epic #138）：回合开始时
-    //    建立并标记 streaming，结束时写下唯一的终态。
-    const assistantMessage = queries.createMessage(
-      sessionId,
-      'assistant',
-      '',
-      undefined,
-      'streaming'
-    )
+    const session = queries.getSessionById(sessionId)
 
-    // 3. 获取历史消息作为上下文
+    // 2. 这一轮要发给模型的上下文
     const history = queries.getMessagesBySession(sessionId)
     let messages = history.map((m: any) => ({
       role: m.role as 'user' | 'assistant' | 'system',
       content: m.content
     }))
 
-    // 3.1 通用消息清理（过滤空消息和无效格式）
+    // 2.1 通用消息清理（过滤空消息和无效格式）。清空之后这一轮仍然是一次失败的 turn，
+    //     由 manager 落库成 failed；handler 不再自己判定终态。
     messages = validateAndCleanMessages(messages)
 
-    // ---- 这一轮的状态：一个回合恰好一个终态（epic #138） -------------------------
-    let fullTextContent = ''
-    let fullReasoningContent = ''
-    let usage: ChatTokenUsage | undefined
-    // 元数据要等检索之后才算得出来。早于检索的失败路径不写 metadata，
-    // 而不是往库里写一个空的。
-    let resolvedMetadata: ChatMessageMetadata | undefined
-
-    /**
-     * 这一轮唯一的决策点。
-     *
-     * 一个流可能送来好几个看起来像终态的信号：`error` part 之后跟着正常的 `finish`
-     * （SDK 在 error 之后仍然会继续送），或者一个合法的 `finish` 之后跟着传输层清理
-     * 阶段的异常。第一个才是这一轮的结论；后面那些是结论之后的噪音，把它们提上来
-     * 会把读者已经拿到的回答重新定性。
-     *
-     * @returns null 表示这一轮已经结束，这个信号必须忽略
-     */
-    let outcome: ChatExecutionOutcome | undefined
-    const settle = (next: ChatExecutionOutcome): ChatExecutionOutcome | null => {
-      const settled = settleOutcome(outcome, next)
-      if (settled === outcome) return null
-      outcome = settled
-      return settled
-    }
-
-    /**
-     * 所有结束方式都经过这里，顺序固定：先落库，再告诉 renderer（epic #138 invariant 4）。
-     * renderer 先收到「完成」而数据库写失败，等于界面宣称一个数据库里并不存在的回合。
-     */
-    const finishTurn = (settled: ChatExecutionOutcome, finishReason?: string): void => {
-      activeStreams.delete(assistantMessage.id)
-
-      queries.updateMessageContent(assistantMessage.id, fullTextContent, fullReasoningContent)
-      if (resolvedMetadata) {
-        queries.updateMessageMetadata(assistantMessage.id, resolvedMetadata)
-      }
-      queries.finishMessageTurn(assistantMessage.id, settled, finishReason, usage)
-
-      void accountTurnTokens(settled)
-      announceOutcome(settled, finishReason)
-    }
-
-    /** 回合结束后才做的事：token 记账与会话自动切换。失败只记日志，不影响终态。 */
-    const accountTurnTokens = async (settled: ChatExecutionOutcome): Promise<void> => {
-      try {
-        // 优先用 provider 报的用量；没有就估算（半截回答也是真的花了 token）
-        const tokensUsed =
-          usage?.totalTokens ??
-          SessionAutoSwitchService.estimateTokens(content) +
-            SessionAutoSwitchService.estimateTokens(fullTextContent)
-
-        Logger.debug(
-          'ChatHandlers',
-          `Tokens used in this conversation: ${tokensUsed} (${settled.status})`
-        )
-
-        const newSessionId = await sessionAutoSwitchService.recordTokenUsageAndCheckSwitch(
-          sessionId,
-          tokensUsed
-        )
-
-        if (newSessionId) {
-          event.sender.send('session-auto-switched', {
-            oldSessionId: sessionId,
-            newSessionId: newSessionId
-          })
-        }
-      } catch (error) {
-        Logger.error('ChatHandlers', 'Error while recording turn tokens:', error)
-      }
-    }
-
-    /**
-     * 终态落库之后才通知 renderer。
-     *
-     * `aborted` 不通知：停止是 renderer 自己发起的，它当时就已经把流式状态清掉了，
-     * 再送一个终态是它没有要求的第二次状态变更。落库的 status 留给重载路径（#142）。
-     */
-    const announceOutcome = (settled: ChatExecutionOutcome, finishReason?: string): void => {
-      if (settled.status === 'failed') {
-        event.sender.send('message-error', {
-          messageId: assistantMessage.id,
-          error: settled.error.message
-        })
-        return
-      }
-
-      if (settled.status === 'aborted') return
-
-      event.sender.send('message-chunk', {
-        messageId: assistantMessage.id,
-        type: 'finish',
-        // 这一个 chunk 的 metadata 没有任何读取方（renderer 只读 `messageMetadata`），
-        // 所以只带终态原因与用量；provider 的事实另有 finish_reason 列。
-        metadata: { finishReason, usage },
-        // The renderer's in-memory message never sees the DB row written before
-        // streaming, so the persisted provenance rides along here or the answer
-        // loses its citations until the session is reloaded.
-        messageMetadata: resolvedMetadata
-      })
-    }
-
-    // 验证清理后是否还有有效消息
-    if (messages.length === 0) {
-      const settled = settle(failedOutcome('No valid conversation history', 'error'))
-      if (settled) finishTurn(settled)
-      return assistantMessage.id
-    }
-
-    // 3.2 RAG 增强：检索相关知识并注入上下文
+    // 3. RAG 增强：检索相关知识并注入上下文
     // 只要 embedding 后端可用就启用 RAG（远程 connection 或内置本地模型）。
     // 以前这里用 `getEmbeddingClient()` 判断，它只认远程 connection，本地模型
     // 直接返回 null —— 于是默认配置下 RAG 被静默关闭，回答无依据也无引用。
@@ -237,7 +178,6 @@ export function registerChatHandlers(
     let citationContexts: CitationContext[] = []
     try {
       if (await knowledgeService.isEmbeddingAvailable()) {
-        const session = queries.getSessionById(sessionId)
         if (session?.notebookId) {
           const searchResults = await knowledgeService.search(session.notebookId, content, {
             topK: 3,
@@ -276,138 +216,37 @@ export function registerChatHandlers(
       Logger.warn('ChatHandlers', 'RAG search failed:', error)
     }
 
-    const answerMetadata: ChatMessageMetadata = {
-      ...(assistantMessage.metadata ?? {}),
+    // 4. 这一轮交给 ChatStreamManager（#140）。生命周期、唯一终态、落库与通知都在那里；
+    //    handler 只负责把 prompt 和检索结果准备好。
+    const client = await connectionManager.getChatClient()
+    const execution = streamManager.start({
+      sessionId,
+      notebookId: session?.notebookId,
+      userContent: content,
+      messages,
+      client,
       retrieval,
       sources: answerSources,
-      citations: answerCitations
-    }
-    queries.updateMessageMetadata(assistantMessage.id, answerMetadata)
-    // Rewritten at the end of the stream, once the answer text exists and its
-    // `[n]` markers can be resolved against the evidence.
-    resolvedMetadata = answerMetadata
-
-    // 4. 调用 Model Connection 流式生成
-    const client = await connectionManager.getChatClient()
-    if (!client) {
-      const settled = settle(
-        failedOutcome('Chat model not configured, please configure in settings', 'error')
-      )
-      if (settled) finishTurn(settled)
-      return assistantMessage.id
-    }
-
-    // 调用 ModelClient 流式生成,获取 AbortController（基于 AI SDK fullStream）
-    const abortController = await client.sendMessageStream(messages, {
-      // onChunk - 处理 AI SDK fullStream 的各种 part 类型
-      onChunk: (chunk) => {
-        const { metadata, content, done } = chunk
-
-        // 1. 推理块开始
-        if (metadata?.reasoningStart) {
-          event.sender.send('message-chunk', {
-            messageId: assistantMessage.id,
-            type: 'reasoning-start',
-            reasoningId: metadata.reasoningId
-          })
-        }
-        // 2. 推理增量内容
-        else if (metadata?.isReasoning) {
-          fullReasoningContent += content
-
-          event.sender.send('message-chunk', {
-            messageId: assistantMessage.id,
-            type: 'reasoning-delta',
-            content: content,
-            reasoningId: metadata.reasoningId
-          })
-        }
-        // 3. 推理块结束
-        else if (metadata?.reasoningEnd) {
-          event.sender.send('message-chunk', {
-            messageId: assistantMessage.id,
-            type: 'reasoning-end',
-            reasoningId: metadata.reasoningId
-          })
-        }
-        // 4. 普通文本内容（text-delta）
-        else if (content) {
-          fullTextContent += content
-
-          event.sender.send('message-chunk', {
-            messageId: assistantMessage.id,
-            type: 'text-delta',
-            content: content
-          })
-        }
-
-        if (!done) return
-
-        // 5. 终态信号。只有当 provider 明确说出它结束了，这一轮才算结束：
-        //    `for await` 跑完本身什么都证明不了（epic #138 invariant 1）。
-        usage = metadata?.usage
-        const finishReason = metadata?.finishReason
-        const settled = settle(classifyTerminal(finishReason))
-        // 已经结束过（例如 error part 先到）：这个信号只是结论之后的噪音
-        if (!settled) return
-
-        // An answer that marked sources gets only the grounded ones: a
-        // fabricated `[9]` or a quote that is not in its span must not survive
-        // as a clickable source (#70). With no markers at all, keep the full
-        // evidence set — the model simply did not use the marker convention.
-        const resolution = resolveCitations(fullTextContent, citationContexts)
-        resolvedMetadata = answerMetadata
-
-        if (finishReason !== undefined) {
-          // #137 的副本来着：流式中的那条消息只能从 metadata 读到原因，
-          // renderer 要靠它显示“被输出上限截断”。#142 把终态搬上协议之后，
-          // 这个副本就不再需要了。
-          resolvedMetadata = { ...resolvedMetadata, finishReason }
-        }
-
-        if (resolution.matches.length > 0) {
-          const grounded: Citation[] = []
-          for (const match of resolution.resolved) {
-            if (match.citation) grounded.push(match.citation)
-          }
-          resolvedMetadata = { ...resolvedMetadata, citations: grounded }
-        }
-
-        finishTurn(settled, finishReason)
-      },
-      onError: (error, reason) => {
-        const settled = settle(failedOutcome(error.message, reason))
-        if (!settled) return
-        finishTurn(settled)
-      },
-      onAbort: () => {
-        const settled = settle(abortedOutcome('user'))
-        if (!settled) return
-        finishTurn(settled)
-      }
+      citations: answerCitations,
+      citationContexts,
+      emit: (streamEvent) => forwardToRenderer(event.sender, streamEvent)
     })
 
-    // 存储 AbortController
-    activeStreams.set(assistantMessage.id, abortController)
-
     // Return messageId immediately so frontend can continue
-    return assistantMessage.id
+    return execution.messageId
   })
 
   // ==================== Abort Message ====================
   ipcMain.handle(
     'abort-message',
     validate(ChatSchemas.abortMessage, async (args) => {
-      const controller = activeStreams.get(args.messageId)
-
-      if (controller) {
-        Logger.info('ChatHandlers', `Aborting message: ${args.messageId}`)
-        controller.abort()
+      if (streamManager.abort(args.messageId, 'user')) {
+        Logger.info('ChatHandlers', `Aborted message: ${args.messageId}`)
         return { success: true }
-      } else {
-        Logger.warn('ChatHandlers', `No active stream found for message: ${args.messageId}`)
-        return { success: false, reason: 'No active stream found' }
       }
+
+      Logger.warn('ChatHandlers', `No active stream found for message: ${args.messageId}`)
+      return { success: false, reason: 'No active stream found' }
     })
   )
 }

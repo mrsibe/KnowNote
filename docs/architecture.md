@@ -46,7 +46,40 @@ Rules are in [Retrieval seam](#retrieval-seam).
 **Known legacy exception, not addressed here.** `noteHandlers.ts`,
 `notebookHandlers.ts` and part of `chatHandlers.ts` call `db/queries` directly instead
 of a service. That predates v1.4 and #60 deliberately leaves it alone: its non-goals
-forbid removing a legacy path before a real feature exercises the replacement.
+forbid removing a legacy path before a real feature exercises the replacement. The
+chat turn lifecycle is no longer one of them (#140) — it goes through
+`ChatStreamManager` — but the handler still reads sessions and history itself.
+
+### Chat execution
+
+Added by #140. A running turn used to be an `AbortController` in a `Map` inside the
+`send-message` IPC handler, with the rest of its state in that handler's closure:
+nothing could answer "what is this turn doing", and what a turn *was* was decided in
+four separate callbacks (#138).
+
+| Role | What it is |
+| --- | --- |
+| The turn's state and rules | `ChatExecution` — `src/main/services/chat/ChatExecution.ts`: accumulated answer, the provider's reason and usage, and the one terminal outcome |
+| The registry and the lifecycle | `ChatStreamManager` — `src/main/services/chat/ChatStreamManager.ts`: one entry per running turn, and the only place a turn is settled, persisted and announced |
+| Persistence port | `ChatTurnStore`, declared by the manager and implemented by `services/chat/turnStore.ts` over `db/queries` |
+
+The manager imports neither `db/queries` nor Electron. It reports what happened through
+an `emit` callback supplied per turn and writes through the store port, which is what
+lets `test/chatStreamManager.test.ts` drive a whole turn — chunks in, one persisted
+record out — without a database or an Electron process.
+
+Invariants, each tested in that file:
+
+1. A turn ends exactly once. The first terminal signal wins and every later one is
+dropped, including a stop that arrives after the answer is already complete.
+2. A stop is recorded **before** the signal is cancelled, so the `AbortError` that
+   comes back out of the SDK cannot re-label the turn.
+3. The terminal state is persisted **before** the renderer is told the turn ended.
+4. A failed or stopped turn keeps the partial answer it produced.
+
+What the renderer receives is not this seam's business yet: #141 replaces the reduced
+`message-chunk` / `message-error` events with the SDK's own chunk stream, and #142 makes
+the transcript render from the persisted status.
 
 ### Call paths
 
@@ -68,6 +101,12 @@ src/main/protocol/documentProtocol.ts
   → KnowledgeService.getDocumentLocalFilePath(id)   (Document, narrow query)
     → getDatabase()
       → documents.localFilePath
+
+send-message
+src/main/ipc/chatHandlers.ts
+  → ChatStreamManager.start()       (Application: one turn, one owner)
+    → ChatTurnStore                 (services/chat/turnStore.ts)
+      → db/queries
 ```
 
 The protocol path is the one #60 changed. It used to run its own
