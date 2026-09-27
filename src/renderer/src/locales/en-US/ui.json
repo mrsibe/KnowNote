@@ -33,6 +33,8 @@
   "resizeNotes": "Resize the notes panel. Use the arrow keys, Shift for a larger step, Home or End for the limits.",
   "addSource": "Add Source",
   "uploadFile": "Upload File",
+  "importFailed": "Import failed for {{name}}: {{error}}",
+  "unknownError": "unknown reason",
   "pasteText": "Paste Text",
   "importUrl": "Import URL",
   "importNote": "Import Note",

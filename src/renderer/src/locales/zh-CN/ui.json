@@ -32,6 +32,8 @@
   "resizeNotes": "调整笔记宽度。用方向键移动，按住 Shift 步长更大，Home / End 到两端。",
   "addSource": "添加来源",
   "uploadFile": "上传文件",
+  "importFailed": "「{{name}}」导入失败：{{error}}",
+  "unknownError": "未知原因",
   "pasteText": "粘贴文本",
   "importUrl": "导入网页",
   "importNote": "导入笔记",

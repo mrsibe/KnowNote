@@ -67,6 +67,29 @@ interface KnowledgeStore {
   selectFiles: () => Promise<string[]>
 }
 
+/**
+ * 一次导入尝试结束之后（成功或失败）收尾。
+ *
+ * 无论成败都要重新读列表：失败时这一行可能已经以 `status: 'failed'` 落库了，而只刷新成功
+ * 的路径会让这次失败在界面上**完全不存在** —— 面板保持空状态，用户以为上传成功了（#146）。
+ * 失败同时记进 `error`：抛异常和返回 `{success:false}` 都是失败，没道理只记前者。
+ */
+async function refreshAfterImport(
+  notebookId: string,
+  result: { success: boolean; error?: string },
+  set: (partial: Partial<KnowledgeStore>) => void,
+  get: () => KnowledgeStore
+): Promise<void> {
+  await get().loadDocuments(notebookId)
+  await get().loadStats(notebookId)
+
+  set({
+    isIndexing: false,
+    indexProgress: null,
+    error: result.success ? null : (result.error ?? null)
+  })
+}
+
 export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
   // 初始状态
   documents: [],
@@ -116,15 +139,12 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     set({ isIndexing: true, error: null })
     try {
       const result = await window.api.knowledge.addDocument(notebookId, options)
-      if (result.success) {
-        await get().loadDocuments(notebookId)
-        await get().loadStats(notebookId)
-      }
-      set({ isIndexing: false, indexProgress: null })
+      await refreshAfterImport(notebookId, result, set, get)
       return result
     } catch (error) {
-      set({ isIndexing: false, indexProgress: null, error: (error as Error).message })
-      return { success: false, error: (error as Error).message }
+      const message = (error as Error).message
+      await refreshAfterImport(notebookId, { success: false, error: message }, set, get)
+      return { success: false, error: message }
     }
   },
 
@@ -133,15 +153,12 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     set({ isIndexing: true, error: null })
     try {
       const result = await window.api.knowledge.addDocumentFromFile(notebookId, filePath)
-      if (result.success) {
-        await get().loadDocuments(notebookId)
-        await get().loadStats(notebookId)
-      }
-      set({ isIndexing: false, indexProgress: null })
+      await refreshAfterImport(notebookId, result, set, get)
       return result
     } catch (error) {
-      set({ isIndexing: false, indexProgress: null, error: (error as Error).message })
-      return { success: false, error: (error as Error).message }
+      const message = (error as Error).message
+      await refreshAfterImport(notebookId, { success: false, error: message }, set, get)
+      return { success: false, error: message }
     }
   },
 
@@ -150,15 +167,12 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     set({ isIndexing: true, error: null })
     try {
       const result = await window.api.knowledge.addDocumentFromUrl(notebookId, url)
-      if (result.success) {
-        await get().loadDocuments(notebookId)
-        await get().loadStats(notebookId)
-      }
-      set({ isIndexing: false, indexProgress: null })
+      await refreshAfterImport(notebookId, result, set, get)
       return result
     } catch (error) {
-      set({ isIndexing: false, indexProgress: null, error: (error as Error).message })
-      return { success: false, error: (error as Error).message }
+      const message = (error as Error).message
+      await refreshAfterImport(notebookId, { success: false, error: message }, set, get)
+      return { success: false, error: message }
     }
   },
 
@@ -167,15 +181,12 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     set({ isIndexing: true, error: null })
     try {
       const result = await window.api.knowledge.addNote(notebookId, noteId)
-      if (result.success) {
-        await get().loadDocuments(notebookId)
-        await get().loadStats(notebookId)
-      }
-      set({ isIndexing: false, indexProgress: null })
+      await refreshAfterImport(notebookId, result, set, get)
       return result
     } catch (error) {
-      set({ isIndexing: false, indexProgress: null, error: (error as Error).message })
-      return { success: false, error: (error as Error).message }
+      const message = (error as Error).message
+      await refreshAfterImport(notebookId, { success: false, error: message }, set, get)
+      return { success: false, error: message }
     }
   },
 

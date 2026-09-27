@@ -42,6 +42,9 @@ import { requestAppendExcerpt } from './note/appendExcerptCommand'
 // 添加来源类型
 type AddSourceType = 'file' | 'url' | 'text' | 'note'
 
+/** “/home/me/notes.pdf” → “notes.pdf”。渲染进程没有 node 的 `path`。 */
+const fileName = (filePath: string): string => filePath.split(/[\\/]/).pop() || filePath
+
 // 添加来源弹窗组件
 interface AddSourceModalProps {
   type: AddSourceType
@@ -451,6 +454,22 @@ export default function SourcePanel(): ReactElement {
     [notebookId, currentNote, createNote, t]
   )
 
+  /**
+   * 导入失败必须说出来（#146）。
+   *
+   * store 把失败当 **返回值**交回来（`{ success: false, error }`），不是抛异常；只要调用点
+   * 不检查它，失败就和成功长得一模一样：面板保持空状态，用户以为上传成功了。
+   *
+   * `reason` 用于代替主进程的原因（空笔记有专门的文案）。
+   */
+  const reportImportFailure = useCallback(
+    (name: string, result: { success: boolean; error?: string }, reason?: string): void => {
+      if (result.success) return
+      toast.error(t('importFailed', { name, error: reason ?? result.error ?? t('unknownError') }))
+    },
+    [t]
+  )
+
   // 处理文件上传
   const handleFileUpload = useCallback(async () => {
     if (!notebookId) return
@@ -463,10 +482,13 @@ export default function SourcePanel(): ReactElement {
 
     const files = await selectFiles()
     for (const filePath of files) {
-      await addDocumentFromFile(notebookId, filePath)
+      // 一个文件失败不能影响其余文件，但也不能被吞掉：
+      // 吞掉它，用户看到的就是“什么都没发生”
+      const result = await addDocumentFromFile(notebookId, filePath)
+      reportImportFailure(fileName(filePath), result)
     }
     setShowAddMenu(false)
-  }, [notebookId, hasEmbeddingModel, selectFiles, addDocumentFromFile, t])
+  }, [notebookId, hasEmbeddingModel, selectFiles, addDocumentFromFile, reportImportFailure, t])
 
   // 处理 URL 导入
   const handleUrlImport = useCallback(
@@ -480,10 +502,11 @@ export default function SourcePanel(): ReactElement {
         return
       }
 
-      await addDocumentFromUrl(notebookId, data.url)
+      const result = await addDocumentFromUrl(notebookId, data.url)
+      reportImportFailure(data.url, result)
       setModalType(null)
     },
-    [notebookId, hasEmbeddingModel, addDocumentFromUrl, t]
+    [notebookId, hasEmbeddingModel, addDocumentFromUrl, reportImportFailure, t]
   )
 
   // 处理文本粘贴
@@ -498,14 +521,15 @@ export default function SourcePanel(): ReactElement {
         return
       }
 
-      await addDocument(notebookId, {
+      const result = await addDocument(notebookId, {
         title: data.title,
         type: 'text',
         content: data.content
       })
+      reportImportFailure(data.title, result)
       setModalType(null)
     },
-    [notebookId, hasEmbeddingModel, addDocument, t]
+    [notebookId, hasEmbeddingModel, addDocument, reportImportFailure, t]
   )
 
   // 处理笔记导入
@@ -520,21 +544,15 @@ export default function SourcePanel(): ReactElement {
         return
       }
 
-      try {
-        await addNoteToKnowledge(notebookId, data.noteId)
-        setModalType(null)
-      } catch (error) {
-        // 检查是否是空笔记错误
-        const errorMessage = (error as Error).message || ''
-        if (errorMessage.toLowerCase().includes('empty')) {
-          alert(t('emptyNoteCannotImport'))
-        } else {
-          alert(errorMessage || t('embeddingFailed', { title: '' }))
-        }
-        setModalType(null)
-      }
+      const noteTitle = notes.find((note) => note.id === data.noteId)?.title ?? data.noteId
+      const result = await addNoteToKnowledge(notebookId, data.noteId)
+      // 空笔记是唯一需要换文案的原因，其余由主进程给出
+      const isEmpty = (result.error ?? '').toLowerCase().includes('empty')
+      reportImportFailure(noteTitle, result, isEmpty ? t('emptyNoteCannotImport') : undefined)
+
+      setModalType(null)
     },
-    [notebookId, hasEmbeddingModel, addNoteToKnowledge, t]
+    [notebookId, hasEmbeddingModel, addNoteToKnowledge, notes, reportImportFailure, t]
   )
 
   // 处理删除文档
