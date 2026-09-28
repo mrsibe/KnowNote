@@ -1,13 +1,23 @@
 import { ReactElement, useState } from 'react'
 import { ChevronDown, ChevronRight, FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { AnswerSource, RetrievalStatus } from '../../../../../shared/types/chat'
+import type {
+  AnswerSource,
+  RetrievalSnapshot,
+  RetrievalStatus
+} from '../../../../../shared/types/chat'
+import type { Citation } from '../../../../../shared/types/citation'
+import { citedChunkIds, countCitedSources } from '../../../../../shared/utils/answerSources'
 import { Button } from '../../ui/button'
 
 interface AnswerSourcesProps {
   sources: AnswerSource[]
   /** `null` for a message written before this was recorded — claim nothing. */
   retrieval: RetrievalStatus | null
+  /** The answer's citations; used to mark which retrieved passages were actually cited (#157). */
+  citations: Citation[]
+  /** The retrieval parameters for this turn; `null` for older messages (#157). */
+  snapshot: RetrievalSnapshot | null
   onShowDocument: (documentId: string, origin: HTMLElement) => void
 }
 
@@ -27,10 +37,16 @@ interface AnswerSourcesProps {
  *
  * A message with no recorded status renders nothing at all: an older message is
  * "unknown", not "ungrounded".
+ *
+ * Since #157 the panel also answers *why this and not that*: the turn's retrieval
+ * parameters (strategy, effective scope, topK, latency) and, per passage, whether
+ * the answer actually cited it. `sources` is "retrieved"; `citations` is "used".
  */
 export default function AnswerSources({
   sources,
   retrieval,
+  citations,
+  snapshot,
   onShowDocument
 }: AnswerSourcesProps): ReactElement | null {
   const { t } = useTranslation('chat')
@@ -38,53 +54,93 @@ export default function AnswerSources({
 
   if (retrieval === null) return null
 
-  if (retrieval === 'failed') {
-    return <p className="px-2 text-xs text-subtle-foreground">{t('answerRetrievalFailed')}</p>
-  }
+  const citedChunks = citedChunkIds(citations)
+  const citedCount = countCitedSources(sources, citations)
 
-  if (sources.length === 0) {
-    return <p className="px-2 text-xs text-subtle-foreground">{t('answerNotGrounded')}</p>
-  }
+  const summary = ((): string | null => {
+    if (!snapshot) return null
+    const documentIds = snapshot.scope.documentIds
+    const scope =
+      documentIds && documentIds.length > 0
+        ? t('scopeSelectedSourcesShort', { count: documentIds.length })
+        : t('scopeAllSourcesShort')
+
+    return t('retrievalSummary', {
+      strategy: snapshot.strategy,
+      scope,
+      topK: snapshot.topK,
+      ms: Math.round(snapshot.durationMs),
+      retrieved: sources.length,
+      cited: citedCount
+    })
+  })()
 
   return (
     <div className="px-2">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setIsOpen((open) => !open)}
-        aria-expanded={isOpen}
-        className="h-auto gap-1 px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-      >
-        {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        {isOpen ? t('hideSources') : t('sourcesUsed', { count: sources.length })}
-      </Button>
+      {summary && <p className="mb-1 text-xs text-subtle-foreground">{summary}</p>}
 
-      {isOpen && (
-        <ul className="mt-2 space-y-2">
-          {sources.map((source) => (
-            <li key={`${source.documentId}:${source.chunkId}`} className="rounded-md bg-muted p-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
-                  <FileText className="w-3 h-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate">{source.documentTitle}</span>
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(event) => onShowDocument(source.documentId, event.currentTarget)}
-                  className="h-auto shrink-0 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  {t('showDocument')}
-                </Button>
-              </div>
-              {/* The passage as it was retrieved, quoted rather than summarised:
-                  this is the evidence, so it is shown verbatim. */}
-              <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
-                {source.content}
-              </p>
-            </li>
-          ))}
-        </ul>
+      {retrieval === 'failed' && (
+        <p className="text-xs text-subtle-foreground">{t('answerRetrievalFailed')}</p>
+      )}
+
+      {retrieval !== 'failed' && sources.length === 0 && (
+        <p className="text-xs text-subtle-foreground">{t('answerNotGrounded')}</p>
+      )}
+
+      {retrieval !== 'failed' && sources.length > 0 && (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsOpen((open) => !open)}
+            aria-expanded={isOpen}
+            className="h-auto gap-1 px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+            {isOpen ? t('hideSources') : t('sourcesUsed', { count: sources.length })}
+          </Button>
+
+          {isOpen && (
+            <ul className="mt-2 space-y-2">
+              {sources.map((source) => {
+                const cited = citedChunks.has(source.chunkId)
+                return (
+                  <li
+                    key={`${source.documentId}:${source.chunkId}`}
+                    className="rounded-md bg-muted p-2"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-foreground">
+                        <FileText className="w-3 h-3 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{source.documentTitle}</span>
+                      </span>
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="text-xs text-subtle-foreground">
+                          {cited ? t('sourceCited') : t('sourceRetrievedNotCited')}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(event) =>
+                            onShowDocument(source.documentId, event.currentTarget)
+                          }
+                          className="h-auto shrink-0 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          {t('showDocument')}
+                        </Button>
+                      </span>
+                    </div>
+                    {/* The passage as it was retrieved, quoted rather than summarised:
+                        this is the evidence, so it is shown verbatim. */}
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">
+                      {source.content}
+                    </p>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </>
       )}
     </div>
   )

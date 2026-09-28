@@ -17,7 +17,11 @@ import { useKnowledgeStore } from '../../../store/knowledgeStore'
 import { useNotebookStore } from '../../../store/notebookStore'
 import { useSourceAnchorNavigation } from '../../../hooks/useSourceAnchorNavigation'
 import { useUIStore } from '../../../store/uiStore'
-import { parseRetrievalStatus, sourcesForDisplay } from '../../../../../shared/utils/answerSources'
+import {
+  parseRetrievalStatus,
+  parseRetrievalSnapshot,
+  sourcesForDisplay
+} from '../../../../../shared/utils/answerSources'
 import { parseCitations, sourceDocumentExists } from '../../../../../shared/utils/citations'
 import { classifyClaimSupport } from '../../../../../shared/utils/claimSupport'
 import {
@@ -65,6 +69,8 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   // database and may predate the shape (see shared/utils/answerSources.ts).
   const answerSources = sourcesForDisplay(message.metadata)
   const retrieval = parseRetrievalStatus(message.metadata)
+  // How this turn retrieved (#157): strategy, effective scope, topK, latency.
+  const retrievalSnapshot = parseRetrievalSnapshot(message.metadata)
 
   // Structured citations (#69) mapped back to the `[n]` markers in the answer.
   const citations = parseCitations(message.metadata)
@@ -273,6 +279,8 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
           <AnswerSources
             sources={answerSources}
             retrieval={retrieval}
+            citations={citations}
+            snapshot={retrievalSnapshot}
             onShowDocument={(documentId, origin) =>
               openSourceAnchor({ documentId, location: { documentId } }, origin)
             }

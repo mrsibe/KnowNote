@@ -7,6 +7,7 @@ import type {
   ChatMessageMetadata,
   ChatTokenUsage,
   ChatTurnEvent,
+  RetrievalSnapshot,
   RetrievalStatus
 } from '../../../shared/types/chat'
 import type { Citation, CitationContext } from '../../../shared/types/citation'
@@ -111,6 +112,8 @@ export interface ChatTurnRequest {
   retrieval: RetrievalStatus
   sources: AnswerSource[]
   citations: Citation[]
+  /** 本次检索的参数快照（#157）；未检索或旧调用方时为 undefined。 */
+  retrievalSnapshot?: RetrievalSnapshot
   /** Bounds for validating the `[n]` markers the answer may use (#70). */
   citationContexts: CitationContext[]
   emit: (event: ChatTurnEvent) => void
@@ -205,6 +208,9 @@ export class ChatStreamManager {
       sources: request.sources,
       citations: request.citations
     }
+    // The retrieval parameters are part of what an answer was built from, so they
+    // are written with the sources, before the model is called (#157).
+    if (request.retrievalSnapshot) baseMetadata.retrievalSnapshot = request.retrievalSnapshot
     // Written before the model is called: what an answer was built from is known
     // then, and a reload mid-turn should not show an answer with no provenance.
     this.deps.store.saveTurnMetadata(turn.id, baseMetadata)

@@ -1,10 +1,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  citedChunkIds,
+  countCitedSources,
   parseAnswerSources,
+  parseRetrievalSnapshot,
   parseRetrievalStatus,
   sourcesForDisplay
 } from '../src/shared/utils/answerSources.ts'
+import type { Citation } from '../src/shared/types/citation.ts'
 
 /**
  * `chat_messages.metadata` is an open JSON bag written by whichever version of the
@@ -20,6 +24,15 @@ const source = (over: Record<string, unknown> = {}) => ({
   chunkId: 'chunk_1',
   content: 'The Forbidden City opens at 08:30.',
   ...over
+})
+
+const citation = (chunkId: string, index = 1): Citation => ({
+  index,
+  documentId: 'doc_1',
+  documentTitle: 'Beijing guide',
+  chunkId,
+  quote: 'a passage',
+  score: 0.8
 })
 
 test('a well-formed source survives the round trip', () => {
@@ -125,4 +138,80 @@ test('what to display per status', () => {
   // nothing when the status is unknown).
   assert.equal(sourcesForDisplay({ sources: [source()] }).length, 1)
   assert.deepEqual(sourcesForDisplay(undefined), [])
+})
+
+/**
+ * Retrieval explainability (#157): the snapshot of how a turn retrieved. It is
+ * read back from the DB, so it is parsed defensively — a message with no snapshot
+ * is "not recorded", not "retrieved with default parameters".
+ */
+
+test('a retrieval snapshot round-trips', () => {
+  const snapshot = parseRetrievalSnapshot({
+    retrievalSnapshot: {
+      strategy: 'dense',
+      scope: { documentIds: ['doc_1', 'doc_2'] },
+      topK: 8,
+      threshold: 0.5,
+      durationMs: 42.4
+    }
+  })
+
+  assert.deepEqual(snapshot, {
+    strategy: 'dense',
+    scope: { documentIds: ['doc_1', 'doc_2'] },
+    topK: 8,
+    threshold: 0.5,
+    durationMs: 42.4
+  })
+})
+
+test('a snapshot without a scope means the whole notebook', () => {
+  const snapshot = parseRetrievalSnapshot({
+    retrievalSnapshot: { strategy: 'dense', scope: {}, topK: 5, durationMs: 3 }
+  })
+
+  assert.deepEqual(snapshot?.scope, {})
+  assert.equal(snapshot?.threshold, undefined)
+})
+
+test('a snapshot that cannot be rendered is dropped, not guessed', () => {
+  for (const bad of [
+    undefined,
+    null,
+    {},
+    { retrievalSnapshot: null },
+    { retrievalSnapshot: {} },
+    { retrievalSnapshot: { strategy: 'dense' } },
+    { retrievalSnapshot: { topK: 5, durationMs: 1 } },
+    { retrievalSnapshot: { strategy: '', topK: 5, durationMs: 1 } }
+  ]) {
+    assert.equal(parseRetrievalSnapshot(bad), null, JSON.stringify(bad))
+  }
+})
+
+test('non-string document ids are dropped from the snapshot scope', () => {
+  const snapshot = parseRetrievalSnapshot({
+    retrievalSnapshot: {
+      strategy: 'dense',
+      scope: { documentIds: ['a', 2, 'b'] },
+      topK: 5,
+      durationMs: 1
+    }
+  })
+
+  assert.deepEqual(snapshot?.scope.documentIds, ['a', 'b'])
+})
+
+test('cited passages are the ones the answer actually used', () => {
+  const sources = [source(), source({ chunkId: 'chunk_2' }), source({ chunkId: 'chunk_3' })]
+  const citations = [citation('chunk_1', 1), citation('chunk_3', 2)]
+
+  assert.equal(countCitedSources(sources, citations), 2)
+  assert.deepEqual([...citedChunkIds(citations)].sort(), ['chunk_1', 'chunk_3'])
+
+  // A citation for a chunk that retrieval never returned must not make a source
+  // look cited.
+  assert.equal(countCitedSources(sources, [citation('chunk_missing', 9)]), 0)
+  assert.equal(countCitedSources([], citations), 0)
 })

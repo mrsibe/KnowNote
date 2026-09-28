@@ -1,4 +1,10 @@
-import type { AnswerSource, ChatMessageMetadata, RetrievalStatus } from '../types/chat'
+import type {
+  AnswerSource,
+  ChatMessageMetadata,
+  RetrievalSnapshot,
+  RetrievalStatus
+} from '../types/chat'
+import type { Citation } from '../types/citation'
 
 /**
  * Readers for `chat_messages.metadata`.
@@ -67,6 +73,65 @@ export const parseRetrievalStatus = (metadata: unknown): RetrievalStatus | null 
   if (!metadata || typeof metadata !== 'object') return null
   const raw = (metadata as ChatMessageMetadata).retrieval
   return RETRIEVAL_STATUSES.includes(raw as RetrievalStatus) ? (raw as RetrievalStatus) : null
+}
+
+/**
+ * 这条回答实际用了什么检索参数（#157）。
+ *
+ * 缺失或形状不对时返回 `null` —— 「没记录」和「记录了但没有范围」是不同的陈述，
+ * 不能拿默认值冒充后者。
+ */
+export const parseRetrievalSnapshot = (metadata: unknown): RetrievalSnapshot | null => {
+  if (!metadata || typeof metadata !== 'object') return null
+  const raw: unknown = (metadata as ChatMessageMetadata).retrievalSnapshot
+  if (!raw || typeof raw !== 'object') return null
+
+  const candidate = raw as Record<string, unknown>
+  if (!isNonEmptyString(candidate.strategy)) return null
+
+  const topK = toFiniteNumber(candidate.topK)
+  const durationMs = toFiniteNumber(candidate.durationMs)
+  if (topK === undefined || durationMs === undefined) return null
+
+  const snapshot: RetrievalSnapshot = {
+    strategy: candidate.strategy,
+    scope: {},
+    topK,
+    durationMs
+  }
+
+  const scope = candidate.scope
+  if (scope && typeof scope === 'object') {
+    const documentIds = (scope as Record<string, unknown>).documentIds
+    if (Array.isArray(documentIds)) {
+      snapshot.scope = {
+        documentIds: documentIds.filter((id): id is string => typeof id === 'string')
+      }
+    }
+  }
+
+  const threshold = toFiniteNumber(candidate.threshold)
+  if (threshold !== undefined) snapshot.threshold = threshold
+
+  return snapshot
+}
+
+/**
+ * A passage is "cited" when the answer's citations include its chunk (#157).
+ *
+ * `sources` is what retrieval returned; `citations` is what the answer actually used.
+ * One chunk can back several citations, so this is set membership, not a count.
+ */
+export const citedChunkIds = (citations: readonly Citation[]): Set<string> =>
+  new Set(citations.map((citation) => citation.chunkId))
+
+/** How many retrieved passages the answer actually cited (#157). */
+export const countCitedSources = (
+  sources: readonly AnswerSource[],
+  citations: readonly Citation[]
+): number => {
+  const cited = citedChunkIds(citations)
+  return sources.filter((source) => cited.has(source.chunkId)).length
 }
 
 /**

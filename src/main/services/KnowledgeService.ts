@@ -44,7 +44,13 @@ import {
 } from './blocks/documentBlocks'
 import { resolveChunkProvenance, type ChunkProvenance } from './chunkProvenance'
 import { DenseRetriever } from './retrieval'
-import type { EvidenceLocator, RetrievalRequest, RetrievalResult, Retriever } from './retrieval'
+import type {
+  EvidenceLocator,
+  RetrievalRequest,
+  RetrievalResult,
+  RetrievedEvidence,
+  Retriever
+} from './retrieval'
 import { WebFetchService } from './WebFetchService'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
@@ -97,6 +103,36 @@ export interface SearchResult {
  * 索引进度回调
  */
 export type IndexProgressCallback = (stage: string, progress: number) => void
+
+/**
+ * `RetrievedEvidence` → 兼容的 `SearchResult` 形状。
+ *
+ * 抽成纯函数是因为现在有两个调用点：legacy `search()`，以及 chat 的 RAG —— 后者直接
+ * 走 `retrieve()` 以拿到 trace（#157），再自己映射，而不是为了 trace 多检索一次。
+ */
+export function toSearchResults(
+  evidence: readonly RetrievedEvidence[],
+  options: { includeContent?: boolean } = {}
+): SearchResult[] {
+  const { includeContent = true } = options
+
+  return evidence.map((item) => {
+    const result: SearchResult = {
+      chunkId: item.chunkId,
+      documentId: item.documentId,
+      documentTitle: item.source.title,
+      documentType: item.source.type,
+      content: includeContent ? item.content : '',
+      score: item.score,
+      chunkIndex: item.chunkIndex,
+      locator: item.locator
+    }
+
+    if (item.metadata) result.metadata = item.metadata
+
+    return result
+  })
+}
 
 /**
  * 知识库服务
@@ -801,24 +837,7 @@ export class KnowledgeService {
     })
 
     // 2. 映射回兼容的 SearchResult 形状
-    return evidence.map((item) => {
-      const result: SearchResult = {
-        chunkId: item.chunkId,
-        documentId: item.documentId,
-        documentTitle: item.source.title,
-        documentType: item.source.type,
-        content: includeContent ? item.content : '',
-        score: item.score,
-        chunkIndex: item.chunkIndex,
-        locator: item.locator
-      }
-
-      if (item.metadata) {
-        result.metadata = item.metadata
-      }
-
-      return result
-    })
+    return toSearchResults(evidence, { includeContent })
   }
 
   /**

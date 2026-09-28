@@ -2,14 +2,14 @@ import { ipcMain, IpcMainInvokeEvent } from 'electron'
 import * as queries from '../db/queries'
 import { ConnectionManager } from '../models/ConnectionManager'
 import type { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
-import { KnowledgeService } from '../services/KnowledgeService'
+import { KnowledgeService, toSearchResults } from '../services/KnowledgeService'
 import { buildRAGContext } from '../services/citations'
 import { ChatStreamManager } from '../services/chat/ChatStreamManager'
 import type { ChatTurnEvent } from '../../shared/types/chat'
 import { queriesTurnStore } from '../services/chat/turnStore'
 import { validateAndCleanMessages } from '../utils/messageValidator'
 import Logger from '../../shared/utils/logger'
-import type { AnswerSource, RetrievalStatus } from '../../shared/types/chat'
+import type { AnswerSource, RetrievalSnapshot, RetrievalStatus } from '../../shared/types/chat'
 import type { Citation, CitationContext } from '../../shared/types/citation'
 import { parseRetrievalScope, scopeDocumentIds } from '../../shared/types/scope'
 import { ChatSchemas, validate } from './validation'
@@ -61,6 +61,7 @@ export function registerChatHandlers(
     citations: Citation[]
     citationContexts: CitationContext[]
     context: string
+    retrievalSnapshot?: RetrievalSnapshot
   }> => {
     const empty = {
       retrieval: 'none' as RetrievalStatus,
@@ -76,12 +77,21 @@ export function registerChatHandlers(
         return empty
       }
 
-      const searchResults = await knowledgeService.search(notebookId, query, {
+      // 直接走 `retrieve()` 而不是 `search()`：trace（#157）只有它有，用它再映射出
+      // SearchResult，不必为了记录参数多检索一次。
+      const { evidence, trace } = await knowledgeService.retrieve({
+        notebookId,
+        query,
         topK: 3,
         threshold: 0.5,
-        documentIds
+        filter: documentIds ? { documentIds } : undefined
       })
-      if (searchResults.length === 0) return empty
+
+      const searchResults = toSearchResults(evidence)
+      if (searchResults.length === 0) {
+        // 没有结果也是一个可解释的结果：scope、topK、耗时仍然有意义。
+        return { ...empty, retrievalSnapshot: trace }
+      }
 
       const { context, sources, citations, citationContexts } = buildRAGContext(searchResults)
       Logger.debug('ChatHandlers', `RAG: Found ${searchResults.length} relevant chunks for query`)
@@ -93,7 +103,8 @@ export function registerChatHandlers(
         // The citation's own candidate span is what a quote is checked against (#70),
         // built from the candidate, not re-derived from the chunk (#155).
         citationContexts,
-        context
+        context,
+        retrievalSnapshot: trace
       }
     } catch (error) {
       // A failed search must not block the answer; it changes what the answer is.
@@ -245,6 +256,7 @@ export function registerChatHandlers(
       sources: retrieved.sources,
       citations: retrieved.citations,
       citationContexts: retrieved.citationContexts,
+      retrievalSnapshot: retrieved.retrievalSnapshot,
       emit: (turnEvent: ChatTurnEvent) => event.sender.send(TURN_EVENT_CHANNEL, turnEvent)
     })
 
@@ -299,6 +311,7 @@ export function registerChatHandlers(
       sources: prompt.retrieved.sources,
       citations: prompt.retrieved.citations,
       citationContexts: prompt.retrieved.citationContexts,
+      retrievalSnapshot: prompt.retrieved.retrievalSnapshot,
       emit: (turnEvent: ChatTurnEvent) => event.sender.send(TURN_EVENT_CHANNEL, turnEvent)
     })
 
@@ -345,6 +358,7 @@ export function registerChatHandlers(
       sources: prompt.retrieved.sources,
       citations: prompt.retrieved.citations,
       citationContexts: prompt.retrieved.citationContexts,
+      retrievalSnapshot: prompt.retrieved.retrievalSnapshot,
       emit: (turnEvent: ChatTurnEvent) => event.sender.send(TURN_EVENT_CHANNEL, turnEvent)
     })
 

@@ -144,6 +144,23 @@ export type ChatTurnEvent =
   | { type: 'session-auto-switched'; sessionId: string; newSessionId: string }
 
 /**
+ * 一次回答实际用了什么检索参数（#157）。
+ *
+ * 这是**回答自己的快照**，不是 session 的当前 scope：用户改了 scope 之后，旧回答显示的
+ * 仍然是它当时被问的那个范围。它与 `RetrievalTrace`（检索层产出）同形，但定义在 shared，
+ * 因为要随 `chat_messages.metadata` 一起持久化并在渲染进程读取。
+ */
+export interface RetrievalSnapshot {
+  strategy: string
+  /** 空对象 = 整个 notebook。 */
+  scope: { documentIds?: string[] }
+  topK: number
+  /** 缺省表示该策略没有阈值，不是「阈值等于 0」。 */
+  threshold?: number
+  durationMs: number
+}
+
+/**
  * The structured part of `chat_messages.metadata`.
  *
  * The column is an open JSON bag, so the index signature is honest rather than a
@@ -155,6 +172,8 @@ export type ChatTurnEvent =
 export interface ChatMessageMetadata {
   sources?: AnswerSource[]
   retrieval?: RetrievalStatus
+  /** 本次检索用了什么参数（#157）：策略、生效范围、topK、耗时。 */
+  retrievalSnapshot?: RetrievalSnapshot
   /**
    * The structured provenance of this answer (#69). `sources` says *what* the
    * answer was built from; `citations` says *where* in the source each marker
