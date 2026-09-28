@@ -146,10 +146,20 @@ export const KnowledgeSchemas = {
     filePath: z.string().min(1, '文件路径不能为空')
   }),
 
-  // 批量/文件夹导入（#98）
+  // 批量/文件夹导入（#98），以及监听文件夹（#158）
   addFolder: z.object({
     notebookId: z.string().min(1, '笔记本 ID 不能为空'),
-    folderPath: z.string().min(1, '文件夹路径不能为空')
+    folderPath: z.string().min(1, '文件夹路径不能为空'),
+    /** true 时把文件夹改为监听来源（#158）：持续对齐，而不仅仅是一次快照。 */
+    watch: z.boolean().optional()
+  }),
+
+  listFolderWatches: z.object({
+    notebookId: z.string().min(1, '笔记本 ID 不能为空')
+  }),
+
+  unwatchFolder: z.object({
+    watchId: z.string().min(1, '监听 ID 不能为空')
   }),
 
   addFiles: z.object({

@@ -757,6 +757,41 @@ async function runChecks(): Promise<string[]> {
   )
   pass('a folder import is a snapshot: unsupported files are skipped and re-import is a no-op')
 
+  // --- watching a folder keeps it current, and never deletes (#158) -----------
+  const watchedFolder = mkdtempSync(join(tmpdir(), 'knownote-watch-'))
+  copyFileSync(join(fixtures, 'sample.md'), join(watchedFolder, 'watched.md'))
+  await knowledge.watchFolder(reindexNotebook, watchedFolder)
+
+  const watchedDoc = knowledge
+    .getDocuments(reindexNotebook)
+    .find((doc) => doc.sourceUri === join(watchedFolder, 'watched.md'))
+  assert(watchedDoc, 'watching a folder did not import the file already in it')
+
+  // A new file appears: reconcile imports it without the user doing anything.
+  copyFileSync(join(fixtures, 'sample.md'), join(watchedFolder, 'added.md'))
+  await knowledge.reconcileWatchedFolders()
+  assert(
+    knowledge
+      .getDocuments(reindexNotebook)
+      .some((doc) => doc.sourceUri === join(watchedFolder, 'added.md')),
+    'reconcile did not import a file added to a watched folder'
+  )
+
+  // A file disappears: the source is marked missing; the row, its chunks and its
+  // citations survive, because a citation is a snapshot.
+  rmSync(join(watchedFolder, 'watched.md'))
+  await knowledge.reconcileWatchedFolders()
+  const missingDoc = knowledge.getDocument(watchedDoc.id)
+  assert(
+    missingDoc?.sourceState === 'missing',
+    `a deleted file left source_state=${missingDoc?.sourceState}`
+  )
+  assert(
+    knowledge.getDocumentChunks(watchedDoc.id).length > 0,
+    'marking a source missing destroyed its derived index'
+  )
+  pass('a watched folder picks up new files and marks deleted ones missing without deleting them')
+
   // --- a failed re-index leaves the previous index usable (#95) ---------------
   // The failure this guards: `reindexDocument()` used to clear the derived index
   // *before* embedding, so an embedding failure at 70% left the document with no

@@ -86,6 +86,8 @@
   "retryDocument": "Try again",
   "reindexDocument": "Re-index",
   "uploadFolder": "Add folder",
+  "watchFolder": "Watch folder",
+  "sourceMissing": "The file is no longer at its path",
   "dropToImport": "Drop files or a folder to import",
   "importAdded": "Imported {{count}}",
   "importSkipped": "skipped {{count}} (already imported)",

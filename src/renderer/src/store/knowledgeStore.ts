@@ -70,8 +70,12 @@ interface KnowledgeStore {
     notebookId: string,
     noteId: string
   ) => Promise<{ success: boolean; documentId?: string; error?: string }>
-  /** 文件夹导入：一次快照（#98）。 */
-  addFolder: (notebookId: string, folderPath: string) => Promise<BatchImportOutcome>
+  /** 文件夹导入：一次快照；`watch` 为 true 时同时改为监听来源（#158）。 */
+  addFolder: (
+    notebookId: string,
+    folderPath: string,
+    watch?: boolean
+  ) => Promise<BatchImportOutcome>
   /** 批量导入一组文件（#98）：拖放与多选共用同一路径。 */
   addFiles: (notebookId: string, paths: string[]) => Promise<BatchImportOutcome>
   selectFolder: () => Promise<string[]>
@@ -207,9 +211,9 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
   },
 
   // 文件夹 / 批量导入（#98）
-  addFolder: async (notebookId, folderPath) => {
+  addFolder: async (notebookId, folderPath, watch = false) => {
     set({ isIndexing: true, error: null })
-    const result = await window.api.knowledge.addFolder(notebookId, folderPath)
+    const result = await window.api.knowledge.addFolder(notebookId, folderPath, watch)
     await refreshAfterImport(notebookId, result, set, get)
     return result
   },

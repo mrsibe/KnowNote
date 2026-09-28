@@ -1,4 +1,4 @@
-import { readdir } from 'fs/promises'
+import { readdir, stat } from 'fs/promises'
 import { extname, join, relative } from 'path'
 
 /**
@@ -15,6 +15,8 @@ export interface ScannedFile {
   path: string
   /** Path relative to the scanned root, for stable ordering and messages. */
   relativePath: string
+  /** File modification time in ms — what a watch compares to decide "changed" (#158). */
+  mtimeMs: number
 }
 
 /**
@@ -46,7 +48,8 @@ export async function scanFolder(
 
       const extension = extname(entry.name).toLowerCase().slice(1)
       if (allowed.has(extension)) {
-        files.push({ path: fullPath, relativePath: relative(dir, fullPath) })
+        const info = await stat(fullPath)
+        files.push({ path: fullPath, relativePath: relative(dir, fullPath), mtimeMs: info.mtimeMs })
       }
     }
   }

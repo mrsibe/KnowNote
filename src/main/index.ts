@@ -137,6 +137,12 @@ app.whenReady().then(async () => {
   knowledgeService = new KnowledgeService(embeddingService)
   Logger.info('Main', 'Knowledge Service initialized')
 
+  // Watched folders (#158): reconcile once so changes made while the app was closed
+  // are picked up, then keep them current live.
+  Logger.info('Main', 'Reconciling watched folders...')
+  await knowledgeService.reconcileWatchedFolders()
+  knowledgeService.startFolderWatching()
+
   // Initialize Update Service
   Logger.info('Main', 'Initializing Update Service...')
   updateService = new UpdateService()
@@ -245,6 +251,7 @@ app.on('before-quit', () => {
   }
 
   Logger.info('Main', 'Closing database connection...')
+  knowledgeService?.stopFolderWatching()
   closeDatabase()
 })
 

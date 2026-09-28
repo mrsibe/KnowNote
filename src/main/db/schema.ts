@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index, primaryKey } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import type { QuizQuestion } from '../../shared/types/quiz'
 import type {
   ChatExecutionError,
@@ -165,6 +165,15 @@ export const documents = sqliteTable(
     status: text('status', { enum: ['pending', 'processing', 'indexed', 'failed'] })
       .notNull()
       .default('pending'),
+    /**
+     * 来源文件本身的状态（#158），与 `status`（索引状态）分开：
+     * 文件被删是 `missing`，索引只是过期；笔记、摘录、citation 都还在。
+     */
+    sourceState: text('source_state', { enum: ['available', 'missing', 'changed'] })
+      .notNull()
+      .default('available'),
+    /** 上次导入/刷新时来源文件的 mtime（ms）；watch 靠它判断文件是否被改过。 */
+    sourceMtimeMs: integer('source_mtime_ms'),
     errorMessage: text('error_message'),
     chunkCount: integer('chunk_count').default(0),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
@@ -178,6 +187,31 @@ export const documents = sqliteTable(
 
 export type Document = typeof documents.$inferSelect
 export type NewDocument = typeof documents.$inferInsert
+
+/**
+ * 被监听的文件夹（#158）。
+ *
+ * 文件夹不是 document（document 是一份来源文件），所以监听关系单独一张表：一个
+ * notebook 可以监听多个文件夹，同一个（notebook, path）不会重复（唯一索引）。
+ */
+export const folderWatches = sqliteTable(
+  'folder_watches',
+  {
+    id: text('id').primaryKey(),
+    notebookId: text('notebook_id')
+      .notNull()
+      .references(() => notebooks.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
+  },
+  (table) => ({
+    uniquePath: uniqueIndex('idx_folder_watches_notebook_path').on(table.notebookId, table.path)
+  })
+)
+
+export type FolderWatch = typeof folderWatches.$inferSelect
+export type NewFolderWatch = typeof folderWatches.$inferInsert
 
 /**
  * 索引尝试记录（#95）。

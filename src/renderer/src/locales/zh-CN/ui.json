@@ -86,6 +86,8 @@
   "retryDocument": "重试",
   "reindexDocument": "重建索引",
   "uploadFolder": "添加文件夹",
+  "watchFolder": "监听文件夹",
+  "sourceMissing": "文件已不在原路径",
   "dropToImport": "拖入文件或文件夹以导入",
   "importAdded": "已导入 {{count}} 个",
   "importSkipped": "跳过 {{count}} 个（已存在）",

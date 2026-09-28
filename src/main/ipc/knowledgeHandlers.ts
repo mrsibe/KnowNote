@@ -337,64 +337,92 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
   })
 
   // 文件夹导入：一次快照（#98）
-  ipcMain.handle(
-    'knowledge:add-folder',
-    async (event: IpcMainInvokeEvent, args: unknown) => {
-      const validated = await validate(KnowledgeSchemas.addFolder, async (params) => {
-        Logger.debug('KnowledgeHandlers', 'add-folder:', params)
+  ipcMain.handle('knowledge:add-folder', async (event: IpcMainInvokeEvent, args: unknown) => {
+    const validated = await validate(KnowledgeSchemas.addFolder, async (params) => {
+      Logger.debug('KnowledgeHandlers', 'add-folder:', params)
 
-        try {
-          const result = await knowledgeService.addFolder(
-            params.notebookId,
-            params.folderPath,
-            (stage, progress) => {
-              event.sender.send('knowledge:index-progress', {
-                notebookId: params.notebookId,
-                stage,
-                progress
-              })
-            }
-          )
-          return { success: true, ...result }
-        } catch (error) {
-          Logger.error('KnowledgeHandlers', 'Error adding folder:', error)
-          return { success: false, added: [], skipped: [], failed: [], error: (error as Error).message }
+      try {
+        const result = await knowledgeService.addFolder(
+          params.notebookId,
+          params.folderPath,
+          (stage, progress) => {
+            event.sender.send('knowledge:index-progress', {
+              notebookId: params.notebookId,
+              stage,
+              progress
+            })
+          }
+        )
+
+        // 监听（#158）在快照之后建立：持久化监听关系、立刻对齐一次、开始实时监听。
+        if (params.watch) {
+          await knowledgeService.watchFolder(params.notebookId, params.folderPath)
         }
-      })(event, args)
 
-      return validated
-    }
+        return { success: true, ...result }
+      } catch (error) {
+        Logger.error('KnowledgeHandlers', 'Error adding folder:', error)
+        return {
+          success: false,
+          added: [],
+          skipped: [],
+          failed: [],
+          error: (error as Error).message
+        }
+      }
+    })(event, args)
+
+    return validated
+  })
+
+  // 监听文件夹（#158）
+  ipcMain.handle(
+    'knowledge:list-folder-watches',
+    validate(KnowledgeSchemas.listFolderWatches, async (params) => {
+      return knowledgeService.listFolderWatches(params.notebookId)
+    })
+  )
+
+  ipcMain.handle(
+    'knowledge:unwatch-folder',
+    validate(KnowledgeSchemas.unwatchFolder, async (params) => {
+      knowledgeService.unwatchFolder(params.watchId)
+      return { success: true }
+    })
   )
 
   // 批量导入一组文件（#98，拖放/多选共用）
-  ipcMain.handle(
-    'knowledge:add-files',
-    async (event: IpcMainInvokeEvent, args: unknown) => {
-      const validated = await validate(KnowledgeSchemas.addFiles, async (params) => {
-        Logger.debug('KnowledgeHandlers', 'add-files:', params.paths.length)
+  ipcMain.handle('knowledge:add-files', async (event: IpcMainInvokeEvent, args: unknown) => {
+    const validated = await validate(KnowledgeSchemas.addFiles, async (params) => {
+      Logger.debug('KnowledgeHandlers', 'add-files:', params.paths.length)
 
-        try {
-          const result = await knowledgeService.addDocumentsFromPaths(
-            params.notebookId,
-            params.paths,
-            (stage, progress) => {
-              event.sender.send('knowledge:index-progress', {
-                notebookId: params.notebookId,
-                stage,
-                progress
-              })
-            }
-          )
-          return { success: true, ...result }
-        } catch (error) {
-          Logger.error('KnowledgeHandlers', 'Error adding files:', error)
-          return { success: false, added: [], skipped: [], failed: [], error: (error as Error).message }
+      try {
+        const result = await knowledgeService.addDocumentsFromPaths(
+          params.notebookId,
+          params.paths,
+          (stage, progress) => {
+            event.sender.send('knowledge:index-progress', {
+              notebookId: params.notebookId,
+              stage,
+              progress
+            })
+          }
+        )
+        return { success: true, ...result }
+      } catch (error) {
+        Logger.error('KnowledgeHandlers', 'Error adding files:', error)
+        return {
+          success: false,
+          added: [],
+          skipped: [],
+          failed: [],
+          error: (error as Error).message
         }
-      })(event, args)
+      }
+    })(event, args)
 
-      return validated
-    }
-  )
+    return validated
+  })
 
   // 打开文档源文件
   ipcMain.handle(

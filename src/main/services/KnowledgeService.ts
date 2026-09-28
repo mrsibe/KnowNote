@@ -5,7 +5,7 @@
 
 import { createHash } from 'crypto'
 import { app } from 'electron'
-import { join, basename } from 'path'
+import { join, basename, sep } from 'path'
 import { mkdir, copyFile, unlink, stat } from 'fs/promises'
 import {
   getDatabase,
@@ -60,6 +60,15 @@ import type {
   Retriever
 } from './retrieval'
 import { WebFetchService } from './WebFetchService'
+import type { WatchedDocument } from './ingestion/folderWatch'
+import {
+  FolderWatchService,
+  addFolderWatch,
+  listFolderWatchesForNotebook,
+  removeFolderWatch,
+  type FolderWatchRecord,
+  type ReconcileResult
+} from './ingestion/folderWatch'
 import { scanFolder } from './ingestion/folderScan'
 import { deleteDocumentChunksFts, ensureChunksFts, indexChunksFts, searchChunksFts } from './fts'
 import { vectorStoreManager } from '../vectorstore'
@@ -182,6 +191,7 @@ export class KnowledgeService {
   private fileParserService: FileParserService
   private webFetchService: WebFetchService
   private knowledgeFilesDir: string
+  private folderWatch: FolderWatchService
 
   constructor(embeddingService: EmbeddingService) {
     this.embeddingService = embeddingService
@@ -192,6 +202,8 @@ export class KnowledgeService {
     // 知识库文件存储目录
     this.knowledgeFilesDir = join(app.getPath('userData'), 'knowledge-files')
     this.ensureKnowledgeFilesDir()
+    // 监听服务只持有本服务的引用，构造本身没有副作用（不会开数据库、不会开始监听）。
+    this.folderWatch = new FolderWatchService(this)
   }
 
   /**
@@ -468,6 +480,9 @@ export class KnowledgeService {
           fileSize: parseResult.metadata?.fileSize as number | undefined,
           metadata: parseResult.metadata,
           errorMessage: null,
+          // 文件回到 available，并记下这次看到的 mtime：watch（#158）靠它判断是否被改过。
+          sourceState: 'available',
+          sourceMtimeMs: (await stat(filePath).catch(() => null))?.mtimeMs,
           updatedAt: new Date()
         })
         .where(eq(documents.id, documentId))
@@ -1173,6 +1188,89 @@ export class KnowledgeService {
   /** 一份 source 的索引尝试历史，最近优先（#95）。 */
   getIngestionRuns(documentId: string) {
     return runsFor(documentId)
+  }
+
+  /** 当前所有已注册 loader 认识的扩展名（#98 / #158 的扫描用它）。 */
+  supportedExtensions(): string[] {
+    return this.fileParserService.supportedExtensions()
+  }
+
+  /**
+   * 一个被监听文件夹下的所有 source（#158）。
+   *
+   * 按 `sourceUri` 前缀匹配：文件导入后 sourceUri 仍是原路径，所以「这个文件夹下的
+   * 来源」可以直接算出来，不需要另存一份父子关系。
+   */
+  getWatchedDocuments(notebookId: string, folderPath: string): WatchedDocument[] {
+    const prefix = folderPath.endsWith(sep) ? folderPath : folderPath + sep
+
+    return getDatabase()
+      .select({
+        documentId: documents.id,
+        sourceUri: documents.sourceUri,
+        sourceMtimeMs: documents.sourceMtimeMs,
+        sourceState: documents.sourceState
+      })
+      .from(documents)
+      .where(eq(documents.notebookId, notebookId))
+      .all()
+      .filter(
+        (row): row is WatchedDocument =>
+          typeof row.sourceUri === 'string' &&
+          (row.sourceUri === folderPath || row.sourceUri.startsWith(prefix))
+      )
+  }
+
+  /** 标记来源文件本身的状态（#158）：`missing` 不删行，也不碰笔记与 citation。 */
+  markSourceState(documentId: string, state: 'available' | 'missing' | 'changed'): void {
+    getDatabase()
+      .update(documents)
+      .set({ sourceState: state, updatedAt: new Date() })
+      .where(eq(documents.id, documentId))
+      .run()
+  }
+
+  /**
+   * 来源文件变了：重新拷贝、解析并索引**同一个** documentId（#158）。
+   *
+   * 与 reindex 的区别：reindex 用的是已持久化的 content，而这里文件本身被改过，必须
+   * 重新解析。来源身份不变，所以历史 citation 与摘录仍然指向同一个来源。
+   */
+  async refreshDocumentFromFile(documentId: string, filePath: string): Promise<void> {
+    await this.ingestFile(documentId, filePath, { copyFrom: filePath }, 'reindex')
+  }
+
+  /**
+   * 监听一个文件夹（#158）：持久化监听关系，立刻对齐一次，然后开始实时监听。
+   * 立刻对齐是必要的：watch 建立之前的改动也要被覆盖，而不仅仅依赖之后的 fs 事件。
+   */
+  async watchFolder(notebookId: string, folderPath: string): Promise<ReconcileResult> {
+    addFolderWatch(notebookId, folderPath)
+    const result = await this.folderWatch.reconcileFolder(notebookId, folderPath)
+    this.folderWatch.start()
+    return result
+  }
+
+  unwatchFolder(watchId: string): void {
+    removeFolderWatch(watchId)
+    this.folderWatch.stopWatch(watchId)
+  }
+
+  listFolderWatches(notebookId: string): FolderWatchRecord[] {
+    return listFolderWatchesForNotebook(notebookId)
+  }
+
+  /** 启动时对齐一次（#158）：app 关着的时候发生的改动不会被漏掉。 */
+  async reconcileWatchedFolders(): Promise<ReconcileResult[]> {
+    return this.folderWatch.reconcileAll()
+  }
+
+  startFolderWatching(): void {
+    this.folderWatch.start()
+  }
+
+  stopFolderWatching(): void {
+    this.folderWatch.stop()
   }
 
   /**

@@ -260,8 +260,17 @@ declare global {
           notebookId: string,
           filePath: string
         ) => Promise<{ success: boolean; documentId?: string; error?: string }>
-        /** 文件夹导入：一次快照（#98）。 */
-        addFolder: (notebookId: string, folderPath: string) => Promise<BatchImportOutcome>
+        /** 文件夹导入：一次快照；`watch` 为 true 时同时改为监听来源（#158）。 */
+        addFolder: (
+          notebookId: string,
+          folderPath: string,
+          watch?: boolean
+        ) => Promise<BatchImportOutcome>
+        /** 监听列表（#158）。 */
+        listFolderWatches: (
+          notebookId: string
+        ) => Promise<Array<{ id: string; notebookId: string; path: string }>>
+        unwatchFolder: (watchId: string) => Promise<{ success: boolean }>
         /** 批量导入一组文件（#98）：拖放与多选共用。 */
         addFiles: (notebookId: string, paths: string[]) => Promise<BatchImportOutcome>
         /** 拖放的 `File` → 绝对路径（#98）。 */

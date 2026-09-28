@@ -168,8 +168,11 @@ const api = {
       ipcRenderer.invoke('knowledge:add-document', { notebookId, options }),
     addDocumentFromFile: (notebookId: string, filePath: string) =>
       ipcRenderer.invoke('knowledge:add-document-from-file', { notebookId, filePath }),
-    addFolder: (notebookId: string, folderPath: string) =>
-      ipcRenderer.invoke('knowledge:add-folder', { notebookId, folderPath }),
+    addFolder: (notebookId: string, folderPath: string, watch = false) =>
+      ipcRenderer.invoke('knowledge:add-folder', { notebookId, folderPath, watch }),
+    listFolderWatches: (notebookId: string) =>
+      ipcRenderer.invoke('knowledge:list-folder-watches', { notebookId }),
+    unwatchFolder: (watchId: string) => ipcRenderer.invoke('knowledge:unwatch-folder', { watchId }),
     addFiles: (notebookId: string, paths: string[]) =>
       ipcRenderer.invoke('knowledge:add-files', { notebookId, paths }),
     /**

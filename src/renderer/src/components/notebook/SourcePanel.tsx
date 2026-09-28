@@ -11,7 +11,8 @@ import {
   ArrowLeft,
   Quote,
   ExternalLink,
-  FolderOpen
+  FolderOpen,
+  FolderSync
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useKnowledgeStore, setupKnowledgeListeners } from '../../store/knowledgeStore'
@@ -27,10 +28,7 @@ import { Card } from '../ui/card'
 import { PanelHeader } from '../ui/panel-header'
 import DocumentList from './source/DocumentList'
 import SourceReader from './source/reader/SourceReader'
-import type {
-  KnowledgeDocument,
-  BatchImportOutcome
-} from '../../../../shared/types/knowledge'
+import type { KnowledgeDocument, BatchImportOutcome } from '../../../../shared/types/knowledge'
 import type { ReaderAnchor, ReaderSelection } from '../../../../shared/types/source'
 import {
   selectionToSourceAnchor,
@@ -511,20 +509,23 @@ export default function SourcePanel(): ReactElement {
     reportBatch(await addFiles(notebookId, files))
   }, [notebookId, hasEmbeddingModel, selectFiles, addFiles, reportBatch, t])
 
-  // 处理文件夹导入（#98）：一次快照，不是监听（监听是 #158）
-  const handleFolderUpload = useCallback(async () => {
-    if (!notebookId) return
-    if (!hasEmbeddingModel) {
-      alert(t('noEmbeddingModelConfigured'))
-      return
-    }
+  // 处理文件夹导入（#98 快照 / #158 监听）
+  const handleFolderUpload = useCallback(
+    async (watch: boolean) => {
+      if (!notebookId) return
+      if (!hasEmbeddingModel) {
+        alert(t('noEmbeddingModelConfigured'))
+        return
+      }
 
-    const folders = await selectFolder()
-    setShowAddMenu(false)
-    for (const folder of folders) {
-      reportBatch(await addFolder(notebookId, folder))
-    }
-  }, [notebookId, hasEmbeddingModel, selectFolder, addFolder, reportBatch, t])
+      const folders = await selectFolder()
+      setShowAddMenu(false)
+      for (const folder of folders) {
+        reportBatch(await addFolder(notebookId, folder, watch))
+      }
+    },
+    [notebookId, hasEmbeddingModel, selectFolder, addFolder, reportBatch, t]
+  )
 
   // 拖放文件/文件夹（#98）。Electron 39 下路径必须由 preload 的 webUtils 给出。
   const handleDrop = useCallback(
@@ -764,12 +765,20 @@ export default function SourcePanel(): ReactElement {
                       {t('uploadFile')}
                     </Button>
                     <Button
-                      onClick={handleFolderUpload}
+                      onClick={() => void handleFolderUpload(false)}
                       variant="ghost"
                       className="w-full justify-start text-sm font-normal"
                     >
                       <FolderOpen className="w-4 h-4" />
                       {t('uploadFolder')}
+                    </Button>
+                    <Button
+                      onClick={() => void handleFolderUpload(true)}
+                      variant="ghost"
+                      className="w-full justify-start text-sm font-normal"
+                    >
+                      <FolderSync className="w-4 h-4" />
+                      {t('watchFolder')}
                     </Button>
                     <Button
                       onClick={() => {

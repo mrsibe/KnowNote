@@ -162,6 +162,10 @@ function DocumentItem({
               {document.errorMessage}
             </p>
           )}
+          {/* 来源文件不在了（#158）：citation / 摘录仍然有效，只是文件暂时取不到。 */}
+          {document.sourceState === 'missing' && (
+            <p className="text-xs text-subtle-foreground">{t('sourceMissing')}</p>
+          )}
         </div>
       </button>
 
