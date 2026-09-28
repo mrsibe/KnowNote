@@ -21,7 +21,8 @@ import type {
   KnowledgeStats,
   AddDocumentOptions,
   SearchOptions,
-  IndexProgress
+  IndexProgress,
+  BatchImportOutcome
 } from '../shared/types/knowledge'
 import type { UpdateState, UpdateCheckResult, UpdateOperationResult } from '../shared/types/update'
 import type { MindMap, Quiz, QuizSession, AnkiCard } from '../main/db/schema'
@@ -259,6 +260,12 @@ declare global {
           notebookId: string,
           filePath: string
         ) => Promise<{ success: boolean; documentId?: string; error?: string }>
+        /** 文件夹导入：一次快照（#98）。 */
+        addFolder: (notebookId: string, folderPath: string) => Promise<BatchImportOutcome>
+        /** 批量导入一组文件（#98）：拖放与多选共用。 */
+        addFiles: (notebookId: string, paths: string[]) => Promise<BatchImportOutcome>
+        /** 拖放的 `File` → 绝对路径（#98）。 */
+        getPathForFile: (file: File) => string
         addDocumentFromUrl: (
           notebookId: string,
           url: string
@@ -295,6 +302,7 @@ declare global {
 
         // 文件选择对话框
         selectFiles: () => Promise<string[]>
+        selectFolder: () => Promise<string[]>
 
         // 打开源文件
         openSource: (documentId: string) => Promise<{ success: boolean; error?: string }>

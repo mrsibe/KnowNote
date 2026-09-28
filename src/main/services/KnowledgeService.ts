@@ -60,6 +60,7 @@ import type {
   Retriever
 } from './retrieval'
 import { WebFetchService } from './WebFetchService'
+import { scanFolder } from './ingestion/folderScan'
 import { deleteDocumentChunksFts, ensureChunksFts, indexChunksFts, searchChunksFts } from './fts'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
@@ -114,6 +115,31 @@ export interface SearchResult {
  * 索引进度回调
  */
 export type IndexProgressCallback = (stage: string, progress: number) => void
+
+/** 批量导入里被跳过的文件（#98）：已经在同一个 notebook 里。 */
+export interface BatchImportSkip {
+  path: string
+  reason: string
+}
+
+/** 批量导入里失败的文件。每个文件都有自己的 ingestion run，这里只汇总。 */
+export interface BatchImportFailure {
+  path: string
+  error: string
+}
+
+/**
+ * 一次批量导入的结果。
+ *
+ * 三组互斥：`added` 是新建的 documentId，`skipped` 是重复路径，`failed` 是解析/索引
+ * 阶段失败的路径。调用方永远知道「42 个里成功多少、跳过多少、失败多少」，而不是只
+ * 看到一个总数。
+ */
+export interface BatchImportResult {
+  added: string[]
+  skipped: BatchImportSkip[]
+  failed: BatchImportFailure[]
+}
 
 /**
  * `RetrievedEvidence` → 兼容的 `SearchResult` 形状。
@@ -320,6 +346,76 @@ export class KnowledgeService {
     )
 
     return documentId
+  }
+
+  /**
+   * 批量导入一组已经存在的文件路径（#98）。
+   *
+   * 一个文件失败不会中止其余的：每个文件仍然走 `addDocumentFromFile`，所以每个都有自己
+   * 的 ingestion run 与失败记录。已经在这个 notebook 里的路径被跳过并报告，而不是重复
+   * 导入一份。
+   */
+  async addDocumentsFromPaths(
+    notebookId: string,
+    paths: readonly string[],
+    onProgress?: IndexProgressCallback
+  ): Promise<BatchImportResult> {
+    const db = getDatabase()
+    const existing = new Set(
+      db
+        .select({ sourceUri: documents.sourceUri })
+        .from(documents)
+        .where(eq(documents.notebookId, notebookId))
+        .all()
+        .map((row) => row.sourceUri)
+        .filter((uri): uri is string => typeof uri === 'string' && uri.length > 0)
+    )
+
+    const added: string[] = []
+    const skipped: BatchImportSkip[] = []
+    const failed: BatchImportFailure[] = []
+
+    for (let index = 0; index < paths.length; index++) {
+      const filePath = paths[index]
+
+      if (existing.has(filePath)) {
+        skipped.push({ path: filePath, reason: 'already imported into this notebook' })
+        continue
+      }
+
+      try {
+        added.push(await this.addDocumentFromFile(notebookId, filePath))
+        existing.add(filePath)
+      } catch (error) {
+        failed.push({ path: filePath, error: (error as Error).message })
+      }
+
+      onProgress?.(
+        `importing ${index + 1}/${paths.length}`,
+        Math.round(((index + 1) / paths.length) * 100)
+      )
+    }
+
+    return { added, skipped, failed }
+  }
+
+  /**
+   * 把一个文件夹导入为**一次快照**（#98）。
+   *
+   * 扫描只挑解析器认识的扩展名，其余文件被跳过并计数，而不是静默忽略。这是一次快照
+   * —— 之后新增到文件夹里的文件不会被自动带走，那是 #158 的监听。
+   */
+  async addFolder(
+    notebookId: string,
+    folderPath: string,
+    onProgress?: IndexProgressCallback
+  ): Promise<BatchImportResult> {
+    const scanned = await scanFolder(folderPath, this.fileParserService.supportedExtensions())
+    return this.addDocumentsFromPaths(
+      notebookId,
+      scanned.map((file) => file.path),
+      onProgress
+    )
   }
 
   /**

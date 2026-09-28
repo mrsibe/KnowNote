@@ -57,6 +57,20 @@ export interface KnowledgeSearchResult {
 }
 
 /**
+ * 一次批量导入的结果（#98）。
+ *
+ * 三组互斥：新增、跳过（重复路径）、失败（解析/索引阶段）。界面上要能说清「42 个里成功
+ * 多少、跳过多少、失败多少」，而不是只给一个总数。
+ */
+export interface BatchImportOutcome {
+  success: boolean
+  added: string[]
+  skipped: Array<{ path: string; reason: string }>
+  failed: Array<{ path: string; error: string }>
+  error?: string
+}
+
+/**
  * 索引进度
  */
 export interface IndexProgress {

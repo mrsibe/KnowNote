@@ -10,7 +10,8 @@ import type {
   IndexProgress,
   KnowledgeStats,
   AddDocumentOptions,
-  SearchOptions
+  SearchOptions,
+  BatchImportOutcome
 } from '../../../shared/types/knowledge'
 
 interface KnowledgeStore {
@@ -69,6 +70,11 @@ interface KnowledgeStore {
     notebookId: string,
     noteId: string
   ) => Promise<{ success: boolean; documentId?: string; error?: string }>
+  /** 文件夹导入：一次快照（#98）。 */
+  addFolder: (notebookId: string, folderPath: string) => Promise<BatchImportOutcome>
+  /** 批量导入一组文件（#98）：拖放与多选共用同一路径。 */
+  addFiles: (notebookId: string, paths: string[]) => Promise<BatchImportOutcome>
+  selectFolder: () => Promise<string[]>
   search: (notebookId: string, query: string, options?: SearchOptions) => Promise<void>
   deleteDocument: (
     notebookId: string,
@@ -197,6 +203,30 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
       const message = (error as Error).message
       await refreshAfterImport(notebookId, { success: false, error: message }, set, get)
       return { success: false, error: message }
+    }
+  },
+
+  // 文件夹 / 批量导入（#98）
+  addFolder: async (notebookId, folderPath) => {
+    set({ isIndexing: true, error: null })
+    const result = await window.api.knowledge.addFolder(notebookId, folderPath)
+    await refreshAfterImport(notebookId, result, set, get)
+    return result
+  },
+
+  addFiles: async (notebookId, paths) => {
+    set({ isIndexing: true, error: null })
+    const result = await window.api.knowledge.addFiles(notebookId, paths)
+    await refreshAfterImport(notebookId, result, set, get)
+    return result
+  },
+
+  selectFolder: async () => {
+    try {
+      return await window.api.knowledge.selectFolder()
+    } catch (error) {
+      console.error('Failed to select folder:', error)
+      return []
     }
   },
 

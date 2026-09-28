@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { EmbeddingDownloadProgress } from '../shared/types'
@@ -168,6 +168,17 @@ const api = {
       ipcRenderer.invoke('knowledge:add-document', { notebookId, options }),
     addDocumentFromFile: (notebookId: string, filePath: string) =>
       ipcRenderer.invoke('knowledge:add-document-from-file', { notebookId, filePath }),
+    addFolder: (notebookId: string, folderPath: string) =>
+      ipcRenderer.invoke('knowledge:add-folder', { notebookId, folderPath }),
+    addFiles: (notebookId: string, paths: string[]) =>
+      ipcRenderer.invoke('knowledge:add-files', { notebookId, paths }),
+    /**
+     * 拖放进来的 `File` 对应的绝对路径（#98）。
+     *
+     * Electron 39 移除了 `File.path`，唯一受支持的取法是 `webUtils.getPathForFile`，
+     * 且必须在 preload 里对真实的 File 对象调用。
+     */
+    getPathForFile: (file: File) => webUtils.getPathForFile(file),
     addDocumentFromUrl: (notebookId: string, url: string) =>
       ipcRenderer.invoke('knowledge:add-document-from-url', { notebookId, url }),
     addNote: (notebookId: string, noteId: string) =>
@@ -204,6 +215,7 @@ const api = {
 
     // 文件选择
     selectFiles: () => ipcRenderer.invoke('knowledge:select-files'),
+    selectFolder: () => ipcRenderer.invoke('knowledge:select-folder'),
 
     // 打开源文件
     openSource: (documentId: string) => ipcRenderer.invoke('knowledge:open-source', { documentId }),

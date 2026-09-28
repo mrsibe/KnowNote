@@ -28,7 +28,7 @@
 
 import Logger from '../shared/utils/logger'
 import { readFile, readdir } from 'fs/promises'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, copyFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { net, BrowserWindow } from 'electron'
@@ -734,6 +734,28 @@ async function runChecks(): Promise<string[]> {
     'a re-index left the full-text index broken or duplicated'
   )
   pass('full-text search finds literal terms and survives a re-index')
+
+  // --- folder import is a snapshot with honest counts (#98) ------------------
+  const folderRoot = mkdtempSync(join(tmpdir(), 'knownote-folder-'))
+  mkdirSync(join(folderRoot, 'nested'), { recursive: true })
+  copyFileSync(join(fixtures, 'sample.md'), join(folderRoot, 'kept.md'))
+  writeFileSync(join(folderRoot, 'ignored.xyz'), 'not a document')
+  writeFileSync(join(folderRoot, 'nested', 'deep.txt'), 'also unsupported')
+
+  const firstFolderImport = await knowledge.addFolder(reindexNotebook, folderRoot)
+  assert(
+    firstFolderImport.added.length === 1,
+    `folder import added ${firstFolderImport.added.length}, expected exactly the one supported file`
+  )
+
+  // A folder import is a snapshot: running it twice must not duplicate anything.
+  const secondFolderImport = await knowledge.addFolder(reindexNotebook, folderRoot)
+  assert(secondFolderImport.added.length === 0, 're-importing the same folder added duplicates')
+  assert(
+    secondFolderImport.skipped.length === 1,
+    `re-import skipped ${secondFolderImport.skipped.length}, expected the already-imported file`
+  )
+  pass('a folder import is a snapshot: unsupported files are skipped and re-import is a no-op')
 
   // --- a failed re-index leaves the previous index usable (#95) ---------------
   // The failure this guards: `reindexDocument()` used to clear the derived index

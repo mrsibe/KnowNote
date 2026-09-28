@@ -107,6 +107,22 @@ export class FileParserService {
   }
 
   /**
+   * 所有已注册 loader 认识的扩展名（小写，不含点）。
+   *
+   * 文件夹导入用它决定「扫什么」和「跳过了什么」（#98）：扩展名集合只有一个来源，
+   * 扫描器不会和 loader 各自维护一份而逐渐漂移。
+   */
+  supportedExtensions(): string[] {
+    const extensions = new Set<string>()
+    for (const loader of this.allLoaders) {
+      for (const extension of loader.supportedExtensions) {
+        extensions.add(extension.toLowerCase())
+      }
+    }
+    return [...extensions].sort((a, b) => a.localeCompare(b))
+  }
+
+  /**
    * 根据 MIME 类型获取文件类型
    */
   getFileTypeFromMime(mimeType: string): SupportedFileType | null {

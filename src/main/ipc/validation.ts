@@ -146,6 +146,17 @@ export const KnowledgeSchemas = {
     filePath: z.string().min(1, '文件路径不能为空')
   }),
 
+  // 批量/文件夹导入（#98）
+  addFolder: z.object({
+    notebookId: z.string().min(1, '笔记本 ID 不能为空'),
+    folderPath: z.string().min(1, '文件夹路径不能为空')
+  }),
+
+  addFiles: z.object({
+    notebookId: z.string().min(1, '笔记本 ID 不能为空'),
+    paths: z.array(z.string().min(1)).min(1, '至少需要一个文件')
+  }),
+
   addDocumentFromUrl: z.object({
     notebookId: z.string().min(1, '笔记本 ID 不能为空'),
     url: z.string().min(1, '无效的 URL')

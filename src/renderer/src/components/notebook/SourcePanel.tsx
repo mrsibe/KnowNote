@@ -10,7 +10,8 @@ import {
   StickyNote,
   ArrowLeft,
   Quote,
-  ExternalLink
+  ExternalLink,
+  FolderOpen
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useKnowledgeStore, setupKnowledgeListeners } from '../../store/knowledgeStore'
@@ -26,7 +27,10 @@ import { Card } from '../ui/card'
 import { PanelHeader } from '../ui/panel-header'
 import DocumentList from './source/DocumentList'
 import SourceReader from './source/reader/SourceReader'
-import type { KnowledgeDocument } from '../../../../shared/types/knowledge'
+import type {
+  KnowledgeDocument,
+  BatchImportOutcome
+} from '../../../../shared/types/knowledge'
 import type { ReaderAnchor, ReaderSelection } from '../../../../shared/types/source'
 import {
   selectionToSourceAnchor,
@@ -41,9 +45,6 @@ import { requestAppendExcerpt } from './note/appendExcerptCommand'
 
 // 添加来源类型
 type AddSourceType = 'file' | 'url' | 'text' | 'note'
-
-/** “/home/me/notes.pdf” → “notes.pdf”。渲染进程没有 node 的 `path`。 */
-const fileName = (filePath: string): string => filePath.split(/[\\/]/).pop() || filePath
 
 // 添加来源弹窗组件
 interface AddSourceModalProps {
@@ -311,6 +312,7 @@ export default function SourcePanel(): ReactElement {
   const { t } = useTranslation('ui')
   const { id: notebookId } = useParams()
   const [showAddMenu, setShowAddMenu] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const [modalType, setModalType] = useState<AddSourceType | null>(null)
   const [hasEmbeddingModel, setHasEmbeddingModel] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<KnowledgeDocument | null>(null)
@@ -326,13 +328,15 @@ export default function SourcePanel(): ReactElement {
     loadDocuments,
     loadStats,
     addDocument,
-    addDocumentFromFile,
+    addFolder,
+    addFiles,
     addDocumentFromUrl,
     addNoteToKnowledge,
     deleteDocument,
     retryDocument,
     reindexDocument,
-    selectFiles
+    selectFiles,
+    selectFolder
   } = useKnowledgeStore()
 
   const { notes, loadNotes, currentNote, createNote } = useItemStore()
@@ -472,7 +476,25 @@ export default function SourcePanel(): ReactElement {
     [t]
   )
 
-  // 处理文件上传
+  /**
+   * 批量导入的汇总（#98）：成功/跳过/失败三组分开说，而不是只报一个总数。
+   * 用户要能知道「42 个里跳过了 3 个、失败了 1 个」。
+   */
+  const reportBatch = useCallback(
+    (result: BatchImportOutcome): void => {
+      const parts: string[] = []
+      if (result.added.length > 0) parts.push(t('importAdded', { count: result.added.length }))
+      if (result.skipped.length > 0)
+        parts.push(t('importSkipped', { count: result.skipped.length }))
+      if (result.failed.length > 0)
+        parts.push(t('importFailedCount', { count: result.failed.length }))
+      if (!result.success && result.error) parts.push(result.error)
+      if (parts.length > 0) toast(parts.join(' · '))
+    },
+    [t]
+  )
+
+  // 处理文件上传（多选 → 批量导入，#98）
   const handleFileUpload = useCallback(async () => {
     if (!notebookId) return
 
@@ -483,14 +505,43 @@ export default function SourcePanel(): ReactElement {
     }
 
     const files = await selectFiles()
-    for (const filePath of files) {
-      // 一个文件失败不能影响其余文件，但也不能被吞掉：
-      // 吞掉它，用户看到的就是“什么都没发生”
-      const result = await addDocumentFromFile(notebookId, filePath)
-      reportImportFailure(fileName(filePath), result)
-    }
     setShowAddMenu(false)
-  }, [notebookId, hasEmbeddingModel, selectFiles, addDocumentFromFile, reportImportFailure, t])
+    if (files.length === 0) return
+    // 一次批量导入：重复路径被跳过并报告，一个失败不中止其余。
+    reportBatch(await addFiles(notebookId, files))
+  }, [notebookId, hasEmbeddingModel, selectFiles, addFiles, reportBatch, t])
+
+  // 处理文件夹导入（#98）：一次快照，不是监听（监听是 #158）
+  const handleFolderUpload = useCallback(async () => {
+    if (!notebookId) return
+    if (!hasEmbeddingModel) {
+      alert(t('noEmbeddingModelConfigured'))
+      return
+    }
+
+    const folders = await selectFolder()
+    setShowAddMenu(false)
+    for (const folder of folders) {
+      reportBatch(await addFolder(notebookId, folder))
+    }
+  }, [notebookId, hasEmbeddingModel, selectFolder, addFolder, reportBatch, t])
+
+  // 拖放文件/文件夹（#98）。Electron 39 下路径必须由 preload 的 webUtils 给出。
+  const handleDrop = useCallback(
+    async (event: React.DragEvent): Promise<void> => {
+      event.preventDefault()
+      setIsDragging(false)
+      if (!notebookId || !hasEmbeddingModel) return
+
+      const paths = Array.from(event.dataTransfer.files)
+        .map((file) => window.api.knowledge.getPathForFile(file))
+        .filter((path) => path.length > 0)
+
+      if (paths.length === 0) return
+      reportBatch(await addFiles(notebookId, paths))
+    },
+    [notebookId, hasEmbeddingModel, addFiles, reportBatch]
+  )
 
   // 处理 URL 导入
   const handleUrlImport = useCallback(
@@ -645,7 +696,22 @@ export default function SourcePanel(): ReactElement {
   )
 
   return (
-    <Card className="flex h-full flex-col overflow-hidden">
+    <Card
+      className="flex h-full flex-col overflow-hidden"
+      onDragOver={(event) => {
+        event.preventDefault()
+        setIsDragging(true)
+      }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-scrim/40">
+          <p className="rounded-md bg-surface-overlay px-4 py-2 text-sm text-foreground shadow-elevation">
+            {t('dropToImport')}
+          </p>
+        </div>
+      )}
       {openDocument ? (
         // 文档预览页面
         <DocumentViewerPanel
@@ -696,6 +762,14 @@ export default function SourcePanel(): ReactElement {
                     >
                       <FileUp className="w-4 h-4" />
                       {t('uploadFile')}
+                    </Button>
+                    <Button
+                      onClick={handleFolderUpload}
+                      variant="ghost"
+                      className="w-full justify-start text-sm font-normal"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      {t('uploadFolder')}
                     </Button>
                     <Button
                       onClick={() => {

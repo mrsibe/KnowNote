@@ -327,6 +327,75 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     return result.canceled ? [] : result.filePaths
   })
 
+  // 打开文件夹选择对话框（#98）
+  ipcMain.handle('knowledge:select-folder', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory', 'multiSelections']
+    })
+
+    return result.canceled ? [] : result.filePaths
+  })
+
+  // 文件夹导入：一次快照（#98）
+  ipcMain.handle(
+    'knowledge:add-folder',
+    async (event: IpcMainInvokeEvent, args: unknown) => {
+      const validated = await validate(KnowledgeSchemas.addFolder, async (params) => {
+        Logger.debug('KnowledgeHandlers', 'add-folder:', params)
+
+        try {
+          const result = await knowledgeService.addFolder(
+            params.notebookId,
+            params.folderPath,
+            (stage, progress) => {
+              event.sender.send('knowledge:index-progress', {
+                notebookId: params.notebookId,
+                stage,
+                progress
+              })
+            }
+          )
+          return { success: true, ...result }
+        } catch (error) {
+          Logger.error('KnowledgeHandlers', 'Error adding folder:', error)
+          return { success: false, added: [], skipped: [], failed: [], error: (error as Error).message }
+        }
+      })(event, args)
+
+      return validated
+    }
+  )
+
+  // 批量导入一组文件（#98，拖放/多选共用）
+  ipcMain.handle(
+    'knowledge:add-files',
+    async (event: IpcMainInvokeEvent, args: unknown) => {
+      const validated = await validate(KnowledgeSchemas.addFiles, async (params) => {
+        Logger.debug('KnowledgeHandlers', 'add-files:', params.paths.length)
+
+        try {
+          const result = await knowledgeService.addDocumentsFromPaths(
+            params.notebookId,
+            params.paths,
+            (stage, progress) => {
+              event.sender.send('knowledge:index-progress', {
+                notebookId: params.notebookId,
+                stage,
+                progress
+              })
+            }
+          )
+          return { success: true, ...result }
+        } catch (error) {
+          Logger.error('KnowledgeHandlers', 'Error adding files:', error)
+          return { success: false, added: [], skipped: [], failed: [], error: (error as Error).message }
+        }
+      })(event, args)
+
+      return validated
+    }
+  )
+
   // 打开文档源文件
   ipcMain.handle(
     'knowledge:open-source',
