@@ -14,10 +14,10 @@
 import { readdir, readFile } from 'fs/promises'
 import { join, posix } from 'path'
 import { and, eq } from 'drizzle-orm'
-import { documentBlocks, notebooks } from '../db/schema'
+import { documentBlocks, notebooks, chunks } from '../db/schema'
 import type { getDatabase } from '../db'
 import type { KnowledgeService } from '../services/KnowledgeService'
-import { DEFAULT_CHUNK_OPTIONS } from '../services/ChunkingService'
+import { DEFAULT_CHUNK_OPTIONS, type ChunkOptions } from '../services/ChunkingService'
 import { LOCAL_EMBEDDING_MODEL } from '../embedding/localModel'
 import {
   evidencePrecisionAtK,
@@ -52,6 +52,8 @@ export interface EvalHarnessOptions {
   threshold: number
   /** How many retrieved passages the evidence-precision metric looks at. */
   evidenceK: number
+  /** 分块配置（#78）。实验变体通过它选择策略；缺省时用生产默认值。 */
+  chunkOptions: ChunkOptions
 }
 
 const NOTEBOOK_ID = 'eval-notebook'
@@ -130,8 +132,10 @@ function resolveGroundTruth(
 async function indexCorpus(
   db: Db,
   knowledgeService: KnowledgeService,
-  corpusDir: string
-): Promise<Map<string, string>> {
+  corpusDir: string,
+  chunkOptions: ChunkOptions
+): Promise<{ documentIds: Map<string, string>; chunkCount: number; indexingMs: number }> {
+  const indexingStarted = performance.now()
   const now = new Date()
   db.insert(notebooks)
     .values({ id: NOTEBOOK_ID, title: 'Eval corpus', createdAt: now, updatedAt: now })
@@ -143,12 +147,23 @@ async function indexCorpus(
   for (const file of files) {
     const documentId = await knowledgeService.addDocumentFromFile(
       NOTEBOOK_ID,
-      join(corpusDir, file)
+      join(corpusDir, file),
+      undefined,
+      chunkOptions
     )
     documentIds.set(posix.normalize(file), documentId)
   }
 
-  return documentIds
+  // Index size is a first-class result of a chunking change: more chunks cost more
+  // to store and to scan, so a recall win that doubles the index is a trade-off,
+  // not a free win.
+  const chunkCount = db
+    .select({ id: chunks.id })
+    .from(chunks)
+    .where(eq(chunks.notebookId, NOTEBOOK_ID))
+    .all().length
+
+  return { documentIds, chunkCount, indexingMs: performance.now() - indexingStarted }
 }
 
 export async function runEvalHarness(
@@ -156,7 +171,12 @@ export async function runEvalHarness(
   knowledgeService: KnowledgeService,
   options: EvalHarnessOptions
 ): Promise<EvalReport> {
-  const documentIds = await indexCorpus(db, knowledgeService, options.corpusDir)
+  const { documentIds, chunkCount, indexingMs } = await indexCorpus(
+    db,
+    knowledgeService,
+    options.corpusDir,
+    options.chunkOptions
+  )
   const questions = parseQuestions(await readFile(options.questionsPath, 'utf-8'))
 
   const perQuestion: QuestionReport[] = []
@@ -202,9 +222,9 @@ export async function runEvalHarness(
     )
   }
 
-  const chunking = DEFAULT_CHUNK_OPTIONS
+  const chunking = { ...DEFAULT_CHUNK_OPTIONS, ...options.chunkOptions }
   return {
-    baseline: 'v1.4',
+    baseline: options.baseline,
     generatedBy: 'npm run eval',
     config: {
       embedding: `${LOCAL_EMBEDDING_MODEL.id}@${LOCAL_EMBEDDING_MODEL.revision} ${LOCAL_EMBEDDING_MODEL.dtype} (${LOCAL_EMBEDDING_MODEL.dimensions}d, local)`,
@@ -212,7 +232,8 @@ export async function runEvalHarness(
         chunkSize: chunking.chunkSize,
         chunkOverlap: chunking.chunkOverlap,
         minChunkSize: chunking.minChunkSize,
-        allowSpanPages: chunking.allowSpanPages
+        allowSpanPages: chunking.allowSpanPages,
+        respectHeadings: chunking.respectHeadings
       },
       retrieval: 'dense',
       topK: options.topK,
@@ -220,12 +241,14 @@ export async function runEvalHarness(
       evidenceK: options.evidenceK,
       corpus: options.corpusLabel,
       documents: documentIds.size,
-      questions: questions.length
+      questions: questions.length,
+      chunkCount
     },
     metrics,
     timing: {
       latencyP50Ms: percentile(latencies, 50),
-      latencyP95Ms: percentile(latencies, 95)
+      latencyP95Ms: percentile(latencies, 95),
+      indexingMs
     },
     perQuestion
   }
@@ -246,7 +269,10 @@ export function stabilize(report: EvalReport): EvalReport {
     },
     timing: {
       latencyP50Ms: round(report.timing.latencyP50Ms),
-      latencyP95Ms: round(report.timing.latencyP95Ms)
+      latencyP95Ms: round(report.timing.latencyP95Ms),
+      // Throughput is informational and excluded from the deterministic report; the
+      // full report keeps it for the #78 comparison.
+      indexingMs: Math.round(report.timing.indexingMs)
     },
     perQuestion: report.perQuestion
   }

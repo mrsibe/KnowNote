@@ -71,6 +71,8 @@ export interface EvalReport {
       chunkOverlap: number
       minChunkSize: number
       allowSpanPages: boolean
+      /** 标题处强制断节（#78）。 */
+      respectHeadings: boolean
     }
     retrieval: string
     topK: number
@@ -80,9 +82,12 @@ export interface EvalReport {
     corpus: string
     documents: number
     questions: number
+    /** 索引出的 chunk 总数（#78 的 index size）。 */
+    chunkCount: number
   }
   metrics: EvalMetrics
-  timing: { latencyP50Ms: number; latencyP95Ms: number }
+  /** `indexingMs` 只用于 #78 的吞吐比较；它不在确定报告里，也不该成为差异原因。 */
+  timing: { latencyP50Ms: number; latencyP95Ms: number; indexingMs: number }
   perQuestion: QuestionReport[]
 }
 

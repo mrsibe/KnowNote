@@ -20,6 +20,7 @@ import { ConnectionManager } from '../models/ConnectionManager'
 import { EmbeddingService } from '../services/EmbeddingService'
 import { KnowledgeService } from '../services/KnowledgeService'
 import { isModelInstalled } from '../embedding/ModelRegistry'
+import { DEFAULT_CHUNK_OPTIONS, type ChunkOptions } from '../services/ChunkingService'
 import {
   runEvalHarness,
   stabilize,
@@ -38,6 +39,52 @@ export function isEvalRequested(argv: readonly string[] = process.argv): boolean
 function readOption(argv: readonly string[], prefix: string, fallback: string): string {
   const arg = argv.find((value) => value.startsWith(prefix))
   return arg ? arg.slice(prefix.length) : fallback
+}
+
+function readNumberOption(argv: readonly string[], prefix: string, fallback: number): number {
+  const raw = argv.find((value) => value.startsWith(prefix))
+  if (!raw) return fallback
+  const parsed = Number(raw.slice(prefix.length))
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${prefix} expects a number, got ${JSON.stringify(raw.slice(prefix.length))}`)
+  }
+  return parsed
+}
+
+function readBoolOption(argv: readonly string[], prefix: string, fallback: boolean): boolean {
+  const raw = argv.find((value) => value.startsWith(prefix))
+  if (!raw) return fallback
+  const value = raw.slice(prefix.length)
+  if (value !== 'true' && value !== 'false') {
+    throw new Error(`${prefix} expects true or false, got ${JSON.stringify(value)}`)
+  }
+  return value === 'true'
+}
+
+/**
+ * Chunking config for one run (#78). The defaults are the production defaults, so
+ * `npm run eval` with no flags still measures what ships.
+ */
+function readChunkOptions(argv: readonly string[]): ChunkOptions {
+  return {
+    chunkSize: readNumberOption(argv, '--eval-chunk-size=', DEFAULT_CHUNK_OPTIONS.chunkSize),
+    chunkOverlap: readNumberOption(
+      argv,
+      '--eval-chunk-overlap=',
+      DEFAULT_CHUNK_OPTIONS.chunkOverlap
+    ),
+    minChunkSize: readNumberOption(argv, '--eval-chunk-min=', DEFAULT_CHUNK_OPTIONS.minChunkSize),
+    allowSpanPages: readBoolOption(
+      argv,
+      '--eval-allow-span-pages=',
+      DEFAULT_CHUNK_OPTIONS.allowSpanPages
+    ),
+    respectHeadings: readBoolOption(
+      argv,
+      '--eval-respect-headings=',
+      DEFAULT_CHUNK_OPTIONS.respectHeadings
+    )
+  }
 }
 
 /**
@@ -109,10 +156,11 @@ export async function runEvalCli(argv: readonly string[] = process.argv): Promis
       // identical on every machine and checkout.
       corpusLabel: relative(process.cwd(), corpusDir) || 'eval/corpus',
       questionsPath,
-      baseline: 'v1.4',
+      baseline: readOption(argv, '--eval-baseline=', 'v1.5'),
       topK: 10,
       threshold: 0,
-      evidenceK: 5
+      evidenceK: 5,
+      chunkOptions: readChunkOptions(argv)
     }
 
     const report = stabilize(await runEvalHarness(getDatabase(), knowledgeService, options))

@@ -31,6 +31,7 @@
     "smoke:packaged": "node scripts/smoke-packaged.mjs",
     "eval:prepare": "npm run build && node scripts/eval.mjs --prepare",
     "eval": "npm run build && node scripts/eval.mjs",
+    "eval:chunking": "npm run build && node scripts/eval-chunking.mjs",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux",

@@ -110,6 +110,6 @@ jobs:
         run: |
           xvfb-run -a npm run eval:prepare
           xvfb-run -a node scripts/eval.mjs
-          cp docs/eval/baseline-v1.4.json /tmp/eval-a.json
+          cp docs/eval/baseline-v1.5.json /tmp/eval-a.json
           xvfb-run -a node scripts/eval.mjs
-          diff /tmp/eval-a.json docs/eval/baseline-v1.4.json
+          diff /tmp/eval-a.json docs/eval/baseline-v1.5.json

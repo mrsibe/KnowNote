@@ -21,17 +21,30 @@ export interface ChunkOptions {
   separators?: string[] // 回退窗口在何处断开的优先级列表
   minChunkSize?: number // 整篇文本不超过它时直接作为一块
   allowSpanPages?: boolean // 允许一个 chunk 跨页，默认 false（分页文档在页边界断开）
+  /**
+   * 在标题处强制开始新 chunk（#78），默认 false。
+   *
+   * false 时标题只是原子单元，仍会和后面的段落装进同一个 chunk；true 时一个 chunk
+   * 不会横跨章节，代价是章节短时会产生更多、更小的 chunk。
+   */
+  respectHeadings?: boolean
 }
 
 /**
  * 默认分块参数。导出的原因只有一个：eval baseline 报告必须引用真实值，而不是
  * 把它手抄一遍。改了默认值而没有重新跑 baseline，差异会从报告里直接暴露出来。
+ *
+ * `chunkSize=1000 / chunkOverlap=100` 是 #78 的实验结论：在 v1.4 语料上，相比
+ * 500/50，它让 Recall@1 0.7667 → 0.8333、MRR 0.8492 → 0.9278、nDCG@10
+ * 0.8899 → 0.9437，同时索引从 36 个 chunk 降到 19 个。完整对比见
+ * `docs/eval/chunking-v1.5.md`，冻结后的基线是 `docs/eval/baseline-v1.5.json`。
  */
 export const DEFAULT_CHUNK_OPTIONS: Required<ChunkOptions> = {
-  chunkSize: 500,
-  chunkOverlap: 50,
+  chunkSize: 1000,
+  chunkOverlap: 100,
   minChunkSize: 100,
   allowSpanPages: false,
+  respectHeadings: false,
   separators: [
     '\n\n\n', // 多个空行（章节分隔）
     '\n\n', // 段落分隔
@@ -257,6 +270,16 @@ export class ChunkingService {
     }
 
     for (const unit of units) {
+      // 标题处强制断节（#78）：一个 chunk 不横跨章节。无重叠 —— 跨章节重叠会把
+      // 上一节的尾巴带进下一节，正是这个策略要避免的。
+      if (
+        opts.respectHeadings &&
+        current.length > 0 &&
+        blocks[unit.blockIndex].kind === 'heading'
+      ) {
+        flush()
+      }
+
       if (current.length === 0) {
         current.push(unit)
         continue

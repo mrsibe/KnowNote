@@ -35,14 +35,31 @@ export function reciprocalRank(matchesByRank: MatchMatrix): number {
 /**
  * nDCG@k with binary gains. The ideal ranking puts every ground-truth location
  * first, so the discount is a plain log base 2.
+ *
+ * A rank only gains when it covers a ground-truth location that no earlier rank
+ * already covered. Without that, several passages recovering the *same* block each
+ * scored a gain while the ideal ranking only counted the block once, and nDCG went
+ * above 1 — which is not a valid ranking metric. Smaller chunks overlap more and
+ * recover the same block from several ranks, so the bug only became visible under
+ * #78. (Found by the #78 chunking experiment.)
  */
 export function ndcgAtK(matchesByRank: MatchMatrix, groundTruthCount: number, k: number): number {
   if (groundTruthCount === 0) return 0
 
   let dcg = 0
+  const covered = new Set<number>()
   const limit = Math.min(matchesByRank.length, k)
   for (let i = 0; i < limit; i++) {
-    if (matchesByRank[i].length > 0) dcg += 1 / Math.log2(i + 2)
+    let fresh = false
+    for (const match of matchesByRank[i]) {
+      // An index at or beyond `groundTruthCount` is not part of the declared ground
+      // truth and cannot be a gain; ignoring it keeps DCG <= IDCG by construction.
+      if (match < groundTruthCount && !covered.has(match)) {
+        covered.add(match)
+        fresh = true
+      }
+    }
+    if (fresh) dcg += 1 / Math.log2(i + 2)
   }
 
   let idcg = 0

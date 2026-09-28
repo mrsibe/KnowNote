@@ -284,7 +284,8 @@ export class KnowledgeService {
   async addDocumentFromFile(
     notebookId: string,
     filePath: string,
-    onProgress?: IndexProgressCallback
+    onProgress?: IndexProgressCallback,
+    chunkOptions?: ChunkOptions
   ): Promise<string> {
     const db = getDatabase()
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
@@ -307,7 +308,13 @@ export class KnowledgeService {
       .run()
 
     // 先拷贝，再解析原文件：本地副本是重新索引/结构恢复时读取的东西。
-    await this.ingestFile(documentId, filePath, { copyFrom: filePath }, 'import', onProgress)
+    await this.ingestFile(
+      documentId,
+      filePath,
+      { copyFrom: filePath, chunkOptions },
+      'import',
+      onProgress
+    )
 
     return documentId
   }
@@ -321,7 +328,7 @@ export class KnowledgeService {
   private async ingestFile(
     documentId: string,
     filePath: string,
-    options: { copyFrom?: string },
+    options: { copyFrom?: string; chunkOptions?: ChunkOptions },
     kind: IngestionRunKind,
     onProgress?: IndexProgressCallback
   ): Promise<void> {
@@ -372,7 +379,7 @@ export class KnowledgeService {
         runId,
         parseResult.content,
         parseResult.structure ?? undefined,
-        {},
+        { chunkOptions: options.chunkOptions },
         onProgress
       )
 

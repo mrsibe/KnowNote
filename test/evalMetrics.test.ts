@@ -4,6 +4,7 @@ import {
   evidencePrecisionAtK,
   firstRelevantRank,
   mean,
+  type MatchMatrix,
   ndcgAtK,
   percentile,
   recallAtK,
@@ -51,6 +52,45 @@ test('nDCG@k discounts a later hit and is 1 when the hit is first', () => {
   // A single ground truth at rank 2: 1/log2(3) over the ideal 1/log2(2)
   assert.ok(Math.abs(ndcgAtK([[], [0]], 1, 10) - 1 / Math.log2(3)) < 1e-12)
   assert.equal(ndcgAtK([[], []], 1, 10), 0)
+})
+
+test('nDCG@k counts a ground-truth location once, however many ranks recover it', () => {
+  // The bug #78 exposed: three passages all covering the same single ground truth
+  // used to score three gains against an ideal that only has one, so nDCG was 3
+  // times the valid maximum. Only the first rank is a fresh gain now.
+  assert.equal(ndcgAtK([[0], [0], [0]], 1, 10), 1)
+  // Two ground truths recovered from the first rank is one binary gain against an
+  // ideal that would place them at ranks 1 and 2.
+  assert.ok(
+    Math.abs(
+      ndcgAtK(
+        [
+          [0, 1],
+          [0, 1]
+        ],
+        2,
+        10
+      ) -
+        1 / (1 + 1 / Math.log2(3))
+    ) < 1e-12
+  )
+})
+
+test('nDCG@k never exceeds 1', () => {
+  const cases: Array<{ matrix: MatchMatrix; count: number }> = [
+    { matrix: [[0], [0], [0]], count: 1 },
+    { matrix: [[0], [0], [0]], count: 3 },
+    { matrix: [[0], [1], [0, 1]], count: 2 },
+    { matrix: [[0, 1, 2]], count: 3 },
+    { matrix: [[], [0], [], [1], [], [2]], count: 3 },
+    { matrix: [[]], count: 0 },
+    { matrix: [], count: 0 }
+  ]
+
+  for (const { matrix, count } of cases) {
+    const value = ndcgAtK(matrix, count, 10)
+    assert.ok(value >= 0 && value <= 1, `nDCG out of range: ${value} for count ${count}`)
+  }
 })
 
 test('evidence precision counts grounded passages over retrieved passages', () => {
