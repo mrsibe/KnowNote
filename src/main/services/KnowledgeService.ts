@@ -44,6 +44,14 @@ import {
 } from './blocks/documentBlocks'
 import { resolveChunkProvenance, type ChunkProvenance } from './chunkProvenance'
 import { DenseRetriever } from './retrieval'
+import {
+  advanceRun,
+  completeRun,
+  failRun,
+  runsFor,
+  startRun,
+  type IngestionRunKind
+} from './ingestion'
 import type {
   EvidenceLocator,
   RetrievalRequest,
@@ -251,13 +259,21 @@ export class KnowledgeService {
 
     // 2. 建立派生索引（blocks → chunks → embeddings → 向量表）。失败时由
     //    `indexDocument()` 把这一行标成 failed，source 行保留以便重试或重新索引。
-    await this.indexDocument(
-      documentId,
-      options.content,
-      undefined,
-      { chunkOptions: options.chunkOptions },
-      onProgress
-    )
+    const runId = startRun(documentId, 'import')
+    try {
+      await this.indexDocument(
+        documentId,
+        runId,
+        options.content,
+        undefined,
+        { chunkOptions: options.chunkOptions },
+        onProgress
+      )
+      completeRun(runId)
+    } catch (error) {
+      failRun(runId, (error as Error).message)
+      throw error
+    }
 
     return documentId
   }
@@ -272,79 +288,107 @@ export class KnowledgeService {
   ): Promise<string> {
     const db = getDatabase()
     const documentId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-    let localFilePath: string | undefined
-    let parsedContent = ''
-    let parsedStructure: DocumentStructure | undefined
+    const now = new Date()
+
+    // source 行在**解析之前**就存在（#95）。以前解析失败时更新的是还没插入的行，
+    // 失败因此丢失，文档也无法重试。解析成功后再把解析结果回填。
+    db.insert(documents)
+      .values({
+        id: documentId,
+        notebookId,
+        title: basename(filePath) || 'Untitled',
+        type: 'file',
+        sourceUri: filePath,
+        status: 'processing',
+        chunkCount: 0,
+        createdAt: now,
+        updatedAt: now
+      })
+      .run()
+
+    // 先拷贝，再解析原文件：本地副本是重新索引/结构恢复时读取的东西。
+    await this.ingestFile(documentId, filePath, { copyFrom: filePath }, 'import', onProgress)
+
+    return documentId
+  }
+
+  /**
+   * 一条 ingestion pipeline：copy（可选）→ parse → chunk → embed → 写入派生索引。
+   *
+   * 导入与「解析阶段失败后的重试」共用它：后者已经有本地副本，直接解析副本，不再拷贝。
+   * run 的生命周期也在这里维护（#95）—— 每条路径都必须留下一次完整的尝试记录。
+   */
+  private async ingestFile(
+    documentId: string,
+    filePath: string,
+    options: { copyFrom?: string },
+    kind: IngestionRunKind,
+    onProgress?: IndexProgressCallback
+  ): Promise<void> {
+    const db = getDatabase()
+    const runId = startRun(documentId, kind)
 
     try {
-      onProgress?.('parsing_file', 0)
+      if (options.copyFrom) {
+        advanceRun(runId, 'copying', 0)
+        onProgress?.('copying', 0)
+        const localFilePath = await this.copyFileToKnowledgeDir(options.copyFrom, documentId)
+        db.update(documents)
+          .set({ localFilePath, updatedAt: new Date() })
+          .where(eq(documents.id, documentId))
+          .run()
+      }
 
-      // 先拷贝文件到知识库目录
-      localFilePath = await this.copyFileToKnowledgeDir(filePath, documentId)
-
+      advanceRun(runId, 'parsing', 5)
+      onProgress?.('parsing', 5)
       const parseResult = await this.fileParserService.parseFile(filePath)
-      parsedContent = parseResult.content
-      parsedStructure = parseResult.structure ?? undefined
 
       // 计算内容哈希
       const contentHash = createHash('md5').update(parseResult.content).digest('hex')
-      const now = new Date()
-
-      // 1. 创建 source 记录（包含 localFilePath 与解析结构）
-      onProgress?.('creating_document', 0)
-
-      // 根据 MIME 类型决定文档类型
-      // text/plain 和 text/markdown 可以直接预览
       const docType =
         parseResult.mimeType === 'text/plain' || parseResult.mimeType === 'text/markdown'
           ? 'text'
           : 'file'
 
-      const newDoc: NewDocument = {
-        id: documentId,
-        notebookId,
-        title: parseResult.title || basename(filePath) || 'Untitled',
-        type: docType,
-        sourceUri: filePath,
-        localFilePath: localFilePath,
-        content: parseResult.content,
-        // 结构随 source 一起持久化，重新索引才能不加解析地重建同一批块
-        structure: parsedStructure,
-        contentHash,
-        mimeType: parseResult.mimeType,
-        fileSize: parseResult.metadata?.fileSize as number | undefined,
-        metadata: parseResult.metadata,
-        status: 'processing',
-        chunkCount: 0,
-        createdAt: now,
-        updatedAt: now
-      }
-
-      db.insert(documents).values(newDoc).run()
-    } catch (error) {
-      // 拷贝/解析/建行失败时删除已拷贝的文件，并把（可能已创建的）行标成失败
-      if (localFilePath) {
-        await this.deleteLocalFile(localFilePath)
-      }
-
       db.update(documents)
         .set({
-          status: 'failed',
-          errorMessage: (error as Error).message,
+          title: parseResult.title || basename(filePath) || 'Untitled',
+          type: docType,
+          content: parseResult.content,
+          // 结构随 source 一起持久化，重新索引才能不加解析地重建同一批块
+          structure: parseResult.structure ?? undefined,
+          contentHash,
+          mimeType: parseResult.mimeType,
+          fileSize: parseResult.metadata?.fileSize as number | undefined,
+          metadata: parseResult.metadata,
+          errorMessage: null,
           updatedAt: new Date()
         })
         .where(eq(documents.id, documentId))
         .run()
 
-      Logger.error('KnowledgeService', 'Failed to add document from file:', error)
+      await this.indexDocument(
+        documentId,
+        runId,
+        parseResult.content,
+        parseResult.structure ?? undefined,
+        {},
+        onProgress
+      )
+
+      completeRun(runId)
+    } catch (error) {
+      const message = (error as Error).message
+      // 保留 source 行与本地副本：来源身份在一次失败的 run 后依然存在，重试可以直接
+      // 解析副本，不必再向用户要一次文件。
+      db.update(documents)
+        .set({ status: 'failed', errorMessage: message, updatedAt: new Date() })
+        .where(eq(documents.id, documentId))
+        .run()
+      failRun(runId, message)
+      Logger.error('KnowledgeService', 'Failed to ingest document:', error)
       throw error
     }
-
-    // 2. 建立派生索引。索引失败由 `indexDocument()` 标记；这里保留本地文件，
-    //    用户可以重新索引，而不是重新导入。
-    await this.indexDocument(documentId, parsedContent, parsedStructure, {}, onProgress)
-
-    return documentId
   }
 
   /**
@@ -355,11 +399,17 @@ export class KnowledgeService {
    * 派生索引，从不插入或删除 `documents` 行，所以对同一个 documentId 反复调用不会改
    * 变来源身份（历史 citation 仍然指向同一个来源）。
    *
-   * 调用前该文档不应带有旧的派生索引；重新索引要先 `clearDerivedIndex()`。
-   * 失败时把该行标成 `failed` 并抛出，由调用方决定是否清理 source。
+   * 顺序是 #95 的核心保证：**先把 blocks / chunks / embeddings 全部算出来**（这些是
+   * 会慢、会失败的步骤），全部成功之后才动旧的派生索引。这样「embedding 跑到 70%
+   * 失败」不会删掉一份还能检索的旧索引 —— 一次失败的 reindex 不破坏上一份可用索引。
+   *
+   * 代价要说清楚：替换阶段本身（clear → 写入 → 向量）不是单个事务，因为向量写入是
+   * 异步的。所以这个保证覆盖 parse/chunk/embed，而不是「替换中途断电」。真正的原子
+   * 切换需要给派生数据加 generation，是后续工作。
    */
   private async indexDocument(
     documentId: string,
+    runId: string,
     content: string,
     structure: DocumentStructure | undefined,
     options: { chunkOptions?: ChunkOptions } = {},
@@ -373,11 +423,11 @@ export class KnowledgeService {
     const now = new Date()
 
     try {
-      // 1. 文档块。偏移锚定 content，即 documents.content。
+      // 1. 文档块（内存）。偏移锚定 content，即 documents.content。
       const blocks = assignBlockIds(documentId, buildDocumentBlocks({ content, structure }))
-      this.persistDocumentBlocks(blocks)
 
-      // 2. 分块（偏移同样锚定 content）
+      // 2. 分块（内存，偏移同样锚定 content）
+      advanceRun(runId, 'chunking', 10)
       onProgress?.('chunking', 10)
       const chunkResults = this.chunkingService.chunkBlocks(content, blocks, options.chunkOptions)
 
@@ -387,13 +437,11 @@ export class KnowledgeService {
 
       Logger.info('KnowledgeService', `Document ${documentId}: ${chunkResults.length} chunks`)
 
-      // 3. 保存分块与 chunk↔block 映射（同一事务，不会出现没有映射的 chunk）
-      onProgress?.('saving_chunks', 20)
-      const { chunkIds, chunkContents } = this.saveChunks(documentId, notebookId, chunkResults, now)
-
-      // 4. 生成嵌入向量
+      // 3. 生成嵌入向量（异步，最可能失败的一步）—— 在动旧索引之前完成。
       // 不指定维度:维度由 embedding 模型决定,写死维度会让用别的模型的笔记本直接
       // 索引失败(vec0 表的宽度在创建时固定,见 #33)。测出真实维度之后再用它建表。
+      advanceRun(runId, 'embedding', 20)
+      const chunkContents = chunkResults.map((chunk) => chunk.content)
       const embeddingResults = await this.embedDocumentChunks(notebookId, chunkContents, onProgress)
 
       if (embeddingResults.length === 0) {
@@ -409,8 +457,18 @@ export class KnowledgeService {
       )
       Logger.info('KnowledgeService', `Embedding dimensions: ${detectedDimensions}`)
 
+      // 4. 到此为止没有破坏任何东西。现在才替换旧的派生索引。
+      advanceRun(runId, 'finalizing', 85)
+      onProgress?.('saving_chunks', 85)
+      await this.clearDerivedIndex(documentId)
+
+      this.persistDocumentBlocks(blocks)
+
+      // 保存分块与 chunk↔block 映射（同一事务，不会出现没有映射的 chunk）
+      const { chunkIds } = this.saveChunks(documentId, notebookId, chunkResults, now)
+
       // 5. 保存嵌入元数据并添加到向量存储
-      onProgress?.('saving_embeddings', 85)
+      onProgress?.('saving_embeddings', 90)
       const vectorStore = await vectorStoreManager.getStore(
         notebookId,
         undefined,
@@ -920,7 +978,7 @@ export class KnowledgeService {
    * 保持不变。重新索引不会让历史 citation 指向另一个来源。
    *
    * 升级前导入的文档 `structure` 为 NULL（migration 只加列，不回填）。这时先从本地
-   * 副本恢复结构再删除旧索引：顺序很重要，否则恢复失败会把已有的 page/bbox 也删掉。
+   * 副本恢复结构，再进入 pipeline：恢复失败时还没动旧索引（#95）。
    */
   async reindexDocument(documentId: string, onProgress?: IndexProgressCallback): Promise<void> {
     const db = getDatabase()
@@ -939,8 +997,41 @@ export class KnowledgeService {
       }
     }
 
-    await this.clearDerivedIndex(documentId)
-    await this.indexDocument(documentId, doc.content, structure, {}, onProgress)
+    const runId = startRun(documentId, 'reindex')
+    try {
+      await this.indexDocument(documentId, runId, doc.content, structure, {}, onProgress)
+      completeRun(runId)
+    } catch (error) {
+      failRun(runId, (error as Error).message)
+      throw error
+    }
+  }
+
+  /**
+   * 对一份失败的 source 再试一次（#95）。
+   *
+   * 已经解析过的（有 `content`）从分块开始重来；解析前就失败的只有本地副本，重新解析。
+   * 两条路径都复用同一条 pipeline，不需要用户再选一次文件。
+   */
+  async retryDocument(documentId: string, onProgress?: IndexProgressCallback): Promise<void> {
+    const doc = this.getDocument(documentId)
+    if (!doc) throw new Error(`Document ${documentId} not found`)
+
+    if (doc.content) {
+      await this.reindexDocument(documentId, onProgress)
+      return
+    }
+
+    if (!doc.localFilePath) {
+      throw new Error('This source has no local copy to retry from')
+    }
+
+    await this.ingestFile(documentId, doc.localFilePath, {}, 'import', onProgress)
+  }
+
+  /** 一份 source 的索引尝试历史，最近优先（#95）。 */
+  getIngestionRuns(documentId: string) {
+    return runsFor(documentId)
   }
 
   /**

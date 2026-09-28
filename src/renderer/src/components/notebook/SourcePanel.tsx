@@ -330,6 +330,8 @@ export default function SourcePanel(): ReactElement {
     addDocumentFromUrl,
     addNoteToKnowledge,
     deleteDocument,
+    retryDocument,
+    reindexDocument,
     selectFiles
   } = useKnowledgeStore()
 
@@ -564,6 +566,23 @@ export default function SourcePanel(): ReactElement {
     [notebookId, deleteDocument]
   )
 
+  // 重试/重建索引（#95）
+  const handleRetryDocument = useCallback(
+    async (documentId: string) => {
+      if (!notebookId) return
+      await retryDocument(notebookId, documentId)
+    },
+    [notebookId, retryDocument]
+  )
+
+  const handleReindexDocument = useCallback(
+    async (documentId: string) => {
+      if (!notebookId) return
+      await reindexDocument(notebookId, documentId)
+    },
+    [notebookId, reindexDocument]
+  )
+
   // 处理打开设置
   const handleOpenSettings = useCallback(() => {
     openSettings()
@@ -732,6 +751,8 @@ export default function SourcePanel(): ReactElement {
                 hasEmbeddingModel={!!hasEmbeddingModel}
                 onDeleteDocument={handleDelete}
                 onSelectDocument={handleSelectDocument}
+                onRetryDocument={handleRetryDocument}
+                onReindexDocument={handleReindexDocument}
                 onOpenSettings={handleOpenSettings}
               />
             </ScrollArea>

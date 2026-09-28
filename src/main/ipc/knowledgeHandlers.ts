@@ -252,6 +252,29 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     return validated
   })
 
+  // 重试一份失败的 source（#95）：已解析过的从分块重来，解析前的重新解析本地副本。
+  ipcMain.handle('knowledge:retry-document', async (event: IpcMainInvokeEvent, args: unknown) => {
+    const validated = await validate(KnowledgeSchemas.retryDocument, async (params) => {
+      Logger.debug('KnowledgeHandlers', 'retry-document:', params.documentId)
+
+      try {
+        await knowledgeService.retryDocument(params.documentId, (stage, progress) => {
+          event.sender.send('knowledge:index-progress', {
+            documentId: params.documentId,
+            stage,
+            progress
+          })
+        })
+        return { success: true }
+      } catch (error) {
+        Logger.error('KnowledgeHandlers', 'Error retrying document:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    })(event, args)
+
+    return validated
+  })
+
   // 获取知识库统计信息
   ipcMain.handle(
     'knowledge:get-stats',

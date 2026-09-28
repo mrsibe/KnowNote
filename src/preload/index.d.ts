@@ -282,6 +282,7 @@ declare global {
         getDocumentBlocks: (documentId: string) => Promise<SourceBlock[]>
         deleteDocument: (documentId: string) => Promise<{ success: boolean; error?: string }>
         reindexDocument: (documentId: string) => Promise<{ success: boolean; error?: string }>
+        retryDocument: (documentId: string) => Promise<{ success: boolean; error?: string }>
 
         // 统计
         getStats: (notebookId: string) => Promise<KnowledgeStats>

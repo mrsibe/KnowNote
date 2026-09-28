@@ -190,6 +190,8 @@ const api = {
       ipcRenderer.invoke('knowledge:delete-document', { documentId }),
     reindexDocument: (documentId: string) =>
       ipcRenderer.invoke('knowledge:reindex-document', { documentId }),
+    retryDocument: (documentId: string) =>
+      ipcRenderer.invoke('knowledge:retry-document', { documentId }),
 
     // 统计
     getStats: (notebookId: string) => ipcRenderer.invoke('knowledge:get-stats', { notebookId }),

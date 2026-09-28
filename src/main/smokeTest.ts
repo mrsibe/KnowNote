@@ -177,6 +177,35 @@ function fakeEmbeddingService(dimensions = 16): EmbeddingService {
 }
 
 /**
+ * 一个必定在嵌入阶段失败的 service（#95 smoke）。
+ *
+ * 用来证明「一次失败的 reindex 不破坏上一份可用索引」：它会失败在动旧索引之前。
+ */
+function failingEmbeddingService(): EmbeddingService {
+  // SAFETY: only `ensureReady`, `embedBatch` and `getSpace` are reached by the
+  // index path; the cast hides the rest of the real service's surface from the
+  // compiler on purpose, so a new call site here fails loudly at runtime.
+  return {
+    ensureReady: async () => undefined,
+    embed: async () => {
+      throw new Error('smoke: embedding failed')
+    },
+    embedBatch: async () => {
+      throw new Error('smoke: embedding failed')
+    },
+    getSpace: async () => ({
+      id: 'smoke-embed-space',
+      backend: 'local',
+      model: 'smoke-embed',
+      revision: '',
+      dimensions: 16,
+      pooling: 'mean',
+      normalize: true
+    })
+  } as unknown as EmbeddingService
+}
+
+/**
  * Rewinds the database to the old layout: one global vec_embeddings table whose
  * width is fixed at 1024, plus a notebook that owns a vector in it.
  *
@@ -683,6 +712,60 @@ async function runChecks(): Promise<string[]> {
     'evidence lost the paragraph bbox needed to highlight it (#72)'
   )
   pass('DenseRetriever returns retrieved evidence with a page/block locator')
+
+  // --- a failed re-index leaves the previous index usable (#95) ---------------
+  // The failure this guards: `reindexDocument()` used to clear the derived index
+  // *before* embedding, so an embedding failure at 70% left the document with no
+  // chunks at all. The fallible work now happens before the old index is touched.
+  const chunksBeforeFailedReindex = knowledge.getDocumentChunks(reindexDocId)
+  const failing = new KnowledgeService(failingEmbeddingService())
+  let reindexFailed = false
+  try {
+    await failing.reindexDocument(reindexDocId)
+  } catch {
+    reindexFailed = true
+  }
+  assert(reindexFailed, 'a re-index with a failing embedding backend reported success')
+  assert(
+    knowledge.getDocumentChunks(reindexDocId).length === chunksBeforeFailedReindex.length,
+    'a failed re-index destroyed the previous usable index'
+  )
+  const failedRun = knowledge.getIngestionRuns(reindexDocId)[0]
+  assert(
+    failedRun?.kind === 'reindex' && failedRun.stage === 'failed',
+    `failed re-index recorded run ${failedRun?.kind}/${failedRun?.stage}`
+  )
+  assert(
+    knowledge.getDocument(reindexDocId)?.status === 'failed',
+    'a failed re-index did not mark the document failed'
+  )
+  pass('a failed re-index leaves the previous index usable and records a failed run')
+
+  // --- an import that fails to parse is still recorded (#95) -----------------
+  // The bug this guards: the documents row used to be inserted *after* parsing, so
+  // a parse failure updated a row that did not exist — the failure was lost and the
+  // document could not be retried.
+  const brokenDir = mkdtempSync(join(tmpdir(), 'knownote-smoke-'))
+  const brokenPath = join(brokenDir, 'broken.xyz')
+  writeFileSync(brokenPath, 'not a supported document')
+  let importFailed = false
+  try {
+    await knowledge.addDocumentFromFile(reindexNotebook, brokenPath)
+  } catch {
+    importFailed = true
+  }
+  assert(importFailed, 'importing an unsupported file did not fail')
+  const brokenDoc = knowledge
+    .getDocuments(reindexNotebook)
+    .find((doc) => doc.title === 'broken.xyz')
+  assert(brokenDoc, 'a failed import left no source row')
+  assert(brokenDoc.status === 'failed', `failed import left status ${brokenDoc.status}`)
+  const brokenRun = knowledge.getIngestionRuns(brokenDoc.id)[0]
+  assert(
+    brokenRun?.stage === 'failed' && Boolean(brokenRun.errorMessage),
+    'a failed import recorded no failed run with a reason'
+  )
+  pass('a failed import is persisted with a failed run')
 
   // --- a turn's outcome survives the database ---------------------------------
   // Every chat turn now ends in exactly one terminal outcome (#139), and that

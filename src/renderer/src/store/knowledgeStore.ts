@@ -51,6 +51,16 @@ interface KnowledgeStore {
     notebookId: string,
     filePath: string
   ) => Promise<{ success: boolean; documentId?: string; error?: string }>
+  /** 重试一份失败的来源（#95）。解析前失败的会重新解析本地副本。 */
+  retryDocument: (
+    notebookId: string,
+    documentId: string
+  ) => Promise<{ success: boolean; error?: string }>
+  /** 重建一份来源的派生索引（#95）。 */
+  reindexDocument: (
+    notebookId: string,
+    documentId: string
+  ) => Promise<{ success: boolean; error?: string }>
   addDocumentFromUrl: (
     notebookId: string,
     url: string
@@ -181,6 +191,33 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     set({ isIndexing: true, error: null })
     try {
       const result = await window.api.knowledge.addNote(notebookId, noteId)
+      await refreshAfterImport(notebookId, result, set, get)
+      return result
+    } catch (error) {
+      const message = (error as Error).message
+      await refreshAfterImport(notebookId, { success: false, error: message }, set, get)
+      return { success: false, error: message }
+    }
+  },
+
+  // 重新索引 / 重试（#95）
+  retryDocument: async (notebookId, documentId) => {
+    set({ isIndexing: true, error: null })
+    try {
+      const result = await window.api.knowledge.retryDocument(documentId)
+      await refreshAfterImport(notebookId, result, set, get)
+      return result
+    } catch (error) {
+      const message = (error as Error).message
+      await refreshAfterImport(notebookId, { success: false, error: message }, set, get)
+      return { success: false, error: message }
+    }
+  },
+
+  reindexDocument: async (notebookId, documentId) => {
+    set({ isIndexing: true, error: null })
+    try {
+      const result = await window.api.knowledge.reindexDocument(documentId)
       await refreshAfterImport(notebookId, result, set, get)
       return result
     } catch (error) {

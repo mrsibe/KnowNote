@@ -6,6 +6,7 @@ import type {
   ChatTokenUsage
 } from '../../shared/types/chat'
 import type { RetrievalScope } from '../../shared/types/scope'
+import type { IngestionRunKind, IngestionStage } from '../../shared/types/ingestion'
 import type { DocumentStructure } from '../services/loaders/types'
 
 /**
@@ -177,6 +178,40 @@ export const documents = sqliteTable(
 
 export type Document = typeof documents.$inferSelect
 export type NewDocument = typeof documents.$inferInsert
+
+/**
+ * 索引尝试记录（#95）。
+ *
+ * `documents` 是**来源身份**，`ingestion_runs` 是**一次索引尝试**。一个 document
+ * 可以有多次 run：失败的、重试后成功的。
+ *
+ * 为什么单独一张表而不是给 documents 加几个字段：一次尝试有历史（阶段、进度、
+ * 失败原因、起止时间），而 documents 一行只能装一个终态。重试需要历史。
+ */
+export const ingestionRuns = sqliteTable(
+  'ingestion_runs',
+  {
+    id: text('id').primaryKey(),
+    documentId: text('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: ['import', 'reindex'] })
+      .$type<IngestionRunKind>()
+      .notNull(),
+    stage: text('stage').$type<IngestionStage>().notNull(),
+    progress: integer('progress').notNull().default(0),
+    errorMessage: text('error_message'),
+    startedAt: integer('started_at', { mode: 'timestamp' }).notNull(),
+    finishedAt: integer('finished_at', { mode: 'timestamp' })
+  },
+  (table) => ({
+    // 取一份文档的最近一次尝试
+    documentIdx: index('idx_ingestion_runs_document').on(table.documentId, table.startedAt)
+  })
+)
+
+export type IngestionRun = typeof ingestionRuns.$inferSelect
+export type NewIngestionRun = typeof ingestionRuns.$inferInsert
 
 /**
  * 文档分块表

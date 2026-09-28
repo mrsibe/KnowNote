@@ -82,5 +82,7 @@
   "scopeSelectedSources": "选中的来源",
   "scopeSelectedCount": "已选 {{count}} 个来源",
   "scopeClear": "改用所有来源",
-  "scopeNoDocuments": "没有可供选择的来源"
+  "scopeNoDocuments": "没有可供选择的来源",
+  "retryDocument": "重试",
+  "reindexDocument": "重建索引"
 }

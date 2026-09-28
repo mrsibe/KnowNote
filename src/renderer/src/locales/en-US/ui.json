@@ -82,5 +82,7 @@
   "scopeSelectedSources": "Selected sources",
   "scopeSelectedCount": "{{count}} sources",
   "scopeClear": "Use all sources",
-  "scopeNoDocuments": "No sources to choose from"
+  "scopeNoDocuments": "No sources to choose from",
+  "retryDocument": "Try again",
+  "reindexDocument": "Re-index"
 }

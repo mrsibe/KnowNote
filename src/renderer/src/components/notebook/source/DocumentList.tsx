@@ -1,5 +1,15 @@
-import { ReactElement, useRef, useEffect, useState } from 'react'
-import { FileText, Globe, FileUp, StickyNote, Trash2, Loader2, Database } from 'lucide-react'
+import { ReactElement, useState } from 'react'
+import {
+  FileText,
+  Globe,
+  FileUp,
+  StickyNote,
+  Trash2,
+  Loader2,
+  Database,
+  RotateCcw,
+  RefreshCw
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { KnowledgeDocument } from '../../../../../shared/types/knowledge'
 import { Button } from '../../ui/button'
@@ -18,6 +28,10 @@ interface DocumentListProps {
   hasEmbeddingModel: boolean
   onDeleteDocument: (documentId: string) => void
   onSelectDocument: (document: KnowledgeDocument) => void
+  /** 重试一份失败的来源（#95）。 */
+  onRetryDocument: (documentId: string) => void
+  /** 重建一份来源的派生索引（#95）。 */
+  onReindexDocument: (documentId: string) => void
   onOpenSettings: () => void
 }
 
@@ -26,6 +40,8 @@ export default function DocumentList({
   hasEmbeddingModel,
   onDeleteDocument,
   onSelectDocument,
+  onRetryDocument,
+  onReindexDocument,
   onOpenSettings
 }: DocumentListProps): ReactElement {
   const { t } = useTranslation('ui')
@@ -71,6 +87,8 @@ export default function DocumentList({
           document={doc}
           onDelete={onDeleteDocument}
           onSelect={onSelectDocument}
+          onRetry={onRetryDocument}
+          onReindex={onReindexDocument}
         />
       ))}
     </div>
@@ -82,11 +100,18 @@ interface DocumentItemProps {
   document: KnowledgeDocument
   onDelete: (id: string) => void
   onSelect: (document: KnowledgeDocument) => void
+  onRetry: (id: string) => void
+  onReindex: (id: string) => void
 }
 
-function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): ReactElement {
+function DocumentItem({
+  document,
+  onDelete,
+  onSelect,
+  onRetry,
+  onReindex
+}: DocumentItemProps): ReactElement {
   const { t } = useTranslation('ui')
-  const hasShownErrorRef = useRef(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   const getTypeIcon = () => {
@@ -102,14 +127,6 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
         return <FileText className={iconClass} />
     }
   }
-
-  // 显示失败提示（仅一次）
-  useEffect(() => {
-    if (document.status === 'failed' && !hasShownErrorRef.current) {
-      hasShownErrorRef.current = true
-      alert(t('embeddingFailed', { title: document.title }))
-    }
-  }, [document.status, document.title, t])
 
   const handleConfirmDelete = () => {
     onDelete(document.id)
@@ -139,19 +156,49 @@ function DocumentItem({ document, onDelete, onSelect }: DocumentItemProps): Reac
               {t('indexing')}
             </p>
           )}
+          {/* 失败原因就地显示（#95）：以前是一个 alert，既丢掉了原因也无法重试。 */}
+          {document.status === 'failed' && document.errorMessage && (
+            <p className="text-xs text-destructive truncate" title={document.errorMessage}>
+              {document.errorMessage}
+            </p>
+          )}
         </div>
       </button>
 
-      {/* 删除按钮列 - 固定宽度 */}
-      <Button
-        onClick={() => setIsDeleteDialogOpen(true)}
-        variant="ghost"
-        size="icon"
-        className="mt-2 mr-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-destructive hover:bg-destructive/10 hover:text-destructive"
-        title={t('deleteDocument')}
-      >
-        <Trash2 className="w-4 h-4" />
-      </Button>
+      {/* 操作列 - 固定宽度 */}
+      <div className="mt-2 mr-1 flex flex-col items-center gap-0.5">
+        {document.status === 'failed' && (
+          <Button
+            onClick={() => onRetry(document.id)}
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+            title={t('retryDocument')}
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        {document.status === 'indexed' && (
+          <Button
+            onClick={() => onReindex(document.id)}
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-foreground"
+            title={t('reindexDocument')}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </Button>
+        )}
+        <Button
+          onClick={() => setIsDeleteDialogOpen(true)}
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          title={t('deleteDocument')}
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </div>
 
       {/* 删除文档确认对话框 */}
       <ConfirmDialog

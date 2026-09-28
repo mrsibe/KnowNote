@@ -180,6 +180,10 @@ export const KnowledgeSchemas = {
     documentId: z.string().min(1, '文档 ID 不能为空')
   }),
 
+  retryDocument: z.object({
+    documentId: z.string().min(1, '文档 ID 不能为空')
+  }),
+
   getStats: z.object({
     notebookId: z.string().min(1, '笔记本 ID 不能为空')
   }),
