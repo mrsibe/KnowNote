@@ -295,22 +295,40 @@ Rules:
 - A collapsed panel keeps its previous width in the session so expanding restores
   it; `0` is never persisted as a width.
 
-`MessageList` follows the transcript only while the reader is already at the
-bottom (within 48px). Scrolling up suspends the follow and reveals a
-`jumpToLatest` pill; the follow resumes when they return to the bottom. A stream
-that force-scrolls per token makes re-reading impossible. The scroll itself is
-instant, never smooth: this effect runs per token, and an animation queued that
-often never settles.
+`MessageList` follows the transcript only while the reader is already near the
+bottom (within `PINNED_THRESHOLD`, 48px). Scrolling up suspends the follow and
+reveals a circular, icon-only `jumpToLatest` control centred above the composer;
+the follow resumes when they return to the bottom, or when the control is
+pressed. A stream that force-scrolls per token makes re-reading impossible. The
+follow itself is instant, never smooth, because it runs per token and an
+animation queued that often never settles; the control is the one place a smooth
+scroll is allowed, and only while no answer is streaming. Reduced motion turns
+even that into an instant jump.
+
+The distance to the bottom is `scrollHeight - scrollTop - clientHeight` clamped at
+zero, compared against the threshold — never `scrollTop + clientHeight ===
+scrollHeight`, which is false under fractional pixels and reflows. The numbers
+live in `stickToBottom.ts` and are tested there.
 
 The transcript's empty state and its message list must share **one** `ScrollArea`.
 The scroll subscription runs once, so a viewport that only exists after messages
-arrive can never be observed — that is how the follow silently stopped working
-while looking correct in review.
+arrive can never be observed.
 
-`ProcessPanel` floats the composer over the transcript and reserves `pb-32`
-(128px) for it; the scroll fade above it is `h-32` for the same reason. The fade
-is sized to the reserve, not to taste: a taller fade dims the last line of every
-answer, because the content scrolls under it.
+The follow is driven by the content's **height**, not only by the messages array:
+streaming grows one message, and Markdown reflow, a highlighted code block, a
+decoded image or an opened source disclosure change the height with no message
+event at all. A `ResizeObserver` on the transcript keeps the follow alive in all
+of those, and only while the reader is pinned.
+
+`ProcessPanel` floats the composer over the transcript, so the transcript reserves
+space for it: `COMPOSER_GAP` (24px) plus the composer's own measured height. The
+composer's height is **measured**, not assumed — it grows with the scope row and
+the auto-resizing textarea, and the old fixed reserve left a long question's answer
+behind the input. A single `ResizeObserver` publishes the reserve as
+`--composer-reserve` on the panel card; the transcript's `padding-bottom`, the
+back-to-bottom control's offset and the scroll fade all read that one value. The
+fade is exactly the reserve's height for the same reason: a taller fade dims the
+last line of every answer, because the content scrolls under it.
 
 Two rules for the composer and for leaving the workspace:
 
@@ -636,7 +654,7 @@ Don't:
 - Gradients, glassmorphism (`backdrop-blur` except on a floating toolbar over
   scrolling content), glow effects. **One sanctioned exception:** the scroll fade
   between the transcript and the floating composer — a functional fade, sized to
-  the `pb-32` reserve it covers so it never dims the last line of an answer
+  the measured composer reserve it covers so it never dims the last line of an answer
   (`ProcessPanel.tsx`).
 - Colour icons in neutral chrome; colour-coded sections chosen from `--chart-*`
   outside chart/graph surfaces.

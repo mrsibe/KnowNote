@@ -15,6 +15,7 @@ import { ScrollArea } from '../../ui/scroll-area'
 import { Button } from '../../ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '../../ui/empty'
 import { isAnswerLive } from '../../../../../shared/utils/answerState'
+import { BACK_TO_BOTTOM_BOTTOM, COMPOSER_RESERVE, isPinnedToBottom } from './stickToBottom'
 // messageList.css 已合并到 effects.css（通过 main.css 全局导入）
 
 export interface MessageListHandle {
@@ -26,16 +27,25 @@ interface MessageListProps {
   messages: ChatMessage[]
 }
 
-/** How close to the bottom still counts as "following the answer". */
-const PINNED_THRESHOLD = 48
+/** A user who asked for reduced motion gets the jump without the animation. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
 
 const MessageList = forwardRef<MessageListHandle, MessageListProps>(function MessageList(
   { messages },
   ref
 ): ReactElement {
   const viewportRef = useRef<HTMLDivElement>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
+  // True while an animated `pinToBottom` is still travelling. The scroll events
+  // it emits are the animation, not the reader leaving, so they must not
+  // unfollow the transcript halfway down.
+  const programmaticRef = useRef(false)
   const [isPinned, setIsPinned] = useState(true)
   // Completion announcements. Kept as `{ text, id }` so the node is replaced and
   // the live region re-announces: setting the same string twice is a no-op for a
@@ -47,6 +57,7 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : undefined
   // The record says whether the turn is still arriving (#142).
   const isStreaming = isAnswerLive(lastMessage?.status)
+  const hasMessages = messages.length > 0
 
   useEffect(() => {
     // Announce the END of a turn, never its tokens. A live region on the
@@ -62,36 +73,67 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
     streamingRef.current = isStreaming
   }, [isStreaming, t])
 
-  const scrollToBottom = useCallback((): void => {
-    // Deliberately instant, not smooth: while an answer streams this runs per
-    // token, and an animated scroll queued that often never settles — it fights
-    // the reader and burns frames instead of following the text.
-    bottomRef.current?.scrollIntoView({ block: 'end' })
+  // Land on the true bottom of the scroll viewport, not on an anchor near it. An
+  // anchor's `scrollIntoView` stops short of the reserved composer space, which
+  // is what left the last line behind the composer.
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto'): void => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior })
   }, [])
 
   const pinToBottom = useCallback((): void => {
     pinnedRef.current = true
     setIsPinned(true)
-    scrollToBottom()
-  }, [scrollToBottom])
+    const viewport = viewportRef.current
+    if (!viewport) return
+    // Smooth for a deliberate jump; instant while an answer streams, where the
+    // content keeps growing underneath the animation and would cancel it. Already
+    // at the bottom, there is nothing to animate and no scroll event will arrive
+    // to clear the lock — so no lock is taken.
+    const smooth = !isStreaming && !prefersReducedMotion() && !isPinnedToBottom(viewport)
+    programmaticRef.current = smooth
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+  }, [isStreaming])
 
   useImperativeHandle(ref, () => ({ pinToBottom }), [pinToBottom])
 
-  // Follow the transcript only while the reader is already at the bottom.
+  // Follow the transcript only while the reader is already near the bottom.
   useEffect(() => {
     const viewport = viewportRef.current
     if (!viewport) return
 
     const handleScroll = (): void => {
-      const distance = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
-      const pinned = distance <= PINNED_THRESHOLD
+      const pinned = isPinnedToBottom(viewport)
+      if (programmaticRef.current) {
+        // Still animating: only arrival clears the lock, so the follow re-arms
+        // the instant the view lands instead of being cancelled part-way.
+        if (!pinned) return
+        programmaticRef.current = false
+      }
       pinnedRef.current = pinned
       setIsPinned(pinned)
     }
 
+    // A wheel, a touch drag or a key is the reader taking over; cancel a running
+    // animation so the next scroll event is judged on its own.
+    const cancelProgrammatic = (): void => {
+      programmaticRef.current = false
+    }
+
     viewport.addEventListener('scroll', handleScroll, { passive: true })
-    handleScroll()
-    return () => viewport.removeEventListener('scroll', handleScroll)
+    viewport.addEventListener('wheel', cancelProgrammatic, { passive: true })
+    viewport.addEventListener('touchmove', cancelProgrammatic, { passive: true })
+    viewport.addEventListener('keydown', cancelProgrammatic)
+    // No initial `handleScroll()`: a fresh viewport sits at the top, and the
+    // follow effect below is about to move it to the bottom. Reading the
+    // position here would unfollow before it ever ran.
+    return () => {
+      viewport.removeEventListener('scroll', handleScroll)
+      viewport.removeEventListener('wheel', cancelProgrammatic)
+      viewport.removeEventListener('touchmove', cancelProgrammatic)
+      viewport.removeEventListener('keydown', cancelProgrammatic)
+    }
   }, [])
 
   useEffect(() => {
@@ -100,6 +142,23 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
     if (!pinnedRef.current) return
     scrollToBottom()
   }, [messages, scrollToBottom])
+
+  // Streaming changes the height of one message, not the number of messages: the
+  // array above is replaced per token today, but Markdown reflow, a highlighted
+  // code block, a decoded image or an opened source disclosure change the height
+  // with no message event at all. Watch the content itself.
+  useEffect(() => {
+    if (!hasMessages) return
+    const content = contentRef.current
+    if (!content) return
+
+    const observer = new ResizeObserver(() => {
+      if (!pinnedRef.current) return
+      scrollToBottom()
+    })
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [hasMessages, scrollToBottom])
 
   // The empty state and the message list must share ONE ScrollArea: the scroll
   // subscription above runs once, so a viewport that only appears after messages
@@ -112,7 +171,7 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
       </div>
 
       <ScrollArea className="h-full" viewportRef={viewportRef}>
-        {messages.length === 0 ? (
+        {!hasMessages ? (
           <div className="flex min-h-full items-center justify-center p-8">
             <Empty className="border-none">
               <EmptyHeader>
@@ -125,29 +184,32 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
             </Empty>
           </div>
         ) : (
-          <div className="px-4 py-6 pb-32">
+          // Observed for height so the follow survives reflow without a message
+          // event. The reserved space keeps the last line above the composer.
+          <div ref={contentRef} className="px-4 py-6" style={{ paddingBottom: COMPOSER_RESERVE }}>
             <div className="space-y-4">
               {messages.map((message) => (
                 <MessageItem key={message.id} message={message} />
               ))}
-              {/* 滚动锚点 */}
-              <div ref={bottomRef} />
             </div>
           </div>
         )}
       </ScrollArea>
 
-      {!isPinned && messages.length > 0 && (
-        // `bottom-32` matches the `pb-32` reserve above, so the pill lands in the
-        // gap between the last message and the floating composer.
+      {!isPinned && hasMessages && (
+        // Icon-only, centred over the composer: the control means "the end of
+        // this transcript", not a global action. The label carries the meaning a
+        // text pill would have spent space on.
         <Button
           variant="outline"
-          size="sm"
+          size="icon"
           onClick={pinToBottom}
-          className="absolute bottom-32 left-1/2 -translate-x-1/2 bg-surface-overlay shadow-elevation"
+          title={t('ui:jumpToLatest')}
+          aria-label={t('ui:jumpToLatest')}
+          className="absolute left-1/2 -translate-x-1/2 rounded-full bg-surface-overlay shadow-elevation"
+          style={{ bottom: BACK_TO_BOTTOM_BOTTOM }}
         >
-          <ArrowDown className="w-3 h-3" />
-          {t('ui:jumpToLatest')}
+          <ArrowDown />
         </Button>
       )}
     </div>

@@ -16,6 +16,7 @@ import { parseRetrievalScope } from '../../../../shared/types/scope'
 import { FOCUS_CHAT_EVENT } from '../../lib/workspaceEvents'
 import MessageList, { type MessageListHandle } from './chat/MessageList'
 import ScopeSelector from './chat/ScopeSelector'
+import { COMPOSER_GAP, COMPOSER_RESERVE, COMPOSER_RESERVE_VAR } from './chat/stickToBottom'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
@@ -58,6 +59,8 @@ function ProcessPanel({
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messageListRef = useRef<MessageListHandle>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<HTMLDivElement>(null)
 
   const currentNotebookId = currentSession?.notebookId
   const isCurrentNotebookStreaming = currentNotebookId
@@ -148,6 +151,26 @@ function ProcessPanel({
   // 的折叠状态与 zone focus target，并且快捷键的语义已从「显示/隐藏面板」变成
   // 「进入该工作区」（#65）。顶部按钮仍然走 `onToggleLeft` / `onToggleRight`。
 
+  // The composer floats over the transcript, so the transcript reserves its
+  // height plus a gap. Measured rather than fixed: the reserve used to be a
+  // hardcoded `pb-32` while the composer grew with the scope row and the
+  // auto-resizing textarea, so a long question left the last answer line behind
+  // the input. Published as a CSS variable on the card because `MessageList`
+  // (the reserve) and the fade below both read it.
+  useEffect(() => {
+    const composer = composerRef.current
+    const card = cardRef.current
+    if (!composer || !card) return
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      const height = entry.borderBoxSize?.[0]?.blockSize ?? composer.getBoundingClientRect().height
+      card.style.setProperty(COMPOSER_RESERVE_VAR, `${height + COMPOSER_GAP}px`)
+    })
+    observer.observe(composer)
+    return () => observer.disconnect()
+  }, [])
+
   // Auto-resize textarea based on content
   const adjustTextareaHeight = (): void => {
     const textarea = textareaRef.current
@@ -229,7 +252,7 @@ function ProcessPanel({
   }
 
   return (
-    <Card className="relative flex h-full flex-col overflow-hidden">
+    <Card ref={cardRef} className="relative flex h-full flex-col overflow-hidden">
       <PanelHeader
         draggable
         left={
@@ -302,16 +325,23 @@ function ProcessPanel({
 
       {/* 对话消息区域 - 使用 absolute 定位占满剩余空间 */}
       <div className="absolute top-14 bottom-0 left-0 right-0 overflow-hidden">
-        <MessageList ref={messageListRef} messages={messages} />
+        {/* Remount per session: every conversation opens at its own end, not at
+            the position the previous one happened to be left at. */}
+        <MessageList
+          key={currentSession?.id ?? 'no-session'}
+          ref={messageListRef}
+          messages={messages}
+        />
       </div>
 
       {/* 底部渐变遮罩 - 独立于消息区域，避免堆叠上下文问题 */}
       <div
-        // Height must match the `pb-32` reserve in MessageList: the fade only needs
-        // to cover the space the composer floats over. At h-48 (192px) it reached
-        // ~64px higher than the reserve and dimmed the last line of every answer.
-        className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none rounded-b-lg z-10"
+        // Height tracks the measured composer reserve (the CSS variable written
+        // above), so the fade covers exactly the space the composer floats over
+        // and never dims the last line of an answer.
+        className="absolute bottom-0 left-0 right-0 pointer-events-none rounded-b-lg z-10"
         style={{
+          height: COMPOSER_RESERVE,
           // A scroll fade, not decoration: it keeps the transcript readable as it
           // passes under the floating composer. Uses the surface token rather than
           // the legacy --card alias, and never a raw hsl().
@@ -321,7 +351,10 @@ function ProcessPanel({
       />
 
       {/* 底部输入区域 - 绝对定位浮动在底部 */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none shrink-0 z-20">
+      <div
+        ref={composerRef}
+        className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none shrink-0 z-20"
+      >
         <div className="relative bg-surface-overlay/95 backdrop-blur-md rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-elevation pointer-events-auto select-none">
           {/* 范围选择（#94）：这次问题用哪些来源回答。放在输入框上方，跟在要提问的地方。 */}
           {currentSession && (
