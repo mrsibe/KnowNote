@@ -43,7 +43,7 @@ import {
   type IdentifiedBlockDraft
 } from './blocks/documentBlocks'
 import { resolveChunkProvenance, type ChunkProvenance } from './chunkProvenance'
-import { DenseRetriever, hydrateEvidence } from './retrieval'
+import { HybridRetriever, hydrateEvidence, type RetrievalStrategy } from './retrieval'
 import {
   advanceRun,
   completeRun,
@@ -60,12 +60,7 @@ import type {
   Retriever
 } from './retrieval'
 import { WebFetchService } from './WebFetchService'
-import {
-  deleteDocumentChunksFts,
-  ensureChunksFts,
-  indexChunksFts,
-  searchChunksFts
-} from './fts'
+import { deleteDocumentChunksFts, ensureChunksFts, indexChunksFts, searchChunksFts } from './fts'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
 
@@ -93,6 +88,8 @@ export interface SearchOptions {
   includeContent?: boolean // 是否包含 chunk 内容，默认 true
   /** 只在这些来源里检索（#94）；为空/缺省表示整个 notebook。 */
   documentIds?: string[]
+  /** 检索策略（#77）；缺省 `dense`，与引入策略之前一致。 */
+  strategy?: RetrievalStrategy
 }
 
 /**
@@ -163,7 +160,7 @@ export class KnowledgeService {
   constructor(embeddingService: EmbeddingService) {
     this.embeddingService = embeddingService
     this.chunkingService = new ChunkingService()
-    this.retriever = new DenseRetriever(embeddingService)
+    this.retriever = new HybridRetriever(embeddingService)
     this.fileParserService = new FileParserService()
     this.webFetchService = new WebFetchService()
     // 知识库文件存储目录
@@ -920,6 +917,7 @@ export class KnowledgeService {
       query,
       topK: options.topK,
       threshold: options.threshold,
+      strategy: options.strategy,
       filter: options.documentIds ? { documentIds: options.documentIds } : undefined
     })
 

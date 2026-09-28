@@ -1,0 +1,48 @@
+{
+  "baseline": "dense",
+  "chunking": "1000/100",
+  "strategies": [
+    {
+      "id": "dense",
+      "label": "dense (vector)",
+      "chunking": "1000/100",
+      "chunkCount": 19,
+      "recallAt1": 0.833333,
+      "recallAt5": 1,
+      "recallAt10": 1,
+      "mrr": 0.927778,
+      "ndcgAt10": 0.94375,
+      "evidencePrecisionAt5": 0.213333,
+      "indexingMs": 2041,
+      "latencyP95Ms": 30.33
+    },
+    {
+      "id": "sparse",
+      "label": "sparse (BM25)",
+      "chunking": "1000/100",
+      "chunkCount": 19,
+      "recallAt1": 0.733333,
+      "recallAt5": 0.866667,
+      "recallAt10": 0.866667,
+      "mrr": 0.805556,
+      "ndcgAt10": 0.818355,
+      "evidencePrecisionAt5": 0.186667,
+      "indexingMs": 2070,
+      "latencyP95Ms": 2.5
+    },
+    {
+      "id": "hybrid",
+      "label": "hybrid (RRF of dense + BM25)",
+      "chunking": "1000/100",
+      "chunkCount": 19,
+      "recallAt1": 0.866667,
+      "recallAt5": 1,
+      "recallAt10": 1,
+      "mrr": 0.944444,
+      "ndcgAt10": 0.956053,
+      "evidencePrecisionAt5": 0.213333,
+      "indexingMs": 2134,
+      "latencyP95Ms": 41.23
+    }
+  ]
+}

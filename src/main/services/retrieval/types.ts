@@ -51,6 +51,14 @@ export interface RetrievalFilter {
 }
 
 /**
+ * 检索策略（#77）。
+ *
+ * `dense` 是 v1.4 的默认；`sparse` 是 BM25 over `chunks_fts`（#96）；`hybrid` 用 RRF
+ * 融合两者。语义解释：dense 找释义，sparse 找字面，hybrid 两者都要。
+ */
+export type RetrievalStrategy = 'dense' | 'sparse' | 'hybrid'
+
+/**
  * 一次检索请求。
  *
  * 取代旧的 `(notebookId, query, options)` 位置参数：#94 的 scope、#77 的策略参数
@@ -62,6 +70,8 @@ export interface RetrievalRequest {
   topK?: number
   threshold?: number
   filter?: RetrievalFilter
+  /** 缺省时为 `dense`，与引入策略之前的默认一致。 */
+  strategy?: RetrievalStrategy
 }
 
 /**

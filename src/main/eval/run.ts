@@ -21,6 +21,7 @@ import { EmbeddingService } from '../services/EmbeddingService'
 import { KnowledgeService } from '../services/KnowledgeService'
 import { isModelInstalled } from '../embedding/ModelRegistry'
 import { DEFAULT_CHUNK_OPTIONS, type ChunkOptions } from '../services/ChunkingService'
+import type { RetrievalStrategy } from '../services/retrieval'
 import {
   runEvalHarness,
   stabilize,
@@ -59,6 +60,15 @@ function readBoolOption(argv: readonly string[], prefix: string, fallback: boole
     throw new Error(`${prefix} expects true or false, got ${JSON.stringify(value)}`)
   }
   return value === 'true'
+}
+
+/** 检索策略（#77）。默认 dense，所以不带 flag 的 `npm run eval` 仍量的是生产默认。 */
+function readRetrievalStrategy(argv: readonly string[]): RetrievalStrategy {
+  const raw = readOption(argv, '--eval-retrieval=', 'dense')
+  if (raw !== 'dense' && raw !== 'sparse' && raw !== 'hybrid') {
+    throw new Error(`--eval-retrieval expects dense, sparse or hybrid, got ${JSON.stringify(raw)}`)
+  }
+  return raw
 }
 
 /**
@@ -160,7 +170,8 @@ export async function runEvalCli(argv: readonly string[] = process.argv): Promis
       topK: 10,
       threshold: 0,
       evidenceK: 5,
-      chunkOptions: readChunkOptions(argv)
+      chunkOptions: readChunkOptions(argv),
+      strategy: readRetrievalStrategy(argv)
     }
 
     const report = stabilize(await runEvalHarness(getDatabase(), knowledgeService, options))

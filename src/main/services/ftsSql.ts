@@ -48,8 +48,13 @@ export function deleteChunksFtsSql(column: 'chunk_id' | 'document_id', count: nu
  * Every whitespace-separated term is quoted, so the user's text can never be
  * parsed as FTS operators (`-`, `*`, `:`, `NEAR`, unbalanced quotes) — a query
  * that is a syntax error is a query that returns nothing, which reads as "no
- * results" rather than "your search is malformed". Terms are ANDed, which is
- * FTS5's default for space-separated tokens.
+ * results" rather than "your search is malformed".
+ *
+ * Terms are **ORed**. AND was the first version and it made BM25 useless for chat
+ * retrieval (#77): a natural-language question's terms almost never all appear in
+ * one chunk, so sparse returned nothing and hybrid silently degenerated to dense.
+ * BM25 already ranks a chunk that matches more terms higher, so OR keeps the best
+ * passages first while still finding them.
  *
  * Returns null when there is nothing to search for.
  */
@@ -59,7 +64,7 @@ export function buildFtsMatchQuery(raw: string): string | null {
     .split(/\s+/)
     .filter((term) => term.length > 0)
   if (terms.length === 0) return null
-  return terms.map((term) => `"${term.replace(/"/g, '""')}"`).join(' ')
+  return terms.map((term) => `"${term.replace(/"/g, '""')}"`).join(' OR ')
 }
 
 export interface FtsSearchSqlOptions {

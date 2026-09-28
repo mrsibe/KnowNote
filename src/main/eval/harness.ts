@@ -18,6 +18,7 @@ import { documentBlocks, notebooks, chunks } from '../db/schema'
 import type { getDatabase } from '../db'
 import type { KnowledgeService } from '../services/KnowledgeService'
 import { DEFAULT_CHUNK_OPTIONS, type ChunkOptions } from '../services/ChunkingService'
+import type { RetrievalStrategy } from '../services/retrieval'
 import { LOCAL_EMBEDDING_MODEL } from '../embedding/localModel'
 import {
   evidencePrecisionAtK,
@@ -54,6 +55,8 @@ export interface EvalHarnessOptions {
   evidenceK: number
   /** 分块配置（#78）。实验变体通过它选择策略；缺省时用生产默认值。 */
   chunkOptions: ChunkOptions
+  /** 检索策略（#77）：dense / sparse(BM25) / hybrid(RRF)。 */
+  strategy: RetrievalStrategy
 }
 
 const NOTEBOOK_ID = 'eval-notebook'
@@ -189,7 +192,8 @@ export async function runEvalHarness(
     const started = performance.now()
     const results = await knowledgeService.search(NOTEBOOK_ID, question.question, {
       topK: options.topK,
-      threshold: options.threshold
+      threshold: options.threshold,
+      strategy: options.strategy
     })
     const latencyMs = performance.now() - started
     latencies.push(latencyMs)
@@ -235,7 +239,7 @@ export async function runEvalHarness(
         allowSpanPages: chunking.allowSpanPages,
         respectHeadings: chunking.respectHeadings
       },
-      retrieval: 'dense',
+      retrieval: options.strategy,
       topK: options.topK,
       threshold: options.threshold,
       evidenceK: options.evidenceK,

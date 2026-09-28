@@ -17,18 +17,23 @@ import {
  */
 
 test('a search query is quoted term by term, never parsed as FTS syntax', () => {
-  assert.equal(buildFtsMatchQuery('hello world'), '"hello" "world"')
-  assert.equal(buildFtsMatchQuery('  spaced   out  '), '"spaced" "out"')
+  assert.equal(buildFtsMatchQuery('hello world'), '"hello" OR "world"')
+  assert.equal(buildFtsMatchQuery('  spaced   out  '), '"spaced" OR "out"')
 
   // Operators and unbalanced quotes would be a syntax error if passed through, and
   // a syntax error reads to the user as "no results" rather than "bad query".
-  assert.equal(buildFtsMatchQuery('a -b'), '"a" "-b"')
-  assert.equal(buildFtsMatchQuery('NEAR(a b)'), '"NEAR(a" "b)"')
-  assert.equal(buildFtsMatchQuery('say "hi"'), '"say" """hi"""')
+  assert.equal(buildFtsMatchQuery('a -b'), '"a" OR "-b"')
+  assert.equal(buildFtsMatchQuery('NEAR(a b)'), '"NEAR(a" OR "b)"')
+  assert.equal(buildFtsMatchQuery('say "hi"'), '"say" OR """hi"""')
   assert.equal(buildFtsMatchQuery('c*'), '"c*"')
 
   assert.equal(buildFtsMatchQuery('   '), null)
   assert.equal(buildFtsMatchQuery(''), null)
+})
+
+test('terms are ORed, so a full question still matches some chunks', () => {
+  // AND made BM25 return nothing for a natural-language question (#77).
+  assert.match(buildFtsMatchQuery('what does section 3 say about attention') ?? '', / OR /)
 })
 
 test('delete is parameterised by count and refuses an empty list', () => {
