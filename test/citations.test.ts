@@ -1,19 +1,37 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  buildCitations,
-  buildRAGContext,
-  citationFromSearchResult
-} from '../src/main/services/citations.ts'
-import { sourceDocumentExists, parseCitations } from '../src/shared/utils/citations.ts'
+import { buildRAGContext, citationFromCandidate } from '../src/main/services/citations.ts'
+import { parseCitations, sourceDocumentExists } from '../src/shared/utils/citations.ts'
 import type { SearchResult } from '../src/main/services/KnowledgeService.ts'
+import type { EvidenceBlock } from '../src/main/services/retrieval/types.ts'
 
 /**
  * A citation is the link between a claim in an answer and the place in the source
- * that supports it (#69). It is assembled from the retriever's locator — never by
- * querying the database again — and read back defensively, because the metadata
- * column is written by whichever version of the app produced the message.
+ * that supports it (#69, #155). Since #155 that place is a **candidate span** — a
+ * sentence-sized piece of a retrieved chunk — not the chunk itself.
+ *
+ * The reader half is unchanged: a citation is still a snapshot, it must still parse
+ * after the source is deleted or re-indexed, and one bad row must not hide the good
+ * ones.
  */
+
+const block = (
+  text: string,
+  startOffset: number,
+  over: Partial<EvidenceBlock> = {}
+): EvidenceBlock => ({
+  blockId: `blk_${startOffset}`,
+  kind: 'paragraph',
+  level: null,
+  page: 5,
+  bbox: null,
+  text,
+  startOffset,
+  endOffset: startOffset + text.length,
+  startInBlock: 0,
+  endInBlock: text.length,
+  ...over
+})
 
 const searchResult = (over: Partial<SearchResult> = {}): SearchResult => ({
   chunkId: 'chunk_1',
@@ -26,34 +44,21 @@ const searchResult = (over: Partial<SearchResult> = {}): SearchResult => ({
   locator: {
     pageStart: 5,
     pageEnd: 5,
-    blocks: [
-      {
-        blockId: 'blk_doc_1_7',
-        kind: 'paragraph',
-        level: null,
-        page: 5,
-        bbox: { x: 0.1, y: 0.2, w: 0.8, h: 0.05 },
-        text: 'the retrieved passage',
-        startOffset: 100,
-        endOffset: 121,
-        startInBlock: 0,
-        endInBlock: 21
-      }
-    ]
+    blocks: [block('the retrieved passage', 100, { blockId: 'blk_doc_1_7' })]
   },
   ...over
 })
 
-test('a citation carries the page, block and char span of the retrieved chunk', () => {
-  const citation = citationFromSearchResult(searchResult(), 2)
+test('a citation points at a candidate span, not the whole chunk', () => {
+  const { citations } = buildRAGContext([searchResult()])
 
-  assert.deepEqual(citation, {
-    index: 2,
+  assert.equal(citations.length, 1)
+  assert.deepEqual(citations[0], {
+    index: 1,
     documentId: 'doc_1',
     documentTitle: 'Attention Is All You Need',
     documentType: 'file',
     page: 5,
-    pageEnd: 5,
     blockId: 'blk_doc_1_7',
     chunkId: 'chunk_1',
     startOffset: 100,
@@ -63,164 +68,104 @@ test('a citation carries the page, block and char span of the retrieved chunk', 
   })
 })
 
-test('a chunk that starts mid-block keeps the exact span, not the block bounds', () => {
-  const citation = citationFromSearchResult(
-    searchResult({
-      locator: {
-        pageStart: 3,
-        pageEnd: 3,
-        blocks: [
-          {
-            blockId: 'b1',
-            kind: 'paragraph',
-            level: null,
-            page: 3,
-            bbox: null,
-            text: 'aaaaaaaaaaaaaaaaaaaa',
-            startOffset: 50,
-            endOffset: 70,
-            startInBlock: 5,
-            endInBlock: 12
-          }
-        ]
-      }
-    }),
-    1
-  )
+test('citation candidates are numbered continuously across chunks', () => {
+  const first = searchResult({ chunkId: 'c1' })
+  const second = searchResult({
+    chunkId: 'c2',
+    documentTitle: 'GPT-2',
+    locator: {
+      pageStart: 3,
+      pageEnd: 3,
+      blocks: [block('a second passage', 200, { blockId: 'b2', page: 3 })]
+    }
+  })
 
-  assert.equal(citation.startOffset, 55)
-  assert.equal(citation.endOffset, 62)
+  const { citations, context } = buildRAGContext([first, second])
+
+  assert.deepEqual(
+    citations.map((citation) => citation.index),
+    [1, 2]
+  )
+  assert.match(context, /\[来源: GPT-2 — p\.3\]/)
 })
 
-test('a chunk spanning several blocks anchors on the first and spans to the last', () => {
-  const citation = citationFromSearchResult(
-    searchResult({
-      locator: {
-        pageStart: 5,
-        pageEnd: 6,
-        blocks: [
-          {
-            blockId: 'b1',
-            kind: 'paragraph',
-            level: null,
-            page: 5,
-            bbox: null,
-            text: 'first',
-            startOffset: 100,
-            endOffset: 105,
-            startInBlock: 0,
-            endInBlock: 5
-          },
-          {
-            blockId: 'b2',
-            kind: 'paragraph',
-            level: null,
-            page: 6,
-            bbox: null,
-            text: 'second',
-            startOffset: 200,
-            endOffset: 206,
-            startInBlock: 0,
-            endInBlock: 6
-          }
-        ]
-      }
-    }),
-    1
-  )
+test('the prompt groups by source but keeps the marker global', () => {
+  const { context, sources, citations } = buildRAGContext([searchResult()])
 
-  assert.equal(citation.blockId, 'b1')
-  assert.equal(citation.startOffset, 100)
-  assert.equal(citation.endOffset, 206)
-  assert.equal(citation.page, 5)
-  assert.equal(citation.pageEnd, 6)
+  assert.match(context, /\[来源: Attention Is All You Need — p\.5\]/)
+  assert.match(context, /\[1\] the retrieved passage/)
+  assert.match(context, /\[n\]/)
+  assert.equal(sources.length, 1)
+  assert.equal(sources[0].chunkId, 'chunk_1')
+  assert.equal(citations.length, 1)
+  assert.equal(citations[0].score, 0.87)
 })
 
-test('an unpaginated source produces a citation without page or block fields', () => {
-  const citation = citationFromSearchResult(
-    searchResult({ locator: { pageStart: null, pageEnd: null, blocks: [] } }),
-    1
+test('the citation context carries the candidate span as its quote', () => {
+  const { citationContexts } = buildRAGContext([searchResult()])
+
+  assert.equal(citationContexts.length, 1)
+  assert.equal(citationContexts[0].spanText, 'the retrieved passage')
+  assert.equal(citationContexts[0].citation.quote, 'the retrieved passage')
+})
+
+test('an answer without retrieval produces no citations', () => {
+  const { context, sources, citations, citationContexts } = buildRAGContext([])
+  assert.equal(context, '')
+  assert.deepEqual(sources, [])
+  assert.deepEqual(citations, [])
+  assert.deepEqual(citationContexts, [])
+})
+
+test('a candidate with no block or span still becomes a citation with no location', () => {
+  const citation = citationFromCandidate(
+    { index: 7, documentId: 'doc_1', chunkId: 'chunk_1', quote: 'legacy chunk text' },
+    searchResult()
   )
 
+  assert.equal(citation.index, 7)
+  assert.equal(citation.quote, 'legacy chunk text')
   assert.equal(citation.page, undefined)
-  assert.equal(citation.pageEnd, undefined)
   assert.equal(citation.blockId, undefined)
   assert.equal(citation.startOffset, undefined)
   assert.equal(citation.endOffset, undefined)
 })
 
-test('citations are numbered by their position in the prompt', () => {
-  const citations = buildCitations([searchResult(), searchResult({ chunkId: 'chunk_2' })])
-  assert.deepEqual(
-    citations.map((citation) => citation.index),
-    [1, 2]
-  )
-  assert.deepEqual(
-    citations.map((citation) => citation.chunkId),
-    ['chunk_1', 'chunk_2']
-  )
-})
-
-test('an answer without retrieval produces no citations', () => {
-  const { context, sources, citations } = buildRAGContext([])
-  assert.equal(context, '')
-  assert.deepEqual(sources, [])
-  assert.deepEqual(citations, [])
-})
-
-test('the prompt asks the model to mark sources so a claim can be resolved', () => {
-  const { context, sources, citations } = buildRAGContext([searchResult()])
-
-  assert.match(context, /\[来源 1: Attention Is All You Need\]/)
-  assert.match(context, /\[n\]/)
-  assert.equal(sources.length, 1)
-  assert.equal(citations.length, 1)
-  assert.equal(citations[0].score, 0.87)
-})
-
 /**
- * The reader half. A citation is a snapshot: it must still parse after the source
- * document has been deleted or re-indexed, and one bad row must not hide the good
- * ones.
+ * The reader half.
  */
 
 test('a citation survives a metadata round trip', () => {
-  const [citation] = parseCitations({
-    citations: [citationFromSearchResult(searchResult(), 1)]
-  })
+  const [citation] = buildRAGContext([searchResult()]).citations
+  const [parsed] = parseCitations({ citations: [citation] })
 
-  assert.equal(citation.documentId, 'doc_1')
-  assert.equal(citation.page, 5)
-  assert.equal(citation.blockId, 'blk_doc_1_7')
-  assert.equal(citation.startOffset, 100)
-  assert.equal(citation.endOffset, 121)
+  assert.equal(parsed.documentId, 'doc_1')
+  assert.equal(parsed.page, 5)
+  assert.equal(parsed.blockId, 'blk_doc_1_7')
+  assert.equal(parsed.startOffset, 100)
+  assert.equal(parsed.endOffset, 121)
 })
 
 test('a citation whose document no longer exists still parses', () => {
-  // Deleting the document does not rewrite history: the answer was grounded when
-  // it was written. The UI disables the jump; the parser keeps the record.
-  const [citation] = parseCitations({
-    citations: [citationFromSearchResult(searchResult(), 1)]
-  })
-  assert.equal(citation.documentTitle, 'Attention Is All You Need')
+  const [citation] = buildRAGContext([searchResult()]).citations
+  const [parsed] = parseCitations({ citations: [citation] })
+  assert.equal(parsed.documentTitle, 'Attention Is All You Need')
 })
 
 test('a citation missing a field it cannot resolve without is dropped', () => {
+  const [citation] = buildRAGContext([searchResult()]).citations
+
   for (const missing of ['documentId', 'documentTitle', 'chunkId', 'quote']) {
-    const broken = citationFromSearchResult(searchResult(), 1) as unknown as Record<string, unknown>
+    const broken = { ...citation } as Record<string, unknown>
     delete broken[missing]
     assert.deepEqual(parseCitations({ citations: [broken] }), [], missing)
   }
 })
 
 test('a malformed citation is dropped without discarding its siblings', () => {
-  const parsed = parseCitations({
-    citations: [
-      citationFromSearchResult(searchResult(), 1),
-      { nope: true },
-      citationFromSearchResult(searchResult({ chunkId: 'chunk_2' }), 2)
-    ]
-  })
+  const { citations } = buildRAGContext([searchResult(), searchResult({ chunkId: 'chunk_2' })])
+
+  const parsed = parseCitations({ citations: [citations[0], { nope: true }, citations[1]] })
   assert.equal(parsed.length, 2)
   assert.deepEqual(
     parsed.map((citation) => citation.chunkId),
@@ -229,13 +174,15 @@ test('a malformed citation is dropped without discarding its siblings', () => {
 })
 
 test('citations come back ordered by the marker the prompt used', () => {
-  const parsed = parseCitations({
-    citations: [
-      citationFromSearchResult(searchResult({ chunkId: 'c3' }), 3),
-      citationFromSearchResult(searchResult({ chunkId: 'c1' }), 1),
-      citationFromSearchResult(searchResult({ chunkId: 'c2' }), 2)
-    ]
-  })
+  const [first, second, third] = buildRAGContext([
+    searchResult({ chunkId: 'c1' }),
+    searchResult({ chunkId: 'c2' }),
+    searchResult({ chunkId: 'c3' })
+  ]).citations
+
+  const [c1, c2, c3] = [{ ...third }, { ...first }, { ...second }]
+
+  const parsed = parseCitations({ citations: [c3, c1, c2] })
   assert.deepEqual(
     parsed.map((citation) => citation.index),
     [1, 2, 3]

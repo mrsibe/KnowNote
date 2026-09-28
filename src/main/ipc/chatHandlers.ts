@@ -80,19 +80,16 @@ export function registerChatHandlers(
       })
       if (searchResults.length === 0) return empty
 
-      const { context, sources, citations } = buildRAGContext(searchResults)
+      const { context, sources, citations, citationContexts } = buildRAGContext(searchResults)
       Logger.debug('ChatHandlers', `RAG: Found ${searchResults.length} relevant chunks for query`)
 
       return {
         retrieval: 'used',
         sources,
         citations,
-        // The span a quote is checked against lives only in the locator, so carry it
-        // alongside the citation for validation (#70).
-        citationContexts: citations.map((citation, index) => ({
-          citation,
-          spanText: searchResults[index].locator.blocks.map((block) => block.text).join('\n')
-        })),
+        // The citation's own candidate span is what a quote is checked against (#70),
+        // built from the candidate, not re-derived from the chunk (#155).
+        citationContexts,
         context
       }
     } catch (error) {

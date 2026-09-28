@@ -1,49 +1,44 @@
-import type { Citation } from '../../shared/types/citation'
+import type { Citation, CitationCandidate, CitationContext } from '../../shared/types/citation'
 import type { AnswerSource } from '../../shared/types/chat'
 import type { SearchResult } from './KnowledgeService'
+import { buildCitationCandidates } from './citationCandidates'
 
 /**
  * 检索 → 引用 的组装。
  *
- * 检索层（`RetrievedEvidence`）已经带着来源身份、页码区间和块区间；这里只把它
- * 投影成 prompt 与 `chat_messages.metadata` 用的形状，不再回查数据库。保持纯函数
- * 是刻意的 —— #70 的解析/校验也走同一份 `Citation`，两条路径必须能看到同样的
- * 定位信息。
+ * 检索层（`RetrievedEvidence` / `SearchResult`）已经带着来源身份、页码区间和块区间；
+ * 这里把它切成 **citation candidates**（#155），再把 candidate 投影成 prompt 与
+ * `chat_messages.metadata` 用的形状，不再回查数据库。
+ *
+ * 关键变化：citation 指向的粒度从「整个 chunk」变成「chunk 内的一段原文」。
+ * `[n]` 仍然存在、仍然是 `Citation.index`，只是它现在标的是 candidate，而不再标
+ * 检索命中的 chunk —— 用户可见的引用协议没有变，变的是它背后的证据精度。
+ *
+ * candidate 编号是一次回答内的临时命名空间（1..M），不是数据库级 id。真正稳定的
+ * 定位是 `documentId` / `chunkId` / `blockId` / `startOffset` / `endOffset` / `quote`。
  */
 
-/** 一个检索结果 → 一条 citation。`index` 是它在 prompt 里的 1-based 位置。 */
-export function citationFromSearchResult(result: SearchResult, index: number): Citation {
-  const { blocks, pageStart, pageEnd } = result.locator
-  const first = blocks[0]
-  const last = blocks[blocks.length - 1]
-
+/** 一个 citation candidate + 它来自的检索结果 → 一条 Citation。 */
+export function citationFromCandidate(
+  candidate: CitationCandidate,
+  source: SearchResult
+): Citation {
   const citation: Citation = {
-    index,
-    documentId: result.documentId,
-    documentTitle: result.documentTitle,
-    chunkId: result.chunkId,
-    quote: result.content,
-    score: result.score
+    index: candidate.index,
+    documentId: candidate.documentId,
+    documentTitle: source.documentTitle,
+    chunkId: candidate.chunkId,
+    quote: candidate.quote,
+    score: source.score
   }
 
-  if (result.documentType) citation.documentType = result.documentType
-  if (pageStart !== null) citation.page = pageStart
-  if (pageEnd !== null) citation.pageEnd = pageEnd
-
-  // A chunk can cover several blocks. The jump anchor is the first one; the
-  // char span is the union of the blocks actually covered, which is what the
-  // reader highlights.
-  if (first && last) {
-    citation.blockId = first.blockId
-    citation.startOffset = first.startOffset + first.startInBlock
-    citation.endOffset = last.startOffset + last.endInBlock
-  }
+  if (source.documentType) citation.documentType = source.documentType
+  if (candidate.page !== undefined) citation.page = candidate.page
+  if (candidate.blockId) citation.blockId = candidate.blockId
+  if (candidate.startOffset !== undefined) citation.startOffset = candidate.startOffset
+  if (candidate.endOffset !== undefined) citation.endOffset = candidate.endOffset
 
   return citation
-}
-
-export function buildCitations(results: SearchResult[]): Citation[] {
-  return results.map((result, index) => citationFromSearchResult(result, index + 1))
 }
 
 /** 检索结果在 prompt / 元数据里共用的「回答基于什么」视图。 */
@@ -51,20 +46,60 @@ export interface RAGContext {
   context: string
   sources: AnswerSource[]
   citations: Citation[]
+  citationContexts: CitationContext[]
+}
+
+/** `[来源: Attention Is All You Need — p.7]`；不分页的来源不带页码。 */
+function sourceHeader(result: SearchResult): string {
+  const page = result.locator.pageStart
+  const suffix = typeof page === 'number' ? ` — p.${page}` : ''
+  return `[来源: ${result.documentTitle}${suffix}]`
 }
 
 /**
- * 构建 RAG 上下文 prompt，并把「这段回答基于哪些段落」一起交出来。
+ * 构建 RAG 上下文 prompt，并交出「这次回答引用了哪些原文片段」。
  *
- * 之前这里只取 `documentTitle` / `content` / `score` 三个字段，`chunkId`、
- * `documentId`、`chunkIndex` 全部被丢掉 —— 于是回答交付之后，界面上再也没有回到
- * 原文的路。prompt 文本保持原有结构，这里只是不再丢弃身份，并显式要求模型用
- * `[n]` 标注来源，让回答里的断言可以解析回 citation。
+ * prompt 按来源/chunk 分组展示，但 marker 全局连续：可读性来自分组，解析协议仍然
+ * 只有一套 `[n]`。每个 candidate 的 `quote` 就是它自己的 span，因此模型引用
+ * `[n]` 时，对应的 `startOffset`/`endOffset`/`blockId`/`page` 早已确定 —— 不需要
+ * 回答之后再猜哪句话支持了哪个断言。
  */
 export function buildRAGContext(searchResults: SearchResult[]): RAGContext {
-  if (searchResults.length === 0) return { context: '', sources: [], citations: [] }
+  if (searchResults.length === 0) {
+    return { context: '', sources: [], citations: [], citationContexts: [] }
+  }
 
-  const citations = buildCitations(searchResults)
+  const candidates = buildCitationCandidates(searchResults)
+
+  // 一个 chunk 的 candidates 在全局编号里是连续的，按 chunk 归组只影响 prompt 的
+  // 呈现顺序，不影响编号。
+  const candidatesByChunk = new Map<string, CitationCandidate[]>()
+  for (const candidate of candidates) {
+    const list = candidatesByChunk.get(candidate.chunkId)
+    if (list) list.push(candidate)
+    else candidatesByChunk.set(candidate.chunkId, [candidate])
+  }
+
+  const citations: Citation[] = []
+  const citationContexts: CitationContext[] = []
+  const promptParts: string[] = []
+
+  for (const result of searchResults) {
+    const chunkCandidates = candidatesByChunk.get(result.chunkId)
+    if (!chunkCandidates || chunkCandidates.length === 0) continue
+
+    promptParts.push(
+      [sourceHeader(result), ...chunkCandidates.map((c) => `[${c.index}] ${c.quote}`)].join('\n')
+    )
+
+    for (const candidate of chunkCandidates) {
+      const citation = citationFromCandidate(candidate, result)
+      citations.push(citation)
+      // candidate.quote 就是它自己的 span，所以这里不需要再回查块文本来校验引文。
+      citationContexts.push({ citation, spanText: candidate.quote })
+    }
+  }
+
   const sources: AnswerSource[] = searchResults.map((result, index) => ({
     index: index + 1,
     documentId: result.documentId,
@@ -76,15 +111,11 @@ export function buildRAGContext(searchResults: SearchResult[]): RAGContext {
     score: result.score
   }))
 
-  const contextParts = sources.map(
-    (source) => `[来源 ${source.index}: ${source.documentTitle}]\n${source.content}`
-  )
+  const context = `以下是与用户问题相关的资料片段，每条片段都有一个编号。请参考这些片段来回答：
 
-  const context = `以下是与用户问题相关的背景知识，请参考这些信息来回答：
+${promptParts.join('\n\n---\n\n')}
 
-${contextParts.join('\n\n---\n\n')}
+请基于以上片段回答用户的问题。引用某一个片段时，请在该句子后使用 [n] 标注片段编号（n 为上面的编号，例如 [1]）。如果这些片段不足以回答问题，请说明并尽力提供有帮助的回答。`
 
-请基于以上背景知识回答用户的问题。引用某个来源时，请在相应句子后使用 [n] 标注来源编号（n 为上面的来源编号，例如 [1]）。如果背景知识不足以回答问题，请说明并尽力提供有帮助的回答。`
-
-  return { context, sources, citations }
+  return { context, sources, citations, citationContexts }
 }
