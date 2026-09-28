@@ -34,22 +34,28 @@ export interface Citation {
  * 一个候选取证区间（#160 定义，#155 使用）。
  *
  * 与 `Citation` 的关键区别是**时机**：candidate 在回答生成之前就存在 —— 检索到的
- * chunk 被切成句子/块之后，每个片段带一个稳定 id。prompt 把 candidate 的 id 交给
- * 模型，模型回答时引用 id，于是引用区间在回答产生前就已确定。
+ * chunk 被切成句子/块之后，每个片段带一个编号。prompt 把 candidate 的编号交给模型，
+ * 模型回答时引用编号，于是引用区间在回答产生前就已确定。
  *
  * 这样就不需要回答之后再问「哪句话支持了哪个 claim」：substring / token overlap 对
  * 改写无能为力，embedding 相似度是概率而非证明，真正的支持关系是语义蕴含（NLI），
  * 那不是一个确定性算法。先有 span、再由模型选择，才是确定性的。
- *
- * `id` 在一次 prompt 内稳定（例如 `S2`）。`startOffset` / `endOffset` 是相对
- * `documents.content` 的字符区间，`blockId` 是区间所在的块。
  */
 export interface CitationCandidate {
-  id: string
+  /**
+   * 本次回答内部的临时编号（1-based），也是模型在回答里写的 `[n]`。
+   *
+   * 它只在一次 prompt / 一次回答内有效，不是数据库级稳定 id —— 用户可见的 marker
+   * 就是 `Citation.index`，真正的稳定定位是下面的
+   * `documentId` / `chunkId` / `blockId` / `startOffset` / `endOffset` / `quote`。
+   */
+  index: number
   documentId: string
   chunkId: string
-  blockId: string
+  /** 区间所在的块；来源没有块结构时为 `undefined`。 */
+  blockId?: string
   page?: number
+  /** 相对 `documents.content` 的字符区间，`quote` 是它的逐字切片。 */
   startOffset: number
   endOffset: number
   quote: string
