@@ -228,6 +228,18 @@ export const ChatSchemas = {
     title: z.string().min(1, '标题不能为空').max(200, '标题不能超过200个字符')
   }),
 
+  setRetrievalScope: z.object({
+    sessionId: z.string().min(1, '会话 ID 不能为空'),
+    scope: z.discriminatedUnion('type', [
+      z.object({ type: z.literal('notebook') }),
+      z.object({ type: z.literal('current-source'), documentId: z.string().min(1) }),
+      z.object({
+        type: z.literal('selected-sources'),
+        documentIds: z.array(z.string().min(1))
+      })
+    ])
+  }),
+
   deleteSession: z.object({
     sessionId: z.string().min(1, '会话 ID 不能为空')
   }),

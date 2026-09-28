@@ -3,6 +3,7 @@ import type { IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { EmbeddingDownloadProgress } from '../shared/types'
 import type { ChatTurnEvent } from '../shared/types/chat'
+import type { RetrievalScope } from '../shared/types/scope'
 
 /**
  * IPC 调用超时包装函数
@@ -95,6 +96,8 @@ const api = {
     ipcRenderer.invoke('get-active-session', { notebookId }),
   updateSessionTitle: (sessionId: string, title: string) =>
     ipcRenderer.invoke('update-session-title', { sessionId, title }),
+  setSessionScope: (sessionId: string, scope: RetrievalScope) =>
+    ipcRenderer.invoke('set-chat-session-scope', { sessionId, scope }),
   deleteSession: (sessionId: string) => ipcRenderer.invoke('delete-session', { sessionId }),
 
   // Chat Message 相关

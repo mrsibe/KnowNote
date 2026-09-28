@@ -134,6 +134,13 @@
       "when": 1790489551459,
       "tag": "0018_sour_thunderball",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1790584981911,
+      "tag": "0019_warm_mad_thinker",
+      "breakpoints": true
     }
   ]
 }

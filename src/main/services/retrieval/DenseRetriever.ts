@@ -10,7 +10,6 @@ import { getDatabase } from '../../db'
 import { vectorStoreManager } from '../../vectorstore'
 import type { EmbeddingService } from '../EmbeddingService'
 import { hydrateEvidence } from './evidence'
-import { assertFilterSupported } from './filter'
 import { buildRetrievalTrace } from './trace'
 import type { RetrievalRequest, RetrievalResult, Retriever } from './types'
 
@@ -20,9 +19,6 @@ export class DenseRetriever implements Retriever {
   constructor(private readonly embeddingService: EmbeddingService) {}
 
   async search(request: RetrievalRequest): Promise<RetrievalResult> {
-    // 先拒绝还不支持的过滤：静默忽略会返回"看起来受限、实际未受限"的结果。
-    assertFilterSupported(request.filter)
-
     const topK = request.topK ?? 5
     const threshold = request.threshold ?? 0.5
     const startedAt = performance.now()
@@ -32,7 +28,12 @@ export class DenseRetriever implements Retriever {
     const queryEmbedding = await this.embeddingService.embed(request.query, 'query')
 
     const vectorStore = await vectorStoreManager.getStore(request.notebookId)
-    const hits = await vectorStore.query(queryEmbedding.embedding, { topK, threshold })
+    // scope 过滤由向量库在 KNN 之前执行（#94），不是取回 topK 之后再筛。
+    const hits = await vectorStore.query(queryEmbedding.embedding, {
+      topK,
+      threshold,
+      filter: request.filter
+    })
 
     const evidence = hits.length === 0 ? [] : hydrateEvidence(getDatabase(), hits)
 

@@ -11,6 +11,7 @@ import { validateAndCleanMessages } from '../utils/messageValidator'
 import Logger from '../../shared/utils/logger'
 import type { AnswerSource, RetrievalStatus } from '../../shared/types/chat'
 import type { Citation, CitationContext } from '../../shared/types/citation'
+import { parseRetrievalScope, scopeDocumentIds } from '../../shared/types/scope'
 import { ChatSchemas, validate } from './validation'
 
 /**
@@ -52,7 +53,8 @@ export function registerChatHandlers(
    */
   const retrieve = async (
     notebookId: string | undefined,
-    query: string
+    query: string,
+    documentIds?: string[]
   ): Promise<{
     retrieval: RetrievalStatus
     sources: AnswerSource[]
@@ -76,7 +78,8 @@ export function registerChatHandlers(
 
       const searchResults = await knowledgeService.search(notebookId, query, {
         topK: 3,
-        threshold: 0.5
+        threshold: 0.5,
+        documentIds
       })
       if (searchResults.length === 0) return empty
 
@@ -131,7 +134,8 @@ export function registerChatHandlers(
     if (messages.length === 0) return null
 
     const session = queries.getSessionById(target.sessionId)
-    const retrieved = await retrieve(session?.notebookId, question.content)
+    const documentIds = scopeDocumentIds(parseRetrievalScope(session?.retrievalScope))
+    const retrieved = await retrieve(session?.notebookId, question.content, documentIds)
     if (retrieved.context) messages.unshift({ role: 'system', content: retrieved.context })
 
     return { messages, question: question.content, session, retrieved }
@@ -163,6 +167,14 @@ export function registerChatHandlers(
     'update-session-title',
     validate(ChatSchemas.updateSessionTitle, async (args) => {
       queries.updateSessionTitle(args.sessionId, args.title)
+      return { success: true }
+    })
+  )
+
+  ipcMain.handle(
+    'set-chat-session-scope',
+    validate(ChatSchemas.setRetrievalScope, async (args) => {
+      queries.updateSessionRetrievalScope(args.sessionId, args.scope)
       return { success: true }
     })
   )
@@ -211,8 +223,10 @@ export function registerChatHandlers(
     //     由 manager 落库成 failed；handler 不再自己判定终态。
     messages = validateAndCleanMessages(messages)
 
-    // 3. 检索：注入上下文，并把「这条回答基于什么」一并记下来（#69/#70）
-    const retrieved = await retrieve(session?.notebookId, content)
+    // 3. 检索：注入上下文，并把「这条回答基于什么」一并记下来（#69/#70）。
+    //    scope 属于 session（#94）：这次问题用哪些来源回答，而不是整个 notebook。
+    const documentIds = scopeDocumentIds(parseRetrievalScope(session?.retrievalScope))
+    const retrieved = await retrieve(session?.notebookId, content, documentIds)
     if (retrieved.context) {
       // 将 RAG 上下文作为 system message 插入到消息列表开头
       messages.unshift({ role: 'system', content: retrieved.context })

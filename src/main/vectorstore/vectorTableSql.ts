@@ -73,11 +73,34 @@ export function deleteVectorsByChunkIdsSql(tableName: string, count: number): st
   )
 }
 
-export function knnQuerySql(tableName: string): string {
+/**
+ * KNN 查询。
+ *
+ * `documentIdCount > 0` 时在 KNN **之前**按来源过滤（#94）：
+ *
+ *   chunk_id IN (SELECT id FROM chunks WHERE document_id IN (?,?,...))
+ *
+ * 过滤必须发生在 KNN 内，而不是取回 topK 之后再筛：一个被限制到 doc C 的查询，
+ * 如果先取全局 top-5（可能全是 doc A / doc B），筛完就是 0 条，而 doc C 的最佳块可能
+ * 排在第 6。SQLite 会把子查询当成 vec0 的约束，先缩小候选再做 KNN。
+ *
+ * 子查询查的是 `chunks` 表，而不是把 document_id 复制进向量表：向量表只存
+ * `(embedding_id, chunk_id, embedding)`，来源身份已经由 `chunks` 持有，加一列只会多一份
+ * 会过期的副本，还要求重建表。
+ */
+export function knnQuerySql(tableName: string, documentIdCount = 0): string {
+  const where =
+    documentIdCount > 0
+      ? ' WHERE chunk_id IN (SELECT id FROM chunks WHERE document_id IN (' +
+        placeholders(documentIdCount) +
+        ')) AND embedding MATCH ? AND k = ?'
+      : ' WHERE embedding MATCH ? AND k = ?'
+
   return (
     'SELECT embedding_id, chunk_id, distance FROM ' +
     safeIdentifier(tableName) +
-    ' WHERE embedding MATCH ? AND k = ? ORDER BY distance ASC'
+    where +
+    ' ORDER BY distance ASC'
   )
 }
 

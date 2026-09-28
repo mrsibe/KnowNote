@@ -7,6 +7,7 @@ import type {
   ChatExecutionStatus,
   ChatTokenUsage
 } from '../../shared/types/chat'
+import type { RetrievalScope } from '../../shared/types/scope'
 
 // ==================== Chat Sessions ====================
 
@@ -74,6 +75,20 @@ export function updateSessionTitle(sessionId: string, title: string) {
       title,
       updatedAt: new Date()
     })
+    .where(eq(chatSessions.id, sessionId))
+    .run()
+}
+
+/**
+ * 更新会话的检索范围（#94）。
+ *
+ * 存 JSON 而不是拆成列：三种 scope 形状不同，将来还会加（例如按 note 检索）。
+ */
+export function updateSessionRetrievalScope(sessionId: string, scope: RetrievalScope) {
+  const db = getDatabase()
+
+  db.update(chatSessions)
+    .set({ retrievalScope: scope, updatedAt: new Date() })
     .where(eq(chatSessions.id, sessionId))
     .run()
 }

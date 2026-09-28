@@ -10,8 +10,12 @@ import {
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chatStore'
 import { useNotebookStore } from '../../store/notebookStore'
+import { useKnowledgeStore } from '../../store/knowledgeStore'
+import { useUIStore } from '../../store/uiStore'
+import { parseRetrievalScope } from '../../../../shared/types/scope'
 import { FOCUS_CHAT_EVENT } from '../../lib/workspaceEvents'
 import MessageList, { type MessageListHandle } from './chat/MessageList'
+import ScopeSelector from './chat/ScopeSelector'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
@@ -34,9 +38,21 @@ function ProcessPanel({
   const { t } = useTranslation('ui')
   const [input, setInput] = useState('')
   const [hasChatModel, setHasChatModel] = useState(false)
-  const { currentSession, messages, isNotebookStreaming, sendMessage, abortMessage } =
-    useChatStore()
+  const {
+    currentSession,
+    messages,
+    isNotebookStreaming,
+    sendMessage,
+    abortMessage,
+    setSessionScope
+  } = useChatStore()
   const { currentNotebook, updateNotebook } = useNotebookStore()
+  const documents = useKnowledgeStore((state) => state.documents)
+  const focusedSource = useUIStore((state) => state.focusedSource)
+
+  // 这次提问的来源范围（#94）。scope 是 session 的属性；没有 session 时就是默认的
+  // 整个 notebook。
+  const scope = parseRetrievalScope(currentSession?.retrievalScope)
 
   const [editingTitle, setEditingTitle] = useState('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -307,6 +323,16 @@ function ProcessPanel({
       {/* 底部输入区域 - 绝对定位浮动在底部 */}
       <div className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none shrink-0 z-20">
         <div className="relative bg-surface-overlay/95 backdrop-blur-md rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-elevation pointer-events-auto select-none">
+          {/* 范围选择（#94）：这次问题用哪些来源回答。放在输入框上方，跟在要提问的地方。 */}
+          {currentSession && (
+            <ScopeSelector
+              scope={scope}
+              documents={documents}
+              currentDocumentId={focusedSource?.documentId ?? null}
+              onChange={(next) => void setSessionScope(currentSession.id, next)}
+            />
+          )}
+
           {/* 多行输入框 */}
           <Textarea
             ref={textareaRef}

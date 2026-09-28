@@ -75,5 +75,12 @@
   "onboardingGetStarted": "开始使用",
   "onboardingStarting": "正在启动...",
   "selectLanguage": "选择语言",
-  "answerComplete": "回答完成"
+  "answerComplete": "回答完成",
+  "scopeLabel": "范围",
+  "scopeNotebook": "所有来源",
+  "scopeCurrentSource": "当前来源",
+  "scopeSelectedSources": "选中的来源",
+  "scopeSelectedCount": "已选 {{count}} 个来源",
+  "scopeClear": "改用所有来源",
+  "scopeNoDocuments": "没有可供选择的来源"
 }

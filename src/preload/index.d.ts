@@ -1,5 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { ChatSession, ChatMessage, ChatTurnEvent } from '../shared/types/chat'
+import type { RetrievalScope } from '../shared/types/scope'
 import type {
   Notebook,
   Note,
@@ -194,6 +195,7 @@ declare global {
       getChatSessions: (notebookId: string) => Promise<ChatSession[]>
       getActiveSession: (notebookId: string) => Promise<ChatSession | null>
       updateSessionTitle: (sessionId: string, title: string) => Promise<void>
+      setSessionScope: (sessionId: string, scope: RetrievalScope) => Promise<{ success: boolean }>
       deleteSession: (sessionId: string) => Promise<void>
 
       // Chat Message 相关

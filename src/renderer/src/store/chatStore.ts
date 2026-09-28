@@ -3,6 +3,7 @@ import { readUIMessageStream } from 'ai'
 import type { UIMessage, UIMessageChunk } from 'ai'
 import type { ChatSession, ChatMessage } from '../types/notebook'
 import type { ChatTurnEvent } from '../../../shared/types/chat'
+import type { RetrievalScope } from '../../../shared/types/scope'
 import {
   isReasoningLive,
   isSequenceContinuing,
@@ -66,6 +67,8 @@ interface ChatStore {
   loadActiveSession: (notebookId: string) => Promise<void>
   loadMessages: (sessionId: string) => Promise<void>
   createSession: (notebookId: string, title: string) => Promise<ChatSession>
+  /** 设置本会话的检索范围（#94）；scope 存在 session 上，不是 notebook 上。 */
+  setSessionScope: (sessionId: string, scope: RetrievalScope) => Promise<void>
   sendMessage: (sessionId: string, content: string) => Promise<void>
   abortMessage: (notebookId: string) => Promise<void>
   /** Answer the same question again, as a sibling of an answer that stopped (#151). */
@@ -329,6 +332,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       currentSession: session
     }))
     return session
+  },
+
+  setSessionScope: async (sessionId, scope) => {
+    await window.api.setSessionScope(sessionId, scope)
+    set((state) => ({
+      currentSession:
+        state.currentSession?.id === sessionId
+          ? { ...state.currentSession, retrievalScope: scope }
+          : state.currentSession,
+      sessions: state.sessions.map((session) =>
+        session.id === sessionId ? { ...session, retrievalScope: scope } : session
+      )
+    }))
   },
 
   sendMessage: async (sessionId, content) => {

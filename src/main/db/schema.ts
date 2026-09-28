@@ -5,6 +5,7 @@ import type {
   ChatExecutionStatus,
   ChatTokenUsage
 } from '../../shared/types/chat'
+import type { RetrievalScope } from '../../shared/types/scope'
 import type { DocumentStructure } from '../services/loaders/types'
 
 /**
@@ -47,6 +48,8 @@ export const chatSessions = sqliteTable(
     parentSessionId: text('parent_session_id').references(() => chatSessions.id, {
       onDelete: 'set null'
     }), // 指向上一个被切换的 session
+    // 这个会话用于回答的来源范围（#94）。NULL = 整个 notebook，与旧会话一致。
+    retrievalScope: text('retrieval_scope', { mode: 'json' }).$type<RetrievalScope>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
   },

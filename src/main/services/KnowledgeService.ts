@@ -71,6 +71,8 @@ export interface SearchOptions {
   topK?: number // 返回结果数量，默认 5
   threshold?: number // 相似度阈值，默认 0.5
   includeContent?: boolean // 是否包含 chunk 内容，默认 true
+  /** 只在这些来源里检索（#94）；为空/缺省表示整个 notebook。 */
+  documentIds?: string[]
 }
 
 /**
@@ -794,7 +796,8 @@ export class KnowledgeService {
       notebookId,
       query,
       topK: options.topK,
-      threshold: options.threshold
+      threshold: options.threshold,
+      filter: options.documentIds ? { documentIds: options.documentIds } : undefined
     })
 
     // 2. 映射回兼容的 SearchResult 形状

@@ -79,4 +79,6 @@ export interface SearchOptions {
   topK?: number
   threshold?: number
   includeContent?: boolean
+  /** 只在这些来源里检索（#94）；为空/缺省表示整个 notebook。 */
+  documentIds?: string[]
 }

@@ -93,3 +93,21 @@ test('KNN 查询按距离排序', () => {
   assert.match(sql, /WHERE embedding MATCH \? AND k = \?/)
   assert.match(sql, /ORDER BY distance ASC$/)
 })
+
+test('无来源限制的 KNN 不带 document 子查询', () => {
+  assert.doesNotMatch(knnQuerySql('vec_nb1'), /document_id/)
+  assert.doesNotMatch(knnQuerySql('vec_nb1', 0), /document_id/)
+})
+
+test('按来源过滤的 KNN 用子查询在 KNN 之前收窄候选（#94）', () => {
+  const sql = knnQuerySql('vec_nb1', 2)
+
+  assert.match(sql, /chunk_id IN \(SELECT id FROM chunks WHERE document_id IN \(\?,\?\)\)/)
+  assert.match(sql, /AND embedding MATCH \? AND k = \?/)
+  assert.match(sql, /ORDER BY distance ASC$/)
+})
+
+test('占位符数量跟 document 数量一致', () => {
+  assert.match(knnQuerySql('vec_nb1', 1), /document_id IN \(\?\)/)
+  assert.match(knnQuerySql('vec_nb1', 3), /document_id IN \(\?,\?,\?\)/)
+})

@@ -143,7 +143,8 @@ export class SQLiteVectorStore implements VectorStore {
     // 还没索引过的笔记本没有向量表,没有结果可言
     if (!this.table) return []
 
-    const { topK = 5, threshold } = options
+    const { topK = 5, threshold, filter } = options
+    const documentIds = filter?.documentIds ?? []
 
     const sqlite = getSqlite()
     if (!sqlite) {
@@ -154,10 +155,15 @@ export class SQLiteVectorStore implements VectorStore {
       // 使用 sqlite-vec 的 KNN 查询
       // cosine 距离：0 表示完全相同，2 表示完全相反
       // 转换为相似度分数：1 - (distance / 2)
-      const queryStmt = sqlite.prepare(knnQuerySql(this.table.tableName))
+      const queryStmt = sqlite.prepare(knnQuerySql(this.table.tableName, documentIds.length))
 
-      // sqlite-vec 可以直接接受 Float32Array
-      const results = queryStmt.all(queryVector, topK) as Array<{
+      // sqlite-vec 可以直接接受 Float32Array。带来源过滤时，document ids 是 BETWEEN
+      // 子句的绑定参数，必须排在 vector / k 之前。
+      const results = (
+        documentIds.length > 0
+          ? queryStmt.all(...documentIds, queryVector, topK)
+          : queryStmt.all(queryVector, topK)
+      ) as Array<{
         embedding_id: string
         chunk_id: string
         distance: number

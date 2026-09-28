@@ -75,5 +75,12 @@
   "onboardingGetStarted": "Get Started",
   "onboardingStarting": "Starting...",
   "selectLanguage": "Select Language",
-  "answerComplete": "Answer complete"
+  "answerComplete": "Answer complete",
+  "scopeLabel": "Scope",
+  "scopeNotebook": "All sources",
+  "scopeCurrentSource": "Current source",
+  "scopeSelectedSources": "Selected sources",
+  "scopeSelectedCount": "{{count}} sources",
+  "scopeClear": "Use all sources",
+  "scopeNoDocuments": "No sources to choose from"
 }
