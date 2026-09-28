@@ -1,4 +1,4 @@
-import { eq, desc, and } from 'drizzle-orm'
+import { eq, desc, and, sql } from 'drizzle-orm'
 import { getDatabase, executeCheckpoint, dropNotebookVectorTable } from './index'
 import { chatSessions, chatMessages, notebooks, notes, documents, items } from './schema'
 import type {
@@ -8,6 +8,7 @@ import type {
   ChatTokenUsage
 } from '../../shared/types/chat'
 import type { RetrievalScope } from '../../shared/types/scope'
+import type { WorkspaceOverview } from '../../shared/types/workspace'
 
 // ==================== Chat Sessions ====================
 
@@ -496,4 +497,78 @@ export function deleteNote(id: string) {
   // 删除笔记本身
   db.delete(notes).where(eq(notes.id, id)).run()
   console.log(`[Database] Deleted note: ${id}`)
+}
+
+// ==================== Workspace Overview ====================
+
+/**
+ * Everything the Home page reads, in one round trip (#65).
+ *
+ * Three statements rather than a request per notebook: Home is opened constantly
+ * and an N+1 over the notebook list grows with the library. The source counts are
+ * one `GROUP BY` merged in JS rather than a correlated subquery per notebook, so
+ * the number of statements does not depend on how many notebooks exist.
+ *
+ * `recentDocuments` orders by `created_at`, which no index covers — the only
+ * document index is `(notebook_id, updated_at)`. A local SQLite sorting a few
+ * thousand rows to take 20 is not worth a migration; if the library ever gets big
+ * enough for that to show, the index is the fix, not a rewrite of this query.
+ */
+export function getWorkspaceOverview(
+  options: { notebookLimit?: number; documentLimit?: number; sessionLimit?: number } = {}
+): WorkspaceOverview {
+  const db = getDatabase()
+
+  const rows = db
+    .select()
+    .from(notebooks)
+    .orderBy(desc(notebooks.updatedAt))
+    .limit(options.notebookLimit ?? 200)
+    .all()
+
+  const counts = db
+    .select({ notebookId: documents.notebookId, count: sql<number>`count(*)` })
+    .from(documents)
+    .groupBy(documents.notebookId)
+    .all()
+  const countByNotebook = new Map(counts.map((row) => [row.notebookId, row.count]))
+
+  const recentDocuments = db
+    .select({
+      id: documents.id,
+      notebookId: documents.notebookId,
+      notebookTitle: notebooks.title,
+      title: documents.title,
+      type: documents.type,
+      mimeType: documents.mimeType,
+      sourceUri: documents.sourceUri,
+      localFilePath: documents.localFilePath,
+      createdAt: documents.createdAt
+    })
+    .from(documents)
+    .innerJoin(notebooks, eq(documents.notebookId, notebooks.id))
+    .orderBy(desc(documents.createdAt))
+    .limit(options.documentLimit ?? 20)
+    .all()
+
+  const recentSessions = db
+    .select({
+      id: chatSessions.id,
+      notebookId: chatSessions.notebookId,
+      notebookTitle: notebooks.title,
+      title: chatSessions.title,
+      updatedAt: chatSessions.updatedAt
+    })
+    .from(chatSessions)
+    .innerJoin(notebooks, eq(chatSessions.notebookId, notebooks.id))
+    .where(eq(chatSessions.status, 'active'))
+    .orderBy(desc(chatSessions.updatedAt))
+    .limit(options.sessionLimit ?? 5)
+    .all()
+
+  return {
+    notebooks: rows.map((row) => ({ ...row, sourceCount: countByNotebook.get(row.id) ?? 0 })),
+    recentDocuments,
+    recentSessions
+  }
 }

@@ -30,9 +30,10 @@ interface WindowTitleBarProps {
  * Windows the controls sat over the content and on Linux two windows reserved
  * nothing at all. The reserves now come from windowChrome.ts.
  *
- * The bar is `surface-base`, the same tone as the workspace canvas, in all four
- * windows. It is the OS window frame, not a panel, so it takes no surface step;
- * the optional `border-b` separates it from full-bleed content.
+ * The bar is `surface-base` — the chrome tier — in all four windows, one step
+ * above the `surface-sunken` workspace floor it sits on. It is the OS window
+ * frame, not a panel, so it takes no surface step beyond that; the optional
+ * `border-b` separates it from full-bleed content.
  */
 export default function WindowTitleBar({
   left,

@@ -26,8 +26,8 @@ export interface DragHandleProps {
  * Its width is **layout, not decoration**: the canvas gutter between two panels
  * *is* the handle, which is why `HANDLE_WIDTH` is subtracted from the space the
  * panels may occupy. Painting it, or shrinking it toward a hairline, closes the
- * gutter between the panels — the panels are separate cards floating on
- * `surface-base`, not adjacent surfaces sharing a divider.
+ * gutter between the panels — the panels are separate cards floating on the
+ * `surface-sunken` floor, not adjacent surfaces sharing a divider.
  *
  * It is a real `separator`: focusable, arrow-resizable, and it reports its
  * value, so the layout is not mouse-only.

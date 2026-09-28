@@ -15,10 +15,10 @@ import { useUIStore } from '../../store/uiStore'
 import { parseRetrievalScope } from '../../../../shared/types/scope'
 import { FOCUS_CHAT_EVENT } from '../../lib/workspaceEvents'
 import MessageList, { type MessageListHandle } from './chat/MessageList'
+import NotebookHeader from './chat/NotebookHeader'
 import ScopeSelector from './chat/ScopeSelector'
 import { COMPOSER_GAP, COMPOSER_RESERVE, COMPOSER_RESERVE_VAR } from './chat/stickToBottom'
 import { Button } from '../ui/button'
-import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
 import { Card } from '../ui/card'
 import { PanelHeader } from '../ui/panel-header'
@@ -55,8 +55,6 @@ function ProcessPanel({
   // 整个 notebook。
   const scope = parseRetrievalScope(currentSession?.retrievalScope)
 
-  const [editingTitle, setEditingTitle] = useState('')
-  const [isEditingTitle, setIsEditingTitle] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messageListRef = useRef<MessageListHandle>(null)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -209,48 +207,6 @@ function ProcessPanel({
     }
   }
 
-  // Start editing title
-  const handleStartEditTitle = (): void => {
-    if (currentNotebook) {
-      setEditingTitle(currentNotebook.title)
-      setIsEditingTitle(true)
-    }
-  }
-
-  // Save title
-  const handleSaveTitle = async (): Promise<void> => {
-    if (!currentNotebook || !editingTitle.trim()) {
-      setIsEditingTitle(false)
-      return
-    }
-
-    if (editingTitle.trim() !== currentNotebook.title) {
-      try {
-        await updateNotebook(currentNotebook.id, { title: editingTitle.trim() })
-      } catch (error) {
-        console.error('Failed to update Notebook title:', error)
-      }
-    }
-
-    setIsEditingTitle(false)
-  }
-
-  // Cancel editing
-  const handleCancelEditTitle = (): void => {
-    setIsEditingTitle(false)
-    setEditingTitle('')
-  }
-
-  // Title input box key handler
-  const handleTitleKeyDown = (e: React.KeyboardEvent): void => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      void handleSaveTitle()
-    } else if (e.key === 'Escape') {
-      handleCancelEditTitle()
-    }
-  }
-
   return (
     <Card ref={cardRef} className="relative flex h-full flex-col overflow-hidden">
       <PanelHeader
@@ -274,34 +230,14 @@ function ProcessPanel({
           )
         }
         center={
-          currentNotebook ? (
-            isEditingTitle ? (
-              <Input
-                type="text"
-                value={editingTitle}
-                onChange={(e) => setEditingTitle(e.target.value)}
-                onBlur={handleSaveTitle}
-                onKeyDown={handleTitleKeyDown}
-                autoFocus
-                className="text-sm font-medium bg-transparent border-0 text-center min-w-0 max-w-full p-0 h-auto focus-visible:ring-0 focus-visible:ring-offset-0"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              />
-            ) : (
-              <Button
-                onClick={handleStartEditTitle}
-                variant="ghost"
-                className="text-sm font-medium h-auto p-0 truncate w-full select-none"
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                title={t('clickToEditTitle')}
-              >
-                {currentNotebook.title}
-              </Button>
-            )
-          ) : (
-            <span className="text-sm text-muted-foreground select-none">
-              {t('selectOrCreateNotebook')}
-            </span>
-          )
+          /*
+           * Empty on purpose, and not omitted: the centre column is what keeps a
+           * wide drag surface between the two toggles. The notebook's name used to
+           * live here as a `text-sm` label; it is now the document header's job
+           * (`NotebookHeader`), and the window's tab strip already carries the name
+           * at all times, so nothing is lost by leaving this blank.
+           */
+          <span aria-hidden="true" />
         }
         right={
           onToggleRight && (
@@ -323,14 +259,24 @@ function ProcessPanel({
         }
       />
 
-      {/* 对话消息区域 - 使用 absolute 定位占满剩余空间 */}
-      <div className="absolute top-14 bottom-0 left-0 right-0 overflow-hidden">
+      {/* 对话消息区域 - 使用 absolute 定位占满剩余空间。`top-11` 就是 PanelHeader 的高度：
+          以前是 `top-14`，中间多出的 12px 是一条什么都不放的死带。 */}
+      <div className="absolute top-11 bottom-0 left-0 right-0 overflow-hidden">
         {/* Remount per session: every conversation opens at its own end, not at
             the position the previous one happened to be left at. */}
         <MessageList
           key={currentSession?.id ?? 'no-session'}
           ref={messageListRef}
           messages={messages}
+          header={
+            currentNotebook ? (
+              <NotebookHeader
+                notebook={currentNotebook}
+                sourceCount={documents.length}
+                onRename={(title) => updateNotebook(currentNotebook.id, { title })}
+              />
+            ) : null
+          }
         />
       </div>
 
@@ -355,7 +301,19 @@ function ProcessPanel({
         ref={composerRef}
         className="absolute bottom-0 left-0 right-0 p-4 pointer-events-none shrink-0 z-20"
       >
-        <div className="relative bg-surface-overlay/95 backdrop-blur-md rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-elevation pointer-events-auto select-none">
+        {/*
+         * A floating layer, not glass. It is opaque (`bg-surface-overlay`) with a
+         * hairline and the elevation token, and it deliberately carries no
+         * `backdrop-blur`: nothing reads through it (the fade covers the
+         * transcript, not this surface), so the blur was cost without an effect
+         * and one of the two glass surfaces DESIGN.md bans.
+         *
+         * The empty composer is one line tall (56px) so it reads as an input
+         * rather than as an empty text box; it grows to `max-h-[280px]` with the
+         * content while the transcript keeps its place, because the fade and the
+         * transcript reserve are both measured from this element.
+         */}
+        <div className="relative bg-surface-overlay rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-elevation pointer-events-auto select-none">
           {/* 范围选择（#94）：这次问题用哪些来源回答。放在输入框上方，跟在要提问的地方。 */}
           {currentSession && (
             <ScopeSelector
@@ -375,7 +333,7 @@ function ProcessPanel({
             placeholder={!hasChatModel ? t('noProviderConfigured') : t('inputMessage')}
             disabled={!hasChatModel}
             rows={1}
-            className="w-full bg-transparent border-0 pl-4 pr-14 py-3 text-sm text-foreground placeholder-muted-foreground resize-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto min-h-[84px] max-h-[280px] themed-scrollbar select-text"
+            className="w-full bg-transparent border-0 pl-4 pr-14 py-3 text-sm text-foreground placeholder-muted-foreground resize-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto min-h-[56px] max-h-[280px] themed-scrollbar select-text"
           />
 
           {/* 发送/停止按钮 - 动态切换 */}

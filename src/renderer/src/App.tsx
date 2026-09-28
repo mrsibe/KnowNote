@@ -78,7 +78,7 @@ function App(): React.JSX.Element {
   // 如果正在加载引导状态，显示加载中
   if (onboardingLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center gap-2 bg-surface-base text-sm text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center gap-2 bg-surface-sunken text-sm text-muted-foreground">
         <Loader2 className="w-4 h-4 animate-spin" />
         <span>{t('loading')}</span>
       </div>

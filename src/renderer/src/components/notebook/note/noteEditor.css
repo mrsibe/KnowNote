@@ -9,8 +9,7 @@
 }
 
 .ProseMirror p.is-empty::before {
-  color: var(--muted-foreground);
-  opacity: 0.5;
+  color: var(--subtle-foreground);
   content: attr(data-placeholder);
   pointer-events: none;
   float: left;
@@ -18,8 +17,7 @@
 }
 
 .ProseMirror.is-editor-empty p::before {
-  color: var(--muted-foreground);
-  opacity: 0.5;
+  color: var(--subtle-foreground);
   content: attr(data-placeholder);
   pointer-events: none;
   float: left;
@@ -35,7 +33,7 @@
 .ProseMirror h2,
 .ProseMirror h3 {
   margin: 1rem 0 0.5rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.4;
   color: var(--foreground);
 }

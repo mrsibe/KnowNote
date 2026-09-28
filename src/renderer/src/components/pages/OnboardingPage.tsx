@@ -31,7 +31,7 @@ export default function OnboardingPage() {
   const selectedLangName = languages.find((l) => l.code === selectedLanguage)?.name
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-surface-base">
+    <div className="flex items-center justify-center min-h-screen bg-surface-sunken">
       <div className="w-full max-w-md px-6 text-center">
         {/* Logo */}
         <div className="mb-8">

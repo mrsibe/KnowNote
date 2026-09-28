@@ -1,6 +1,7 @@
 import {
   forwardRef,
   ReactElement,
+  ReactNode,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -25,6 +26,15 @@ export interface MessageListHandle {
 
 interface MessageListProps {
   messages: ChatMessage[]
+  /**
+   * Rendered as the first block inside the scroll area, above the messages.
+   *
+   * A node rather than a set of props: the transcript does not know what a
+   * notebook is, and the header has to scroll with the answer rather than sit
+   * pinned above the scroll area, which would change the geometry the composer
+   * reserve and the follow behaviour are measured against.
+   */
+  header?: ReactNode
 }
 
 /** A user who asked for reduced motion gets the jump without the animation. */
@@ -36,7 +46,7 @@ function prefersReducedMotion(): boolean {
 }
 
 const MessageList = forwardRef<MessageListHandle, MessageListProps>(function MessageList(
-  { messages },
+  { messages, header },
   ref
 ): ReactElement {
   const viewportRef = useRef<HTMLDivElement>(null)
@@ -171,8 +181,14 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
       </div>
 
       <ScrollArea className="h-full" viewportRef={viewportRef}>
+        {header && (
+          <div className="mx-auto w-full max-w-[var(--reading-measure)] px-4">{header}</div>
+        )}
+
         {!hasMessages ? (
-          <div className="flex min-h-full items-center justify-center p-8">
+          // No `min-h-full`: with the header above it, a full-height box would
+          // push the empty state down by a viewport and invent a scrollbar.
+          <div className="mx-auto flex w-full max-w-[var(--reading-measure)] items-center justify-center px-4 py-16">
             <Empty className="border-none">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -186,7 +202,11 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
         ) : (
           // Observed for height so the follow survives reflow without a message
           // event. The reserved space keeps the last line above the composer.
-          <div ref={contentRef} className="px-4 py-6" style={{ paddingBottom: COMPOSER_RESERVE }}>
+          <div
+            ref={contentRef}
+            className="mx-auto w-full max-w-[var(--reading-measure)] px-4 py-6"
+            style={{ paddingBottom: COMPOSER_RESERVE }}
+          >
             <div className="space-y-4">
               {messages.map((message) => (
                 <MessageItem key={message.id} message={message} />

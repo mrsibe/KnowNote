@@ -42,7 +42,7 @@ export default class AppErrorBoundary extends Component<
     }
 
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface-base p-8 text-center text-foreground">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface-sunken p-8 text-center text-foreground">
         <h1 className="text-lg font-medium">{i18n.t('common:errorTitle')}</h1>
         <p className="max-w-md text-sm text-muted-foreground">
           {i18n.t('common:errorDescription')}

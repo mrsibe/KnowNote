@@ -698,7 +698,7 @@ export default function SourcePanel(): ReactElement {
 
   return (
     <Card
-      className="flex h-full flex-col overflow-hidden"
+      className="flex h-full flex-col overflow-hidden bg-surface-base"
       onDragOver={(event) => {
         event.preventDefault()
         setIsDragging(true)

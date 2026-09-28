@@ -64,6 +64,8 @@ const api = {
   createNotebook: (title: string, description?: string) =>
     ipcRenderer.invoke('create-notebook', { title, description }),
   getAllNotebooks: () => ipcRenderer.invoke('get-all-notebooks'),
+  /** 首页一次读完：笔记本 + 来源数、最近来源、最近会话（#65）。 */
+  getWorkspaceOverview: () => ipcRenderer.invoke('get-workspace-overview'),
   getNotebook: (id: string) => ipcRenderer.invoke('get-notebook', { id }),
   updateNotebook: (id: string, updates: any) =>
     ipcRenderer.invoke('update-notebook', { id, updates }),

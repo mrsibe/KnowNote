@@ -48,8 +48,16 @@ export const COMPOSER_RESERVE_VAR = '--composer-reserve'
 /** Gap between the last message and the top of the floating composer. */
 export const COMPOSER_GAP = 24
 
-/** Reserve used until the composer reports its height. */
-export const COMPOSER_RESERVE_FALLBACK = 152
+/**
+ * Reserve used until the composer reports its height.
+ *
+ * The composer's outer height is the wrapper's `p-4` (32) plus the scope row
+ * (28) plus the textarea's `min-h-[56px]` plus the hairline (2). The value is
+ * deliberately the one with the scope row: the reserve only has to be large
+ * enough, and over-reserving leaves a gap while under-reserving hides the last
+ * line of an answer behind the composer.
+ */
+export const COMPOSER_RESERVE_FALLBACK = 120
 
 /** Gap between the back-to-bottom button's lower edge and the composer's top. */
 export const BACK_TO_BOTTOM_GAP = 8

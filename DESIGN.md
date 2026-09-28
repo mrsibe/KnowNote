@@ -146,20 +146,88 @@ either: unknown is not a claim, and it must not be rendered as one.
 The line is `text-xs text-subtle-foreground`, the treatment the retrieval lines
 already use — a state of the answer, quieter than the answer itself.
 
+## Home
+
+Implementation: `components/home/` and `components/pages/NotebookListPage.tsx`. Home
+is a **starting desk, not a dashboard**. It has four sections, in the order they are
+used, and each one is allowed to render nothing:
+
+| Section           | Grammar         | Ordered by              | Source                                     |
+| ----------------- | --------------- | ----------------------- | ------------------------------------------ |
+| Greeting + prompt | text, `text-xl` | —                       | local time                                 |
+| Search entry      | input, `h-12`   | —                       | notebooks + recent sources, filtered in JS |
+| Recent notebooks  | cards           | `notebooks.updatedAt`   | the notebook store                         |
+| Continue          | list rows       | the user's own activity | `lib/recentlyOpened.ts` + `recentSessions` |
+| Recently added    | list rows       | `documents.createdAt`   | `recentDocuments`                          |
+
+Rules:
+
+- **No hero banner.** The greeting is one `text-xl` line and a T2 prompt. Home is
+  opened a hundred times; a banner is paid for on every one of them. The visual
+  centre is the entry below it, not the words above it.
+- **One grammar per kind of thing.** Notebooks are cards, everything that is not a
+  notebook is a row, and creating is a button. Repeating one container for every
+  object is what makes a launcher read as a wall of identical boxes, and it hides
+  the difference between a place you work and a file that arrived.
+- **"Continue" means where the user was, not what changed.** The shelf is ordered by
+  `updatedAt`, so a notebook renamed last week outranks the one read an hour ago.
+  Continue merges the notebooks the user actually opened with the conversation last
+  written to, ordered by real recency, and caps at three.
+- **No dead affordances.** There is no "View all" link, because there is no Library
+  page to point at — Home is where notebooks are browsed, so the shelf expands in
+  place with a real disclosure. A section with nothing to show is omitted, not
+  rendered as an empty box with a heading.
+- **One read, not a fan-out.** Home's data arrives in a single
+  `get-workspace-overview` call (`WorkspaceOverview`): source counts, the newest
+  sources across every notebook, and the last active conversation. One IPC per
+  notebook would grow with the library on a page that is opened constantly.
+- **Counts are rendered only when known.** A notebook card takes an optional
+  `sourceCount` and omits the count rather than printing a zero it cannot vouch for.
+
+### What Home's search does, and does not
+
+`HomeSearch` filters **notebook and source names** in the renderer, over data Home
+already has. It is not wired to retrieval, and the placeholder says so: search the
+_text_ of the library and ask a question across all notebooks is a different change,
+because `searchChunksFts` is scoped to one notebook and every notebook owns its own
+vector table. A box labelled "ask your knowledge" that quietly matched only titles
+would be worse than the honest label.
+
+The entry owns the `Cmd/Ctrl+K` binding on Home, so the hint it renders is a
+shortcut that works. Results are a `combobox` / `listbox` pair with
+`aria-activedescendant`; options prevent `mousedown` so clicking one does not blur
+the input before the click lands.
+
+### Card hover
+
+A shelf card takes `hover:-translate-y-px` and `hover:shadow-control`, over 150ms.
+This is the one place a `surface-raised` card may carry a shadow, and only while
+hovered: it is a transient affordance on a control, not a panel floating over the
+document. At rest the card is border + surface step, per [Borders and
+shadow](#borders-and-elevation). Never widen this into a resting shadow or a
+`shadow-elevation`.
+
 ## Surfaces
 
 The app is a stack of opaque surfaces plus two translucent state fills. Higher
 in the stack means further from the window background, and **lighter** in both
-colour schemes.
+colour schemes. Each of the three opaque steps has one job, and a surface is
+only ever used for that job:
 
-| Token                | Tailwind              | Light               | Dark                            | Use for                                                                                                    |
-| -------------------- | --------------------- | ------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `--surface-sunken`   | `bg-surface-sunken`   | `oklch(0.9551 0 0)` | `oklch(0.24 0.0127 258.3724)`   | Window chrome that sits _behind_ content: the settings sidebar and dialog shell, a segmented-control track |
-| `--surface-base`     | `bg-surface-base`     | `oklch(0.9851 0 0)` | `oklch(0.2925 0.0157 264.2965)` | App canvas, page background, the gap between panels                                                        |
-| `--surface-raised`   | `bg-surface-raised`   | `oklch(1 0 0)`      | `oklch(0.325 0.011 260)`        | Content panels: document list, reader, chat, editor, cards                                                 |
-| `--surface-overlay`  | `bg-surface-overlay`  | `oklch(1 0 0)`      | `oklch(0.365 0.011 260)`        | Floating layers: dialog, sheet, popover, menu, select, tooltip, toast                                      |
-| `--surface-hover`    | `bg-surface-hover`    | `foreground @ 5%`   | `neutral 0.9 @ 6%`              | Translucent hover fill for rows, menu items, ghost buttons                                                 |
-| `--surface-selected` | `bg-surface-selected` | `foreground @ 9%`   | `neutral 0.9 @ 10%`             | Translucent selected/active fill for rows and toggles                                                      |
+| Tier            | Token                | Tailwind              | Light                         | Dark                      | Use for                                                                                                                                            |
+| --------------- | -------------------- | --------------------- | ----------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **floor**       | `--surface-sunken`   | `bg-surface-sunken`   | `oklch(0.946 0.0045 91)`      | `oklch(0.1776 0.0015 91)` | The workspace floor: the window background and the gutter between panels. Also the recessed utility fill — a segmented-control track, a code block |
+| **chrome**      | `--surface-base`     | `bg-surface-base`     | `oklch(0.9756 0.0026 106.45)` | `oklch(0.2046 0.0015 91)` | Rails and bars: the library panel, the notes panel, the settings nav, every window title bar, a full-bleed page background                         |
+| **content**     | `--surface-raised`   | `bg-surface-raised`   | `oklch(1 0 0)`                | `oklch(0.235 0.0015 91)`  | What the user is reading or writing: the chat document, the reader, the editor, a notebook card, a dialog body                                     |
+| **floating**    | `--surface-overlay`  | `bg-surface-overlay`  | `oklch(1 0 0)`                | `oklch(0.285 0.0015 91)`  | Layers above the page: dialog, sheet, popover, menu, select, tooltip, toast                                                                        |
+| **state fills** | `--surface-hover`    | `bg-surface-hover`    | `foreground @ 5%`             | `neutral 0.93 @ 6%`       | Translucent hover fill for rows, menu items, ghost buttons                                                                                         |
+|                 | `--surface-selected` | `bg-surface-selected` | `foreground @ 9%`             | `neutral 0.93 @ 10%`      | Translucent selected/active fill for rows and toggles                                                                                              |
+
+The three opaque steps are the **floor → chrome → content** ladder. In the
+workspace it reads as: the `p-2` gutter is floor, the library and notes panels
+are chrome, and the chat document in the centre — the thing the notebook is
+_about_ — is content. That is the whole hierarchy; no shadow or colour carries
+it.
 
 Rules:
 
@@ -180,9 +248,16 @@ Rules:
   `surface-raised` in both colour schemes. Do not nest `surface-raised` inside
   `surface-raised`.
 
-**Not** part of the ladder: the window title bar. It is the OS window frame
-rather than a panel, so every window draws it `bg-surface-base`, the same tone as
-the canvas. Do not give it a surface step.
+**The neutral ramp is warm.** Surfaces and text share hue ~91 (a warm grey)
+rather than the zero-chroma grey this palette used to be, which is what makes a
+white panel read as paper instead of as a default browser surface. Text and
+surfaces remain two separate ramps — they agree on hue, nothing else. Do not
+mix a warm surface with a cool grey label, and do not introduce a second
+neutral hue.
+
+**Not** a separate tier: the window title bar. It is the OS window frame rather
+than a panel, so it is drawn `bg-surface-base` — the chrome tier — in all four
+windows. It takes no step of its own; do not give it one.
 
 Legacy aliases kept for compatibility while pages migrate: `--background`,
 `--card`, `--popover`, `--sidebar` and `--accent` — with their `-foreground`
@@ -270,7 +345,7 @@ Rules:
   cancels). Without the lock, dragging past a panel's limit leaves the browser's
   native selection drag running and selects the text underneath.
 - **The seam is a gutter, and its width is layout.** The panels are separate
-  cards floating on `surface-base`; the canvas between them _is_ the handle.
+  cards floating on the `surface-sunken` floor; the gutter between them _is_ the handle.
   That is why `HANDLE_WIDTH` is subtracted from the width the panels may occupy,
   and why the handle paints nothing at rest. Painting it (`bg-border`) or
   shrinking it toward `w-px` closes the gutter and makes the cards read as
@@ -550,24 +625,46 @@ use opacity on top of a level (`text-muted-foreground/70`).
 
 Sizes:
 
-| Size | Class         | Use for                                                                               |
-| ---- | ------------- | ------------------------------------------------------------------------------------- |
-| 11px | `text-[11px]` | Keycaps, tiny counters (rare; prefer `text-xs`)                                       |
-| 12px | `text-xs`     | Meta line, timestamps, badges, table headers, code                                    |
-| 14px | `text-sm`     | **Default UI size**: buttons, labels, list rows, inputs, prose in chat and the editor |
-| 16px | `text-base`   | Dialog titles, empty-state body (only where 14px reads cramped)                       |
-| 18px | `text-lg`     | Page titles, empty-state titles                                                       |
-| 20px | `text-xl`     | Focus content: home page title, flashcard face                                        |
-| 36px | `text-4xl`    | A single focus readout (quiz score). One per screen                                   |
+| Size | Class         | Use for                                                                                    |
+| ---- | ------------- | ------------------------------------------------------------------------------------------ |
+| 11px | `text-[11px]` | Keycaps, tiny counters (rare; prefer `text-xs`)                                            |
+| 12px | `text-xs`     | Meta line, timestamps, badges, table headers, code                                         |
+| 14px | `text-sm`     | **Default UI size**: buttons, labels, list rows, inputs, prose in chat and the editor      |
+| 16px | `text-base`   | Dialog titles, empty-state body (only where 14px reads cramped)                            |
+| 18px | `text-lg`     | Page titles, empty-state titles                                                            |
+| 20px | `text-xl`     | Focus content: home page title, flashcard face                                             |
+| 30px | `text-3xl`    | The notebook title in the workspace header, `font-semibold tracking-tight`. One per screen |
+| 36px | `text-4xl`    | A single focus readout (quiz score). One per screen                                        |
 
 Weights: `font-normal` for body, `font-medium` for interactive labels, panel
 headers, section titles, titles and the selected state of anything.
-`font-semibold` and above are reserved for the one focus readout per screen.
-Never use weight alone to express selection — pair it with
-`bg-surface-selected`.
+`font-semibold` and above are reserved for two things: headings inside long-form
+prose (`.markdown-content h1–h4`, `.ProseMirror h1–h3`, all 600), and the one
+focus readout per screen. A prose heading is never `font-bold`: an `h3` inside an
+answer must not out-weigh the panel header above it. Never use weight alone to
+express selection — pair it with `bg-surface-selected`.
 
 Line height: UI text uses Tailwind defaults. Long-form reading surfaces
 (`markdown.css`, `noteEditor.css`) use 14px / `line-height: 1.75`.
+
+**Measure.** A long-form reading surface is capped at `--reading-measure` (72ch)
+and centred:
+
+```tsx
+<div className="mx-auto w-full max-w-[var(--reading-measure)] px-4 py-6">
+```
+
+The chat transcript (`MessageList.tsx`) and the note editor (`NoteEditor.tsx`,
+`p-4`) both read the token, so a paragraph is the same width on either surface.
+Widening a panel adds margin around the column; it must never lengthen the line —
+uncapped, a 1000px centre panel sets an answer at roughly 130 characters per
+line. The token is defined once in `theme.css`; take it as a variant rather than
+hard-coding a `ch` value or a pixel width.
+
+The source reader does **not** read it yet, and the reason is a contract rather
+than an oversight: `TextSourceReader` measures its highlight rectangles once from
+the laid-out range, so a column that re-centres on resize would strand the
+highlight. Make that measurement resize-aware before capping that surface.
 
 ## Accent and states
 
@@ -669,7 +766,22 @@ Copy these shapes. `cn()` (`@/lib/utils`) is used for merging class overrides.
 
 ### Panel
 
+`Panel` is the frame for a workspace zone. Which tier it takes depends on what
+the zone holds — a rail is chrome, the thing being read is content:
+
+- **Rail** (library, notes, settings nav): `bg-surface-base`.
+- **Content** (chat transcript, reader, editor): `bg-surface-raised`.
+
+A rail and a content panel share the same hairline; what separates them is the
+tier under it. The hairline is one step lighter than it used to be, because the
+surface ladder now carries part of the separation the outline used to carry
+alone — do not compensate by reaching for a darker border, and do not add a
+second outline to a rail that already sits in the gutter.
+
 ```tsx
+// rail
+<Card className="flex h-full flex-col overflow-hidden bg-surface-base">
+// content
 <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface-raised">
   <PanelHeader … />
   <div className="min-h-0 flex-1 overflow-y-auto themed-scrollbar">…</div>
@@ -683,6 +795,48 @@ Implementation: `components/ui/panel-header.tsx`.
 ```tsx
 <div className="flex h-11 shrink-0 items-center justify-between border-b border-border px-3" />
 ```
+
+A panel header is chrome. It carries the panel's own controls and nothing that
+belongs to the document — in the chat panel that is the two collapse toggles, and
+its centre is an empty `<span />` that exists only to keep the centre a drag
+surface. Do not put the notebook title back in it: the title is the document
+header's job (see [Notebook header](#notebook-header)), and the window's tab strip
+already carries the name at all times.
+
+The content below a panel header starts at `top-11`, the header's own height.
+Nothing sits in between; a `top-14` left a 12px dead band under every header.
+
+### Notebook header
+
+Implementation: `components/notebook/chat/NotebookHeader.tsx`, rendered as the
+first block inside the transcript's scroll area (it is passed to `MessageList` as
+`header`, not positioned above it).
+
+```tsx
+<header className="pt-6 pb-2">
+  <button className="block w-full cursor-text rounded-md text-left text-3xl font-semibold tracking-tight break-words">
+    {notebook.title}
+  </button>
+  <p className="mt-2 text-xs text-subtle-foreground">
+    {sources} · {updated}
+  </p>
+</header>
+```
+
+- **The title scrolls with the answer**, like a page title, instead of sitting
+  pinned above the scroll area. Pinning it would change the boxes the composer
+  reserve, the scroll fade and the follow-the-answer observer are measured
+  against; scrolling it costs nothing and reads as a document.
+- **The title is a `<button>`, not a span with a click handler**, and its
+  affordance is `cursor-text` — no resting border, no hover fill. At `text-3xl` a
+  hover block would read as a control sitting on a document.
+- **Metadata is one T3 line**: `documents` count and the relative updated date
+  (`lib/relativeDate.ts`, shared with `NotebookCard`). Counters and timestamps are
+  exactly what T3 is for.
+- **There is no subtitle.** `notebooks.description` exists but nothing in the app
+  can author it, so every notebook carries the same creation-time filler. Printing
+  a sentence the user never wrote is worse than an empty line; add it when the
+  field is editable.
 
 ### Window title bar
 
@@ -716,6 +870,78 @@ Separators, not gaps:
 </div>
 ```
 
+### Rail list
+
+A list inside a chrome panel (the library, the notes list) is not a table. Rows
+are separated by a 4px gap and identified by a `hover` fill on a `rounded-md`
+block, never by a hairline; groups are separated by 12px and labelled with a T3
+section heading.
+
+```tsx
+<div className="p-2 space-y-3">
+  <section className="space-y-1">
+    <h2 className="select-none px-2 py-0.5 text-xs font-medium text-subtle-foreground">
+      {label}
+    </h2>
+    {/* one row */}
+    <div className="group flex items-start gap-0.5 rounded-md transition-colors hover:bg-surface-hover focus-within:bg-surface-hover">
+      <button className="flex min-w-0 flex-1 items-start gap-2 rounded-md px-2 py-1.5 text-left">
+        <span className="mt-0.5 shrink-0">{icon}</span>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate text-sm text-foreground">{title}</span>
+          <span className="truncate text-xs text-subtle-foreground">{meta}</span>
+        </span>
+      </button>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={…}
+          className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100"
+        />
+      </DropdownMenuTrigger>
+    </div>
+  </section>
+</div>
+```
+
+Rules:
+
+- **A heading is rendered only when there is more than one group.** A heading over
+  the only group restates the panel header.
+- **Secondary actions live in one `···` menu, revealed on hover or focus.** A row
+  in a rail never carries a permanent column of buttons — that is what made every
+  source row read as a toolbar. Retry, re-index, open and delete are items in the
+  same menu, applied in that order with the destructive item last, below a
+  separator.
+- **The hover-revealed control is always laid out**, with `opacity-0` rather than
+  `hidden`/conditional rendering, so revealing it cannot reflow the title.
+- **The row button and its menu trigger are siblings**, never nested. A button
+  inside a button is unreachable by keyboard and is the same defect the tab strip
+  already fixed.
+- **The row button keeps a real hover fill** (`hover:bg-surface-hover` on the
+  wrapper). The revealed control uses `hover:bg-surface-selected` so it stays
+  visible on top of it.
+- **A source row leads with what the source is.** The metadata line is
+  `<kind> · <n> chunks`, where the kind comes from `lib/sourceKind.ts`
+  (`sourceKindOf`), not from `document.type` — `file` covers PDF, Word and Slides,
+  and "202 chunks" on its own is machine vocabulary, not a fact about the source.
+  The leading glyph is `KIND_ICON[kind]` in the same module's vocabulary, drawn
+  from one library at one stroke weight and left neutral: the kind is carried by
+  the glyph **and** the word, never by a tint (a colour icon in neutral chrome is
+  a violation).
+- **The kind is derived, never stored twice.** `sourceKindOf` is the single
+  reader of `mimeType` / path / URL, it is total (an unknown file is `file`, not a
+  guessed `text`), and it is asserted in `test/sourceKind.test.ts`. It is
+  deliberately _not_ shared with `SourceReader`'s `isPdf`: that predicate answers
+  "which reader renders this?", which is a rendering contract, and folding the two
+  together would let a display change pick a different reader.
+- **There is no persistent selected row in the library.** Clicking a source
+  replaces the list with the reader (see [Library and Reading are one zone, two
+  states](#library-and-reading-are-one-zone-two-states)), so there is no state in
+  which a selected row is on screen; do not add one back. The notes rail does have
+  a real selection and uses the [Selected row](#selected-row) recipe.
+
 ### Selected row
 
 ```tsx
@@ -729,6 +955,33 @@ Dialog, popover, menu, toast:
 ```tsx
 <div className="rounded-lg border border-border bg-surface-overlay shadow-elevation" />
 ```
+
+### Composer
+
+Implementation: `components/notebook/ProcessPanel.tsx`. The chat composer is the
+one floating layer that lives permanently on the page rather than over it.
+
+```tsx
+<div className="relative bg-surface-overlay rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-elevation">
+  <ScopeSelector … />
+  <Textarea className="min-h-[56px] max-h-[280px] py-3 pl-4 pr-14 resize-none border-0 bg-transparent focus-visible:ring-0" />
+  <Button size="icon" className="absolute right-2 bottom-3 rounded-full" />
+</div>
+```
+
+- **Opaque, and no blur.** It is a floating surface with a hairline and
+  `shadow-elevation`. It does not take `backdrop-blur` — the functional scroll
+  fade below the transcript already covers the content that passes under it, so a
+  blur here costs GPU and returns nothing.
+- **One line when empty.** `min-h-[56px]` keeps it reading as an input; it grows
+  with the content to `max-h-[280px]`.
+- **Its height is measured, never assumed.** `ProcessPanel` writes the measured
+  height to `--composer-reserve`, and `MessageList`'s bottom padding and the fade
+  both read that variable. `COMPOSER_RESERVE_FALLBACK` in `stickToBottom.ts` is
+  only the pre-measurement value; if the composer's geometry changes, that
+  constant is the one to re-derive (it is the scope row + the one-line textarea +
+  the wrapper padding).
+- **The send control is a pill inside the composer**, not a sibling below it.
 
 ### Raised card
 
@@ -784,8 +1037,8 @@ Never signal an error with a red border alone.
 
 ## Adding a page: order of decisions
 
-1. Pick the surfaces: which panel is `surface-raised`, what is `surface-base`
-   between panels, what is `surface-sunken`.
+1. Pick the tiers: which zone is the `surface-sunken` floor, which panels are
+   `surface-base` chrome (rails), and which one is the `surface-raised` content.
 2. Pick the panel header height (`h-11`) and the row density (`h-8` / `h-9`).
 3. Build with the [recipes](#component-recipes); pick radius from the radius
    table, never a literal.

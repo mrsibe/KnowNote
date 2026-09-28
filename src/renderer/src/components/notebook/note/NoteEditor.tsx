@@ -27,9 +27,9 @@ interface NoteEditorProps {
 
 /** 正文的当前 markdown。`onUpdate`、外部同步和摘录追加都走这一个序列化入口。 */
 const markdownOf = (editor: Editor): string =>
-  // SAFETY: `tiptap-markdown` 把 serializer 挂在 `editor.storage.markdown` 上，但它的
-  // 类型增强没有覆盖到 @tiptap/core v3 的 storage 映射，所以 TS 看不到 `getMarkdown`。
-  // 该扩展是下面 `useEditor` 的固定成员，挂载后这个字段必然存在（原本这里写的是 `as any`）。
+  // SAFETY: `tiptap-markdown` 把 serializer 挂在 `editor.storage.markdown` 上，但它的类型增强
+  // 没有覆盖到 @tiptap/core v3 的 storage 映射，所以 TS 看不到 `getMarkdown`。该扩展是下面
+  // `useEditor` 的固定成员，挂载后这个字段必然存在（原本这里写的是 `as any`）。
   (editor.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown()
 
 export default function NoteEditor({ noteId, content, onChange }: NoteEditorProps): ReactElement {
@@ -171,7 +171,11 @@ export default function NoteEditor({ noteId, content, onChange }: NoteEditorProp
       <Toaster />
       {/* 编辑器内容 */}
       <ScrollArea className="flex-1">
-        <div ref={containerRef} className="p-4" onClickCapture={handleClickCapture}>
+        <div
+          ref={containerRef}
+          className="mx-auto w-full max-w-[var(--reading-measure)] p-4"
+          onClickCapture={handleClickCapture}
+        >
           <EditorContent editor={editor} />
         </div>
       </ScrollArea>

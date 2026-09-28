@@ -100,7 +100,7 @@ export default function NotebookLayout(): ReactElement {
   }, [])
 
   return (
-    <div className="flex flex-col h-screen bg-surface-base text-foreground">
+    <div className="flex flex-col h-screen bg-surface-sunken text-foreground">
       <TopNavigationBar onCreateClick={handleCreateNotebook} onConfirmDiscard={confirmDiscard} />
 
       <ResizableLayout

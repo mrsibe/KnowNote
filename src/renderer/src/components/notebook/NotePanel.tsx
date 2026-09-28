@@ -337,7 +337,7 @@ export default function NotePanel(): ReactElement {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface-raised">
+    <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface-base">
       {isEditing && currentNote ? (
         // 编辑器页面 - 使用 key 强制在切换笔记时重新挂载
         <NoteEditorPanel

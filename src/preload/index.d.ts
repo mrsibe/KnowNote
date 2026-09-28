@@ -12,7 +12,8 @@ import type {
   LocalEmbeddingModelInfo,
   EmbeddingDownloadProgress,
   EmbeddingSourceInfo,
-  SourceBlock
+  SourceBlock,
+  WorkspaceOverview
 } from '../shared/types'
 import type {
   KnowledgeDocument,
@@ -95,6 +96,8 @@ declare global {
       // Notebook 相关
       createNotebook: (title: string, description?: string) => Promise<Notebook>
       getAllNotebooks: () => Promise<Notebook[]>
+      /** 首页一次读完：笔记本 + 来源数、最近来源、最近会话（#65）。 */
+      getWorkspaceOverview: () => Promise<WorkspaceOverview>
       getNotebook: (id: string) => Promise<Notebook | null>
       updateNotebook: (
         id: string,

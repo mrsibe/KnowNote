@@ -3,6 +3,7 @@ import {
   createNotebook,
   getAllNotebooks,
   getNotebookById,
+  getWorkspaceOverview,
   updateNotebook,
   deleteNotebook
 } from '../db/queries'
@@ -37,6 +38,16 @@ export function registerNotebookHandlers() {
       return notebooks
     } catch (error) {
       console.error('[IPC] Error getting notebooks:', error)
+      throw error
+    }
+  })
+
+  // 首页概览：笔记本 + 来源数、最近来源、最近会话，一次读完（#65）
+  ipcMain.handle('get-workspace-overview', async () => {
+    try {
+      return getWorkspaceOverview()
+    } catch (error) {
+      console.error('[IPC] Error getting workspace overview:', error)
       throw error
     }
   })

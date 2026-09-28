@@ -30,6 +30,9 @@ export * from './connection'
 // 导出 Embedding 类型
 export * from './embedding'
 
+// 导出 Workspace 概览类型（首页一次读全量，见 WorkspaceOverview）
+export * from './workspace'
+
 /**
  * 笔记本接口
  * 与 Drizzle schema 推导的类型兼容

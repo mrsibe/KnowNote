@@ -8,10 +8,10 @@
   overflow-wrap: break-word;
 }
 
-/* 标题样式 */
+/* 标题样式。字重 600，与设计系统里标题的上限一致：正文标题不该比面板标题更重。 */
 .markdown-content h1 {
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 600;
   margin-top: 1rem;
   margin-bottom: 0.75rem;
   line-height: 1.4;
@@ -19,7 +19,7 @@
 
 .markdown-content h2 {
   font-size: 1.125rem;
-  font-weight: 700;
+  font-weight: 600;
   margin-top: 1rem;
   margin-bottom: 0.5rem;
   line-height: 1.4;
@@ -27,7 +27,7 @@
 
 .markdown-content h3 {
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 600;
   margin-top: 0.75rem;
   margin-bottom: 0.5rem;
   line-height: 1.4;
@@ -35,7 +35,7 @@
 
 .markdown-content h4 {
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: 600;
   margin-top: 0.5rem;
   margin-bottom: 0.25rem;
   line-height: 1.4;
@@ -180,10 +180,11 @@
   font-style: italic;
 }
 
-/* 删除线 */
+/* 删除线：用文字层级降一级，不用 opacity —— 透明度会叠在色阶上，
+   既让对比度不可预测，也让 T1/T2/T3 的三级失去意义。 */
 .markdown-content del {
   text-decoration: line-through;
-  opacity: 0.7;
+  color: var(--muted-foreground);
 }
 
 /* 任务列表 */

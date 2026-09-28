@@ -1,18 +1,25 @@
 import { ReactElement, useState } from 'react'
 import {
-  FileText,
-  Globe,
-  FileUp,
-  StickyNote,
-  Trash2,
-  Loader2,
   Database,
+  FileText,
+  Loader2,
+  MoreHorizontal,
+  RefreshCw,
   RotateCcw,
-  RefreshCw
+  Trash2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { KnowledgeDocument } from '../../../../../shared/types/knowledge'
+import { SOURCE_KIND_LABEL, sourceKindOf } from '../../../lib/sourceKind'
+import { SOURCE_KIND_ICON } from '../../common/sourceIcon'
 import { Button } from '../../ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '../../ui/dropdown-menu'
 import ConfirmDialog from '../../common/ConfirmDialog'
 import {
   Empty,
@@ -22,6 +29,41 @@ import {
   EmptyDescription,
   EmptyContent
 } from '../../ui/empty'
+
+/**
+ * The order the library is grouped in, and the label each group carries.
+ *
+ * A library is read by scanning, so the sections are stable rather than sorted
+ * by size: what a user uploaded sits above what they pasted, every time. The
+ * section headings are only rendered when more than one group exists — a
+ * heading over the only group is noise, not structure.
+ *
+ * This is the coarse `document.type`, not the display kind from
+ * `lib/sourceKind.ts`: a group of "PDF" with one item in it is a worse table of
+ * contents than a group of "Documents".
+ */
+const SOURCE_GROUPS = ['file', 'url', 'note', 'text'] as const
+type SourceGroup = (typeof SOURCE_GROUPS)[number]
+
+const GROUP_LABEL: Record<SourceGroup, string> = {
+  file: 'files',
+  url: 'webPages',
+  note: 'notes',
+  text: 'sourceKindText'
+}
+
+/**
+ * One drawn glyph per kind, shared with the Home page (`components/common/sourceIcon.ts`).
+ *
+ * The library used to show four generic icons (an upload arrow for every file),
+ * which said nothing about what the source *is*.
+ */
+/** The column is a closed enum in the schema but open at runtime, so an unknown
+ * kind falls into the Documents group instead of disappearing from the list. */
+function groupOf(document: KnowledgeDocument): SourceGroup {
+  const type = document.type
+  return SOURCE_GROUPS.includes(type as SourceGroup) ? (type as SourceGroup) : 'file'
+}
 
 interface DocumentListProps {
   documents: KnowledgeDocument[]
@@ -79,17 +121,34 @@ export default function DocumentList({
     )
   }
 
+  const groups = SOURCE_GROUPS.map((group) => ({
+    group,
+    documents: documents.filter((document) => groupOf(document) === group)
+  })).filter((section) => section.documents.length > 0)
+
+  // A single group needs no heading: the panel header already says "Library".
+  const showHeadings = groups.length > 1
+
   return (
-    <div className="p-2 space-y-1">
-      {documents.map((doc) => (
-        <DocumentItem
-          key={doc.id}
-          document={doc}
-          onDelete={onDeleteDocument}
-          onSelect={onSelectDocument}
-          onRetry={onRetryDocument}
-          onReindex={onReindexDocument}
-        />
+    <div className="p-2 space-y-3">
+      {groups.map((section) => (
+        <section key={section.group} className="space-y-1">
+          {showHeadings && (
+            <h2 className="select-none px-2 py-0.5 text-xs font-medium text-subtle-foreground">
+              {t(GROUP_LABEL[section.group])}
+            </h2>
+          )}
+          {section.documents.map((doc) => (
+            <DocumentItem
+              key={doc.id}
+              document={doc}
+              onDelete={onDeleteDocument}
+              onSelect={onSelectDocument}
+              onRetry={onRetryDocument}
+              onReindex={onReindexDocument}
+            />
+          ))}
+        </section>
       ))}
     </div>
   )
@@ -114,95 +173,102 @@ function DocumentItem({
   const { t } = useTranslation('ui')
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
-  const getTypeIcon = () => {
-    const iconClass = 'w-4 h-4 mt-0.5 text-muted-foreground'
-    switch (document.type) {
-      case 'file':
-        return <FileUp className={iconClass} />
-      case 'url':
-        return <Globe className={iconClass} />
-      case 'note':
-        return <StickyNote className={iconClass} />
-      default:
-        return <FileText className={iconClass} />
-    }
-  }
+  const kind = sourceKindOf(document)
+  const KindIcon = SOURCE_KIND_ICON[kind]
 
   const handleConfirmDelete = () => {
     onDelete(document.id)
   }
 
   return (
-    <div className="group grid grid-cols-[1fr_auto] items-start gap-1 rounded-md transition-colors hover:bg-surface-hover">
-      {/* The row is a real button, not a click handler on a div: it is the primary
-          way into a source, so it must be reachable and activatable by keyboard
-          (#65). The delete control is its sibling rather than a child — a button
-          nested in a button is the same defect the tab strip already fixed. */}
-      <button
-        type="button"
-        onClick={() => onSelect(document)}
-        className="grid min-w-0 cursor-pointer grid-cols-[auto_1fr] select-none items-start gap-2 rounded-md px-2 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
-        {/* 图标列 - 固定宽度 */}
-        {getTypeIcon()}
+    <DropdownMenu>
+      {/* The row reads as a line of text, not as a toolbar: one control lives on
+          it, and that control only appears on hover or focus. Retry and re-index
+          moved into the menu with delete, which is what stopped every row from
+          carrying a permanent column of buttons.
 
-        {/* 内容列 - 可被压缩 */}
-        <div className="min-w-0 flex flex-col gap-1">
-          <h3 className="text-sm font-medium truncate">{document.title}</h3>
-          <p className="text-xs text-subtle-foreground">{document.chunkCount} chunks</p>
-          {document.status === 'processing' && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              {t('indexing')}
-            </p>
-          )}
-          {/* 失败原因就地显示（#95）：以前是一个 alert，既丢掉了原因也无法重试。 */}
-          {document.status === 'failed' && document.errorMessage && (
-            <p className="text-xs text-destructive truncate" title={document.errorMessage}>
-              {document.errorMessage}
-            </p>
-          )}
-          {/* 来源文件不在了（#158）：citation / 摘录仍然有效，只是文件暂时取不到。 */}
-          {document.sourceState === 'missing' && (
-            <p className="text-xs text-subtle-foreground">{t('sourceMissing')}</p>
-          )}
-        </div>
-      </button>
+          The row is a real button and the menu trigger is its **sibling**, never
+          its child — a button nested in a button is the defect the tab strip
+          already fixed (#65, and the same rule the note list follows). The 32px
+          trigger is always laid out, so revealing it does not reflow the title. */}
+      <div className="group flex items-start gap-0.5 rounded-md transition-colors hover:bg-surface-hover focus-within:bg-surface-hover">
+        <button
+          type="button"
+          onClick={() => onSelect(document)}
+          className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-left select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          <span className="mt-0.5 shrink-0">
+            <KindIcon className="w-4 h-4 text-muted-foreground" />
+          </span>
 
-      {/* 操作列 - 固定宽度 */}
-      <div className="mt-2 mr-1 flex flex-col items-center gap-0.5">
-        {document.status === 'failed' && (
+          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="truncate text-sm text-foreground">{document.title}</span>
+            {/* The kind leads the meta line: "202 chunks" alone was the only fact a
+                row carried, and it is machine vocabulary. "PDF · 202 chunks" says
+                what the source is first. */}
+            <span className="truncate text-xs text-subtle-foreground">
+              {t(SOURCE_KIND_LABEL[kind])}
+              <span aria-hidden="true"> · </span>
+              {t('chunks', { count: document.chunkCount ?? 0 })}
+            </span>
+            {document.status === 'processing' && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                {t('indexing')}
+              </span>
+            )}
+            {/* 失败原因就地显示（#95）：以前是一个 alert，既丢掉了原因也无法重试。 */}
+            {document.status === 'failed' && document.errorMessage && (
+              <span className="truncate text-xs text-destructive" title={document.errorMessage}>
+                {document.errorMessage}
+              </span>
+            )}
+            {/* 来源文件不在了（#158）：citation / 摘录仍然有效，只是文件暂时取不到。 */}
+            {document.sourceState === 'missing' && (
+              <span className="text-xs text-subtle-foreground">{t('sourceMissing')}</span>
+            )}
+          </span>
+        </button>
+
+        <DropdownMenuTrigger asChild>
           <Button
-            onClick={() => onRetry(document.id)}
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            title={t('retryDocument')}
+            aria-label={t('moreActions')}
+            title={t('moreActions')}
+            className="mt-0.5 mr-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:bg-surface-selected hover:text-foreground data-[state=open]:opacity-100 data-[state=open]:bg-surface-selected"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <MoreHorizontal className="w-4 h-4" />
           </Button>
+        </DropdownMenuTrigger>
+      </div>
+
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem onSelect={() => onSelect(document)}>
+          <FileText className="w-4 h-4 text-muted-foreground" />
+          {t('openSource')}
+        </DropdownMenuItem>
+        {document.status === 'failed' && (
+          <DropdownMenuItem onSelect={() => onRetry(document.id)}>
+            <RotateCcw className="w-4 h-4 text-muted-foreground" />
+            {t('retryDocument')}
+          </DropdownMenuItem>
         )}
         {document.status === 'indexed' && (
-          <Button
-            onClick={() => onReindex(document.id)}
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-foreground"
-            title={t('reindexDocument')}
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </Button>
+          <DropdownMenuItem onSelect={() => onReindex(document.id)}>
+            <RefreshCw className="w-4 h-4 text-muted-foreground" />
+            {t('reindexDocument')}
+          </DropdownMenuItem>
         )}
-        <Button
-          onClick={() => setIsDeleteDialogOpen(true)}
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-destructive hover:bg-destructive/10 hover:text-destructive"
-          title={t('deleteDocument')}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive focus:text-destructive"
+          onSelect={() => setIsDeleteDialogOpen(true)}
         >
           <Trash2 className="w-4 h-4" />
-        </Button>
-      </div>
+          {t('deleteDocument')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
 
       {/* 删除文档确认对话框 */}
       <ConfirmDialog
@@ -212,6 +278,6 @@ function DocumentItem({
         title={t('deleteDocument')}
         message={t('confirmDeleteDocument')}
       />
-    </div>
+    </DropdownMenu>
   )
 }
