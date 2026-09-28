@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import type { ChatMessage } from '../../../types/notebook'
 import ReasoningContent from './ReasoningContent'
 import AnswerSources from './AnswerSources'
+import AnswerCoverage from './AnswerCoverage'
 import CitationChip from './CitationChip'
 import remarkCitationMarkers, { parseCitationHref } from './citationMarkers'
 import { useItemStore } from '../../../store/itemStore'
@@ -18,6 +19,7 @@ import { useSourceAnchorNavigation } from '../../../hooks/useSourceAnchorNavigat
 import { useUIStore } from '../../../store/uiStore'
 import { parseRetrievalStatus, sourcesForDisplay } from '../../../../../shared/utils/answerSources'
 import { parseCitations, sourceDocumentExists } from '../../../../../shared/utils/citations'
+import { classifyClaimSupport } from '../../../../../shared/utils/claimSupport'
 import {
   citationToSourceAnchor,
   sourceAnchorsEqual
@@ -67,6 +69,11 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   // Structured citations (#69) mapped back to the `[n]` markers in the answer.
   const citations = parseCitations(message.metadata)
   const citationByIndex = new Map(citations.map((citation) => [citation.index, citation]))
+
+  // Citation coverage (#156): which sentences carry a resolvable citation. Computed
+  // from the answer and the persisted citations with the same pure function the
+  // tests exercise, so "grounded" means one thing in the UI and in a test.
+  const coverage = message.content ? classifyClaimSupport(message.content, citations) : null
 
   // A chip is disabled only once the library has been read and the document is
   // provably absent. Before that (or after a failed load) the list is "unknown",
@@ -271,6 +278,9 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
             }
           />
         )}
+        {/* Citation coverage (#156). Stated only when something is not backed by a
+            source; a normal answer does not need an "all good" line. */}
+        {coverage && !isLive && <AnswerCoverage coverage={coverage} />}
         {/* Why the answer stops where it does, when the model did not decide to stop
             there itself. Beside the answer, never instead of it: the part that
             arrived is what the reader was left with. */}

@@ -115,7 +115,10 @@ export function buildRAGContext(searchResults: SearchResult[]): RAGContext {
 
 ${promptParts.join('\n\n---\n\n')}
 
-请基于以上片段回答用户的问题。引用某一个片段时，请在该句子后使用 [n] 标注片段编号（n 为上面的编号，例如 [1]）。如果这些片段不足以回答问题，请说明并尽力提供有帮助的回答。`
+请基于以上片段回答用户的问题：
+- 每一句来自片段的陈述，都请在该句后使用 [n] 标注片段编号（n 为上面的编号，例如 [1]）。
+- 如果某句话是你自己的推断、并不来自这些片段，请在该句后标注 [inference]，不要给它加 [n]。
+- 如果这些片段不足以回答问题，请说明并尽力提供有帮助的回答。`
 
   return { context, sources, citations, citationContexts }
 }

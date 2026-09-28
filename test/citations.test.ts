@@ -95,6 +95,9 @@ test('the prompt groups by source but keeps the marker global', () => {
   assert.match(context, /\[来源: Attention Is All You Need — p\.5\]/)
   assert.match(context, /\[1\] the retrieved passage/)
   assert.match(context, /\[n\]/)
+  // The model is asked to mark its own inference too, so #156 can tell it apart
+  // from a sentence that simply forgot to cite.
+  assert.match(context, /\[inference\]/)
   assert.equal(sources.length, 1)
   assert.equal(sources[0].chunkId, 'chunk_1')
   assert.equal(citations.length, 1)
