@@ -713,6 +713,28 @@ async function runChecks(): Promise<string[]> {
   )
   pass('DenseRetriever returns retrieved evidence with a page/block locator')
 
+  // --- the literal signal has its own index (#96) ----------------------------
+  // FTS is written with the chunks and deleted with them, so a re-index must leave
+  // exactly one row: zero means the search silently went blind, two means a stale
+  // row survived.
+  const ftsDocId = await knowledge.addDocument(reindexNotebook, {
+    title: 'FTS smoke',
+    type: 'text',
+    content: 'the quick brown zephyrine jumps over the lazy dog'
+  })
+  const literal = await knowledge.searchText(reindexNotebook, 'zephyrine')
+  assert(
+    literal.length === 1 && literal[0].documentId === ftsDocId,
+    'full-text search did not find a literal term in the document it was indexed from'
+  )
+  await knowledge.reindexDocument(ftsDocId)
+  const literalAfterReindex = await knowledge.searchText(reindexNotebook, 'zephyrine')
+  assert(
+    literalAfterReindex.length === 1 && literalAfterReindex[0].documentId === ftsDocId,
+    'a re-index left the full-text index broken or duplicated'
+  )
+  pass('full-text search finds literal terms and survives a re-index')
+
   // --- a failed re-index leaves the previous index usable (#95) ---------------
   // The failure this guards: `reindexDocument()` used to clear the derived index
   // *before* embedding, so an embedding failure at 70% left the document with no

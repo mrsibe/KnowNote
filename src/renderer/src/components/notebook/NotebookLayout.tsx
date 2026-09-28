@@ -6,6 +6,7 @@ import ResizableLayout from '../layouts/ResizableLayout'
 import SourcePanel from './SourcePanel'
 import ProcessPanel from './ProcessPanel'
 import NotePanel from './NotePanel'
+import SearchPalette from './chat/SearchPalette'
 import { useNotebookStore } from '../../store/notebookStore'
 import { useChatStore } from '../../store/chatStore'
 import { useUIStore } from '../../store/uiStore'
@@ -113,6 +114,9 @@ export default function NotebookLayout(): ReactElement {
         onClose={handleDiscardClose}
         onConfirm={handleDiscardConfirm}
       />
+
+      {/* Global search (#96): Ctrl/Cmd+K from anywhere in the notebook. */}
+      <SearchPalette />
     </div>
   )
 }

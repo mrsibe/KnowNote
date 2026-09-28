@@ -43,7 +43,7 @@ import {
   type IdentifiedBlockDraft
 } from './blocks/documentBlocks'
 import { resolveChunkProvenance, type ChunkProvenance } from './chunkProvenance'
-import { DenseRetriever } from './retrieval'
+import { DenseRetriever, hydrateEvidence } from './retrieval'
 import {
   advanceRun,
   completeRun,
@@ -60,6 +60,12 @@ import type {
   Retriever
 } from './retrieval'
 import { WebFetchService } from './WebFetchService'
+import {
+  deleteDocumentChunksFts,
+  ensureChunksFts,
+  indexChunksFts,
+  searchChunksFts
+} from './fts'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
 
@@ -467,12 +473,24 @@ export class KnowledgeService {
       // 4. 到此为止没有破坏任何东西。现在才替换旧的派生索引。
       advanceRun(runId, 'finalizing', 85)
       onProgress?.('saving_chunks', 85)
+      ensureChunksFts()
       await this.clearDerivedIndex(documentId)
 
       this.persistDocumentBlocks(blocks)
 
       // 保存分块与 chunk↔block 映射（同一事务，不会出现没有映射的 chunk）
       const { chunkIds } = this.saveChunks(documentId, notebookId, chunkResults, now)
+
+      // 字面检索索引（#96）。与 chunk 写入在同一个 pipeline 里，所以两者不会各自
+      // 漂移；就算漂移，`ensureChunksFts()` 的补齐也会在下次索引时自愈。
+      indexChunksFts(
+        chunkResults.map((chunk, index) => ({
+          chunkId: chunkIds[index],
+          notebookId,
+          documentId,
+          content: chunk.content
+        }))
+      )
 
       // 5. 保存嵌入元数据并添加到向量存储
       onProgress?.('saving_embeddings', 90)
@@ -560,6 +578,10 @@ export class KnowledgeService {
     const db = getDatabase()
     const doc = db.select().from(documents).where(eq(documents.id, documentId)).get()
     if (!doc) return
+
+    // 字面索引与 chunk 一起清掉；表不存在时先建出来，免得删除本身成了第一个错误。
+    ensureChunksFts()
+    deleteDocumentChunksFts(documentId)
 
     const oldChunks = db
       .select({ id: chunks.id })
@@ -903,6 +925,24 @@ export class KnowledgeService {
 
     // 2. 映射回兼容的 SearchResult 形状
     return toSearchResults(evidence, { includeContent })
+  }
+
+  /**
+   * 字面检索（#96）：BM25 over `chunks_fts`，可限定来源（#94 的 scope）。
+   *
+   * 与向量检索共用 `SearchResult` 形状，所以引用/定位链路不需要第二套。两个信号在
+   * UI 里分开呈现，**不**做融合 —— 融合是 chat 检索（#77）的事。
+   */
+  async searchText(
+    notebookId: string,
+    query: string,
+    options: { limit?: number; documentIds?: string[] } = {}
+  ): Promise<SearchResult[]> {
+    ensureChunksFts()
+    const hits = searchChunksFts(notebookId, query, options)
+    if (hits.length === 0) return []
+
+    return toSearchResults(hydrateEvidence(getDatabase(), hits))
   }
 
   /**

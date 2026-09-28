@@ -84,5 +84,11 @@
   "scopeClear": "改用所有来源",
   "scopeNoDocuments": "没有可供选择的来源",
   "retryDocument": "重试",
-  "reindexDocument": "重建索引"
+  "reindexDocument": "重建索引",
+  "searchPlaceholder": "搜索来源",
+  "searchHint": "查找精确文本或相关段落。Ctrl/Cmd+K 开关此面板。",
+  "searchNoResults": "没有匹配结果。",
+  "searchMatchingText": "匹配的文本",
+  "searchRelatedPassages": "相关段落",
+  "searchPage": "第 {{page}} 页"
 }

@@ -37,6 +37,23 @@ export interface KnowledgeSearchResult {
   score: number
   chunkIndex: number
   metadata?: Record<string, unknown>
+  /**
+   * 命中在来源里的位置（#96）：页码区间与块区间。运行时会随结果一起送达
+   * （`KnowledgeService.search` / `searchText` 共用 `SearchResult`），搜索面板用它
+   * 跳到命中的段落，而不是只打开文档。
+   */
+  locator?: {
+    pageStart: number | null
+    pageEnd: number | null
+    blocks: Array<{
+      blockId: string
+      page: number | null
+      startOffset: number
+      endOffset: number
+      startInBlock: number
+      endInBlock: number
+    }>
+  }
 }
 
 /**

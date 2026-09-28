@@ -150,6 +150,26 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     })
   )
 
+  // 字面搜索（#96）：BM25，与语义搜索分开返回，UI 不融合两者。
+  ipcMain.handle(
+    'knowledge:search-text',
+    validate(KnowledgeSchemas.searchText, async (params) => {
+      Logger.debug('KnowledgeHandlers', 'search-text:', params)
+
+      try {
+        const results = await knowledgeService.searchText(
+          params.notebookId,
+          params.query,
+          params.options ?? {}
+        )
+        return { success: true, results }
+      } catch (error) {
+        Logger.error('KnowledgeHandlers', 'Error searching text:', error)
+        return { success: false, error: (error as Error).message, results: [] }
+      }
+    })
+  )
+
   // 获取文档列表
   ipcMain.handle(
     'knowledge:get-documents',

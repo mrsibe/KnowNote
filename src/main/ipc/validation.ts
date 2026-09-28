@@ -202,6 +202,18 @@ export const KnowledgeSchemas = {
         includeContent: z.boolean().optional()
       })
       .optional()
+  }),
+
+  // 字面检索（#96）：BM25 over chunks_fts，与语义检索分开呈现，不融合。
+  searchText: z.object({
+    notebookId: z.string().min(1, '笔记本 ID 不能为空'),
+    query: z.string().min(1, '搜索查询不能为空').max(1000, '搜索查询不能超过1000个字符'),
+    options: z
+      .object({
+        limit: z.number().int().min(1).max(100).optional(),
+        documentIds: z.array(z.string().min(1)).optional()
+      })
+      .optional()
   })
 }
 

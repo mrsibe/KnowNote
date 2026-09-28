@@ -84,5 +84,11 @@
   "scopeClear": "Use all sources",
   "scopeNoDocuments": "No sources to choose from",
   "retryDocument": "Try again",
-  "reindexDocument": "Re-index"
+  "reindexDocument": "Re-index",
+  "searchPlaceholder": "Search sources",
+  "searchHint": "Find exact text or a related passage. Ctrl/Cmd+K toggles this palette.",
+  "searchNoResults": "No matches.",
+  "searchMatchingText": "Matching text",
+  "searchRelatedPassages": "Related passages",
+  "searchPage": "p. {{page}}"
 }

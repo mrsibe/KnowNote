@@ -274,6 +274,12 @@ declare global {
           query: string,
           options?: SearchOptions
         ) => Promise<{ success: boolean; results: KnowledgeSearchResult[]; error?: string }>
+        /** 字面搜索（#96）：BM25，与语义搜索分开返回。 */
+        searchText: (
+          notebookId: string,
+          query: string,
+          options?: { limit?: number; documentIds?: string[] }
+        ) => Promise<{ success: boolean; results: KnowledgeSearchResult[]; error?: string }>
 
         // 文档管理
         getDocuments: (notebookId: string) => Promise<KnowledgeDocument[]>

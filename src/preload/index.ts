@@ -176,6 +176,12 @@ const api = {
     // 搜索
     search: (notebookId: string, query: string, options?: any) =>
       ipcRenderer.invoke('knowledge:search', { notebookId, query, options }),
+    // 字面搜索（#96）
+    searchText: (
+      notebookId: string,
+      query: string,
+      options?: { limit?: number; documentIds?: string[] }
+    ) => ipcRenderer.invoke('knowledge:search-text', { notebookId, query, options }),
 
     // 文档管理
     getDocuments: (notebookId: string) =>
