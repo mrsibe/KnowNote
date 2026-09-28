@@ -55,9 +55,15 @@ export interface CitationCandidate {
   /** 区间所在的块；来源没有块结构时为 `undefined`。 */
   blockId?: string
   page?: number
-  /** 相对 `documents.content` 的字符区间，`quote` 是它的逐字切片。 */
-  startOffset: number
-  endOffset: number
+  /**
+   * 相对 `documents.content` 的字符区间，`quote` 是它的逐字切片。
+   *
+   * 只有来源带块结构时才知道区间。没有块结构的 chunk（旧索引或未生成块的来源）
+   * 仍然可以是一个 candidate，此时没有 span 可指 —— 宁可缺字段，也不要编一个
+   * 假的 offset；`Citation` 的对应字段本来也是可选的。
+   */
+  startOffset?: number
+  endOffset?: number
   quote: string
 }
 
