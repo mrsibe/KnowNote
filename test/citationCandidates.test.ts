@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import {
   buildCitationCandidates,
   groupCandidateRanges,
-  splitSentences,
   type CitationCandidateSource
 } from '../src/main/services/citationCandidates.ts'
+import { splitSentences } from '../src/shared/utils/sentenceSegmentation.ts'
 import type { EvidenceBlock } from '../src/main/services/retrieval/types.ts'
 
 /**

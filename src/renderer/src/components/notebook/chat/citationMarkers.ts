@@ -18,6 +18,12 @@ export const CITATION_HREF_PREFIX = '#citation-'
 /** 只认 1-3 位数字，避免把 `[2024]` 这种正文误判成引用。 */
 const MARKER_PATTERN = /\[(\d{1,3})\]/g
 
+/**
+ * 模型标注「这是自己的推断，不是来自来源」的标记（#156）。它不会变成链接，也不该
+ * 出现在正文里 —— 逐句的判定由 `classifyClaimSupport` 完成，正文只显示干净的句子。
+ */
+const INFERENCE_MARKER = /\[inference\]/gi
+
 /** 从 link 的 `href` 里取回标记编号；不是 citation 链接时返回 null。 */
 export function parseCitationHref(href: string | undefined): number | null {
   if (!href || !href.startsWith(CITATION_HREF_PREFIX)) return null
@@ -37,6 +43,11 @@ interface MarkdownNode {
 
 /** 文本节点按标记切开，标记本身变成 link。 */
 function splitText(value: string): MarkdownNode[] {
+  // The inference marker is a machine annotation, not prose: drop it before the
+  // answer is rendered. The sentence's status still reaches the reader through the
+  // coverage notice.
+  value = value.replace(INFERENCE_MARKER, '')
+
   const parts: MarkdownNode[] = []
   let lastIndex = 0
   MARKER_PATTERN.lastIndex = 0
