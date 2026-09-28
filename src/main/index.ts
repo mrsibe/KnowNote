@@ -21,6 +21,7 @@ import { getStore } from './config/store'
 import { migrateProvidersToConnections } from './config/connectionMigration'
 import { isSmokeTestRequested, runSmokeTest } from './smokeTest'
 import { isEvalRequested, runEvalCli } from './eval/run'
+import { isMcpRequested, runMcpServer } from './mcp/entry'
 import { declareDocumentScheme, registerDocumentProtocolHandler } from './protocol/documentProtocol'
 import {
   declarePdfjsAssetScheme,
@@ -67,6 +68,14 @@ app.whenReady().then(async () => {
     const code = await runEvalCli()
     await new Promise<void>((resolve) => process.stdout.write('', () => resolve()))
     app.exit(code)
+    return
+  }
+
+  // MCP stdio server (#80). Like the other headless entries it runs before any
+  // window exists; unlike them it stays alive until the client closes stdin.
+  if (isMcpRequested()) {
+    await runMcpServer()
+    app.exit(0)
     return
   }
 

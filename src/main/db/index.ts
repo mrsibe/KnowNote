@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { join } from 'path'
+import { mkdirSync } from 'fs'
 import { stat } from 'fs/promises'
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
@@ -23,8 +24,16 @@ let isClosing = false // 防止重复关闭
  * 在 Electron 主进程的 app.whenReady() 中调用
  */
 export function initDatabase() {
-  // 数据库文件存放在用户数据目录
-  const dbPath = join(app.getPath('userData'), 'knownote.db')
+  // 数据库文件存放在用户数据目录。
+  //
+  // `KNOWNOTE_DATA_DIR` 让非桌面入口（#80 的 MCP server）能指向同一个 profile，而不
+  // 必经过 Electron 的 `app.getPath('userData')`。默认值仍然是 Electron 的 userData，
+  // 所以桌面应用的行为不变。
+  const dataDir = process.env.KNOWNOTE_DATA_DIR?.trim() || app.getPath('userData')
+  // Electron creates its userData directory; a `KNOWNOTE_DATA_DIR` override (#80) is
+  // a path we were handed, so it has to exist before sqlite can open a file in it.
+  mkdirSync(dataDir, { recursive: true })
+  const dbPath = join(dataDir, 'knownote.db')
 
   console.log('[Database] Initializing database at:', dbPath)
 

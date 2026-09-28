@@ -39,6 +39,31 @@ KnowNote 把你自己的文档变成可以提问的知识库，并让每个回�
 - **自带模型。** 任何兼容 OpenAI、Anthropic 或 Google 协议的端点，或 Ollama 这类本地服务。没有内置对话模型，也没有账号。
 - **笔记与思维导图。** 把你的结论作为结构化笔记保存在资料旁边，也可以把一本笔记本转成思维导图。
 - **无需部署。** 下载、打开、开始阅读。嵌入模型只下载一次，之后都在你的机器上运行。
+- **MCP 导出面。** 通过只读的 stdio [MCP](https://modelcontextprotocol.io) 把笔记本提供给本地 agent —— 用的是 app 自己的检索路径，KnowNote 作服务端，不是再做一个客户端（见下）。
+
+## 从 agent 调用（MCP）
+
+KnowNote 可以通过 stdio 以只读方式把知识库作为 MCP 服务提供给 agent ——
+Claude Code、Codex、Cursor、Claude Desktop —— 让它直接检索你已有的文档，而不是让你把文档粘进去。
+
+```jsonc
+// 你的 MCP 客户端配置
+{
+  "mcpServers": {
+    "knownote": {
+      "command": "/path/to/knownote",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+工具是 `list_notebooks`、`search_notebook`、`get_source`、`read_document`、`search_notes`。
+`search_notebook` 返回带 **provenance**（文档 id、页码、字符偏移）的片段，而不是裸文本，
+所以 agent 给出的结论可以回到原文核对。没有写入工具、没有调用模型的工具、也没有任何
+返回文件路径的结果 —— 正是这一点让这个面可以安全地授予一个正在读不可信文档的 agent。
+
+默认使用与桌面应用相同的知识库；用 `KNOWNOTE_DATA_DIR=/path/to/profile` 可以指向别的 profile。
 
 ## 还没有的部分
 

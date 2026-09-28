@@ -54,6 +54,37 @@ AnythingLLM.
   sources, and turn a notebook into a mind map.
 - **No deployment.** Download, open, start reading. The embedder downloads once
   and then runs on your machine.
+- **An MCP export surface.** Serve a notebook to a local agent over read-only
+  stdio [MCP](https://modelcontextprotocol.io) — the same retrieval path the app
+  uses, as a server, not a second client (see below).
+
+## Use it from an agent (MCP)
+
+KnowNote can serve your library over MCP on stdio, read-only, so an agent —
+Claude Code, Codex, Cursor, Claude Desktop — can search the documents you already
+have instead of asking you to paste them in.
+
+```jsonc
+// your MCP client's config
+{
+  "mcpServers": {
+    "knownote": {
+      "command": "/path/to/knownote",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+The tools are `list_notebooks`, `search_notebook`, `get_source`, `read_document`
+and `search_notes`. `search_notebook` returns passages **with provenance**
+(document id, page, character offsets) rather than bare text, so a claim an agent
+makes can be checked against the source. There is no write tool, no tool that
+calls a model, and no result that reports a filesystem path — that is what makes
+this surface safe to grant to an agent reading untrusted documents.
+
+By default the server uses the same library as the desktop app. Point it at a
+different profile with `KNOWNOTE_DATA_DIR=/path/to/profile`.
 
 ## What is not here yet
 
