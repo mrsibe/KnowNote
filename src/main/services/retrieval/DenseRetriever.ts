@@ -10,26 +10,41 @@ import { getDatabase } from '../../db'
 import { vectorStoreManager } from '../../vectorstore'
 import type { EmbeddingService } from '../EmbeddingService'
 import { hydrateEvidence } from './evidence'
-import type { RetrieveOptions, RetrievedEvidence, Retriever } from './types'
+import { assertFilterSupported } from './filter'
+import { buildRetrievalTrace } from './trace'
+import type { RetrievalRequest, RetrievalResult, Retriever } from './types'
+
+const STRATEGY = 'dense'
 
 export class DenseRetriever implements Retriever {
   constructor(private readonly embeddingService: EmbeddingService) {}
 
-  async search(
-    notebookId: string,
-    query: string,
-    options: RetrieveOptions = {}
-  ): Promise<RetrievedEvidence[]> {
-    const { topK = 5, threshold = 0.5 } = options
+  async search(request: RetrievalRequest): Promise<RetrievalResult> {
+    // 先拒绝还不支持的过滤：静默忽略会返回"看起来受限、实际未受限"的结果。
+    assertFilterSupported(request.filter)
+
+    const topK = request.topK ?? 5
+    const threshold = request.threshold ?? 0.5
+    const startedAt = performance.now()
 
     // E5 要求 query 前缀，与索引时的 document 前缀区分
     await this.embeddingService.ensureReady()
-    const queryEmbedding = await this.embeddingService.embed(query, 'query')
+    const queryEmbedding = await this.embeddingService.embed(request.query, 'query')
 
-    const vectorStore = await vectorStoreManager.getStore(notebookId)
+    const vectorStore = await vectorStoreManager.getStore(request.notebookId)
     const hits = await vectorStore.query(queryEmbedding.embedding, { topK, threshold })
-    if (hits.length === 0) return []
 
-    return hydrateEvidence(getDatabase(), hits)
+    const evidence = hits.length === 0 ? [] : hydrateEvidence(getDatabase(), hits)
+
+    return {
+      evidence,
+      trace: buildRetrievalTrace({
+        strategy: STRATEGY,
+        filter: request.filter,
+        topK,
+        threshold,
+        durationMs: performance.now() - startedAt
+      })
+    }
   }
 }

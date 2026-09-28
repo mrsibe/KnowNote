@@ -30,10 +30,12 @@ export interface QueryResult {
 export interface QueryOptions {
   topK?: number // 返回前 K 个结果，默认 5
   threshold?: number // 相似度阈值（0-1），低于此值的结果不返回
-  filter?: {
-    chunkIds?: string[] // 限制在指定 chunk 中搜索
-  }
 }
+
+// 这里曾经声明过 `filter?: { chunkIds?: string[] }`，但 `SQLiteVectorStore.query()`
+// 从未读取它，`knnQuerySql()` 也没有对应的 WHERE —— 一个声明了却不生效的能力，比
+// 没有这个能力更糟。真正需要按来源预过滤的是 #94，而它要求过滤发生在 KNN 之前，
+// 且向量表要能按 document id 过滤；那属于 #94 的实现，不属于这个接口。
 
 /**
  * VectorStore 配置

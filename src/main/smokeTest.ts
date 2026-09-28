@@ -656,12 +656,18 @@ async function runChecks(): Promise<string[]> {
 
   // Retrieval delivers provenance, not a bare chunk (#74). The re-index above
   // just rebuilt chunks, embeddings, vectors and the chunk↔block mapping, so
-  // this drives the real DenseRetriever against them.
-  const evidence = await new DenseRetriever(fakeEmbeddingService()).search(
-    reindexNotebook,
-    'sample query'
-  )
+  // this drives the real DenseRetriever against them. The trace (#160) rides
+  // alongside, so the packaged app proves the whole result shape, not just the
+  // evidence array.
+  const reindexResult = await new DenseRetriever(fakeEmbeddingService()).search({
+    notebookId: reindexNotebook,
+    query: 'sample query'
+  })
+  const evidence = reindexResult.evidence
   assert(evidence.length > 0, 'DenseRetriever returned no evidence for an indexed notebook')
+  assert(reindexResult.trace.strategy === 'dense', 'retrieval trace lost its strategy')
+  assert(reindexResult.trace.topK === 5, `retrieval trace topK was ${reindexResult.trace.topK}`)
+  assert(Number.isFinite(reindexResult.trace.durationMs), 'retrieval trace has no duration')
   const first = evidence[0]
   assert(first.documentId === reindexDocId, `evidence came from ${first.documentId}`)
   assert(first.source.title.length > 0, 'evidence lost its source title')

@@ -31,6 +31,31 @@ export interface Citation {
 }
 
 /**
+ * 一个候选取证区间（#160 定义，#155 使用）。
+ *
+ * 与 `Citation` 的关键区别是**时机**：candidate 在回答生成之前就存在 —— 检索到的
+ * chunk 被切成句子/块之后，每个片段带一个稳定 id。prompt 把 candidate 的 id 交给
+ * 模型，模型回答时引用 id，于是引用区间在回答产生前就已确定。
+ *
+ * 这样就不需要回答之后再问「哪句话支持了哪个 claim」：substring / token overlap 对
+ * 改写无能为力，embedding 相似度是概率而非证明，真正的支持关系是语义蕴含（NLI），
+ * 那不是一个确定性算法。先有 span、再由模型选择，才是确定性的。
+ *
+ * `id` 在一次 prompt 内稳定（例如 `S2`）。`startOffset` / `endOffset` 是相对
+ * `documents.content` 的字符区间，`blockId` 是区间所在的块。
+ */
+export interface CitationCandidate {
+  id: string
+  documentId: string
+  chunkId: string
+  blockId: string
+  page?: number
+  startOffset: number
+  endOffset: number
+  quote: string
+}
+
+/**
  * 一条 citation 连同它所覆盖的原文。
  *
  * 校验「引文确实落在引用区间内」需要区间文本，而文本只在检索侧（`locator`）

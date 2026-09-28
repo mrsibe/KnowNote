@@ -40,12 +40,49 @@ export interface RetrievedEvidence {
 }
 
 /**
- * 检索选项。`includeContent` 不在这里：截断内容由 legacy `SearchResult` 映射决定，
- * 不是检索策略的事（策略应当总是返回真实内容）。
+ * 限制检索范围的过滤条件。
+ *
+ * `documentIds` 为空或缺省都表示「整个 notebook」。当前还没有后端实现预过滤，
+ * 所以这个 seam 由 `assertFilterSupported()` 守着：被真正使用前拒绝，而不是静默
+ * 忽略（实现落在 #94）。
  */
-export interface RetrieveOptions {
+export interface RetrievalFilter {
+  documentIds?: string[]
+}
+
+/**
+ * 一次检索请求。
+ *
+ * 取代旧的 `(notebookId, query, options)` 位置参数：#94 的 scope、#77 的策略参数
+ * 与 #157 要快照的 trace 都要挂在这一个对象上，而不是散落在调用点。
+ */
+export interface RetrievalRequest {
+  notebookId: string
+  query: string
   topK?: number
   threshold?: number
+  filter?: RetrievalFilter
+}
+
+/**
+ * 一次检索实际生效的参数。
+ *
+ * 它会随回答一起被快照（#157），因此必须由检索层产出、而不是调用方猜：
+ * `strategy` 说明用的是哪条检索路径，`scope` 说明结果被限制在哪些来源。
+ * `threshold` 缺省表示该策略没有阈值，不是「阈值等于 0」。
+ */
+export interface RetrievalTrace {
+  strategy: string
+  scope: { documentIds?: string[] }
+  topK: number
+  threshold?: number
+  durationMs: number
+}
+
+/** 检索结果：证据 + 本次检索的可解释参数。 */
+export interface RetrievalResult {
+  evidence: RetrievedEvidence[]
+  trace: RetrievalTrace
 }
 
 /**
@@ -53,5 +90,5 @@ export interface RetrieveOptions {
  * 只要实现这个接口就能被 eval harness 直接度量与替换。
  */
 export interface Retriever {
-  search(notebookId: string, query: string, options?: RetrieveOptions): Promise<RetrievedEvidence[]>
+  search(request: RetrievalRequest): Promise<RetrievalResult>
 }

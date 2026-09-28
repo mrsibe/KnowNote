@@ -5,3 +5,5 @@
 export * from './types'
 export { DenseRetriever } from './DenseRetriever'
 export { hydrateEvidence, assembleEvidence, type EvidenceHit } from './evidence'
+export { buildRetrievalTrace, type RetrievalTraceInput } from './trace'
+export { assertFilterSupported } from './filter'

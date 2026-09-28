@@ -44,7 +44,7 @@ import {
 } from './blocks/documentBlocks'
 import { resolveChunkProvenance, type ChunkProvenance } from './chunkProvenance'
 import { DenseRetriever } from './retrieval'
-import type { EvidenceLocator, Retriever } from './retrieval'
+import type { EvidenceLocator, RetrievalRequest, RetrievalResult, Retriever } from './retrieval'
 import { WebFetchService } from './WebFetchService'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
@@ -751,17 +751,13 @@ export class KnowledgeService {
   }
 
   /**
-   * 语义搜索。
+   * 检索：embedding space 前置校验 + 委托给当前 `Retriever`，并带回本次检索的
+   * trace（#157 会把它快照到回答上）。
    *
-   * 保持原有签名与返回形状，内部委托给默认的 `Retriever`（当前是 `DenseRetriever`）。
-   * embedding space 校验留在这里：它是前置条件，不是检索策略的一部分。
+   * embedding space 校验留在这里：它是前置条件，不是检索策略的一部分。旧的
+   * `search()` 形状保持不变，只是改为经这里委托。
    */
-  async search(
-    notebookId: string,
-    query: string,
-    options: SearchOptions = {}
-  ): Promise<SearchResult[]> {
-    const { includeContent = true } = options
+  async retrieve(request: RetrievalRequest): Promise<RetrievalResult> {
     const db = getDatabase()
 
     // 0. 索引身份校验：当前模型与建索引时不一致，向量不可比，明确要求重新索引
@@ -769,7 +765,7 @@ export class KnowledgeService {
     const storedSpace = db
       .select()
       .from(notebookEmbeddingSpaces)
-      .where(eq(notebookEmbeddingSpaces.notebookId, notebookId))
+      .where(eq(notebookEmbeddingSpaces.notebookId, request.notebookId))
       .get()
     if (storedSpace && storedSpace.spaceId !== space.id) {
       throw new Error(
@@ -777,8 +773,26 @@ export class KnowledgeService {
       )
     }
 
+    return this.retriever.search(request)
+  }
+
+  /**
+   * 语义搜索。
+   *
+   * 保持原有签名与返回形状，内部委托给 `retrieve()`（默认策略是
+   * `DenseRetriever`），再映射成兼容的 `SearchResult` 形状。
+   */
+  async search(
+    notebookId: string,
+    query: string,
+    options: SearchOptions = {}
+  ): Promise<SearchResult[]> {
+    const { includeContent = true } = options
+
     // 1. 检索（向量 → 批量补齐来源/定位信息）
-    const evidence = await this.retriever.search(notebookId, query, {
+    const { evidence } = await this.retrieve({
+      notebookId,
+      query,
       topK: options.topK,
       threshold: options.threshold
     })
