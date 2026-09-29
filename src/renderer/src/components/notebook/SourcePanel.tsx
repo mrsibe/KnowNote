@@ -444,7 +444,11 @@ export default function SourcePanel(): ReactElement {
 
       if (currentNote) {
         requestAppendExcerpt(currentNote.id, excerptMarkdown)
-        toast.success(t('excerptAppended', { title: currentNote.title }))
+        // Stable id (#178): appending twice to the same note updates one toast
+        // instead of stacking a second identical one.
+        toast.success(t('excerptAppended', { title: currentNote.title }), {
+          id: `excerpt:${currentNote.id}`
+        })
         return
       }
 
@@ -452,7 +456,7 @@ export default function SourcePanel(): ReactElement {
         await createNote(notebookId, excerptMarkdown, t('excerptNoteTitle', { title: sourceTitle }))
       } catch (error) {
         console.error('[SourcePanel] Failed to save the excerpt as a note:', error)
-        toast.error(t('excerptSaveFailed'))
+        toast.error(t('excerptSaveFailed'), { id: 'excerpt-save' })
       }
     },
     [notebookId, currentNote, createNote, t]
@@ -469,7 +473,9 @@ export default function SourcePanel(): ReactElement {
   const reportImportFailure = useCallback(
     (name: string, result: { success: boolean; error?: string }, reason?: string): void => {
       if (result.success) return
-      toast.error(t('importFailed', { name, error: reason ?? result.error ?? t('unknownError') }))
+      toast.error(t('importFailed', { name, error: reason ?? result.error ?? t('unknownError') }), {
+        id: `import-failed:${name}`
+      })
     },
     [t]
   )

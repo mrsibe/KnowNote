@@ -9,6 +9,7 @@ import MindMapPage from './components/pages/MindMapPage'
 import QuizPage from './components/pages/QuizPage'
 import AnkiPage from './components/pages/AnkiPage'
 import SettingsDialog from './components/settings/SettingsDialog'
+import { Toaster } from './components/ui/sonner'
 import { setupChatListeners } from './store/chatStore'
 import { useThemeStore } from './store/themeStore'
 import { useNotebookStore } from './store/notebookStore'
@@ -107,6 +108,13 @@ function App(): React.JSX.Element {
           <Route path="/anki/view/:ankiCardId" element={<AnkiPage />} />
         </Routes>
         <SettingsDialog />
+        {/*
+         * One toaster for the whole app, mounted here rather than inside a note editor
+         * (#178). sonner replays every still-active toast to a subscriber that arrives
+         * late, so a toaster that only existed while a note was open held import,
+         * save and excerpt toasts and released them all at once on the next open.
+         */}
+        <Toaster />
       </HashRouter>
     </I18nextProvider>
   )

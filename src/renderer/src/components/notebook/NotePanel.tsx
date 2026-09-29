@@ -208,7 +208,9 @@ export default function NotePanel(): ReactElement {
   const handleSave = async (title: string, content: string) => {
     if (!currentNote) return
     await updateNote(currentNote.id, { title, content })
-    toast.success(t('noteSaved'))
+    // One toast per note (#178): saving the same note again updates it rather than
+    // stacking another "saved" line.
+    toast.success(t('noteSaved'), { id: `note-saved:${currentNote.id}` })
   }
 
   // 删除笔记

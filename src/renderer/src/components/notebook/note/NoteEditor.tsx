@@ -5,7 +5,6 @@ import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import { Placeholder } from '@tiptap/extensions'
 import { ScrollArea } from '../../ui/scroll-area'
-import { Toaster } from '../../ui/sonner'
 import { toast } from 'sonner'
 import { sourceDocumentExists } from '../../../../../shared/utils/citations'
 import {
@@ -142,7 +141,7 @@ export default function NoteEditor({ noteId, content, onChange }: NoteEditorProp
         // 来源已删除：不导航，也不把锚点从正文里删掉。但要说明为什么没反应，
         // 否则「已禁用」和「坏了」在用户看来是一样的。
         if (!sourceDocumentExists(context.documents, context.documentsLoaded, anchor.documentId)) {
-          toast.error(t('excerptSourceMissing'))
+          toast.error(t('excerptSourceMissing'), { id: 'excerpt-source-missing' })
           return
         }
         context.openSourceAnchor(anchor)
@@ -168,7 +167,6 @@ export default function NoteEditor({ noteId, content, onChange }: NoteEditorProp
 
   return (
     <div className="h-full flex flex-col">
-      <Toaster />
       {/* 编辑器内容 */}
       <ScrollArea className="flex-1">
         <div
