@@ -140,7 +140,8 @@ export class FolderWatchService {
     }
 
     if (diff.added.length > 0) {
-      await this.knowledgeService.addDocumentsFromPaths(
+      // 后台队列（#176）：监听同步只负责登记，解析/嵌入在队列里继续。
+      this.knowledgeService.enqueueDocumentsFromPaths(
         notebookId,
         diff.added.map((file) => file.path)
       )

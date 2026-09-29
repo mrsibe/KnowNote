@@ -29,6 +29,11 @@ interface KnowledgeStore {
    * #72 的失效引用判定只能在加载完成后做，否则冷启动的 deep-link 会在列表回来之前被误清。
    */
   documentsLoaded: boolean
+  /**
+   * 最近一次加载文档的 notebook。后台索引（#176）完成后只有进度事件可听，
+   * 靠它把刚转成 `indexed` 的那一行重新读回来。
+   */
+  activeNotebookId: string | null
 
   // Actions
   setDocuments: (docs: KnowledgeDocument[]) => void
@@ -121,6 +126,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
   indexProgress: null,
   error: null,
   documentsLoaded: false,
+  activeNotebookId: null,
 
   // Setters
   setDocuments: (documents) => set({ documents }),
@@ -135,7 +141,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
 
   // 加载文档列表
   loadDocuments: async (notebookId) => {
-    set({ isLoading: true, error: null, documentsLoaded: false })
+    set({ isLoading: true, error: null, documentsLoaded: false, activeNotebookId: notebookId })
     try {
       const docs = await window.api.knowledge.getDocuments(notebookId)
       set({ documents: docs, isLoading: false, documentsLoaded: true })
@@ -314,6 +320,16 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
 export function setupKnowledgeListeners(): () => void {
   const cleanupProgress = window.api.knowledge.onIndexProgress((data: IndexProgress) => {
     useKnowledgeStore.getState().setIndexProgress(data)
+
+    // 后台导入的最后一步（#176）：这一行刚从 pending/processing 变成 indexed 或 failed。
+    // 进度事件是唯一信号，所以在这里重读一次列表与统计。
+    if (data.stage === 'completed' || data.stage === 'failed') {
+      const { activeNotebookId, loadDocuments, loadStats } = useKnowledgeStore.getState()
+      if (activeNotebookId) {
+        void loadDocuments(activeNotebookId)
+        void loadStats(activeNotebookId)
+      }
+    }
   })
 
   return () => {

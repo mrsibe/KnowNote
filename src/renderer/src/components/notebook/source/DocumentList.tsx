@@ -211,7 +211,7 @@ function DocumentItem({
               <span aria-hidden="true"> · </span>
               {t('chunks', { count: document.chunkCount ?? 0 })}
             </span>
-            {document.status === 'processing' && (
+            {(document.status === 'processing' || document.status === 'pending') && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 {t('indexing')}

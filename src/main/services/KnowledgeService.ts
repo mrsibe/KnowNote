@@ -70,6 +70,7 @@ import {
   type ReconcileResult
 } from './ingestion/folderWatch'
 import { scanFolder } from './ingestion/folderScan'
+import { IngestionQueue } from './ingestion/IngestionQueue'
 import { deleteDocumentChunksFts, ensureChunksFts, indexChunksFts, searchChunksFts } from './fts'
 import { vectorStoreManager } from '../vectorstore'
 import Logger from '../../shared/utils/logger'
@@ -192,6 +193,8 @@ export class KnowledgeService {
   private webFetchService: WebFetchService
   private knowledgeFilesDir: string
   private folderWatch: FolderWatchService
+  /** 后台索引队列（#176）：登记完就返回，解析/嵌入在这里继续。 */
+  private readonly ingestionQueue: IngestionQueue
 
   constructor(embeddingService: EmbeddingService) {
     this.embeddingService = embeddingService
@@ -204,6 +207,7 @@ export class KnowledgeService {
     this.ensureKnowledgeFilesDir()
     // 监听服务只持有本服务的引用，构造本身没有副作用（不会开数据库、不会开始监听）。
     this.folderWatch = new FolderWatchService(this)
+    this.ingestionQueue = new IngestionQueue()
   }
 
   /**
@@ -320,7 +324,10 @@ export class KnowledgeService {
   }
 
   /**
-   * 从文件添加文档
+   * 从文件添加文档。
+   *
+   * 这条路保持同步（smoke test / eval harness / 监听刷新需要它跑完再往下），后台
+   * 队列只服务 `knowledge:add-files` 这类批量导入。
    */
   async addDocumentFromFile(
     notebookId: string,
@@ -328,50 +335,23 @@ export class KnowledgeService {
     onProgress?: IndexProgressCallback,
     chunkOptions?: ChunkOptions
   ): Promise<string> {
-    const db = getDatabase()
-    const documentId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-    const now = new Date()
-
-    // source 行在**解析之前**就存在（#95）。以前解析失败时更新的是还没插入的行，
-    // 失败因此丢失，文档也无法重试。解析成功后再把解析结果回填。
-    db.insert(documents)
-      .values({
-        id: documentId,
-        notebookId,
-        title: basename(filePath) || 'Untitled',
-        type: 'file',
-        sourceUri: filePath,
-        status: 'processing',
-        chunkCount: 0,
-        createdAt: now,
-        updatedAt: now
-      })
-      .run()
-
-    // 先拷贝，再解析原文件：本地副本是重新索引/结构恢复时读取的东西。
-    await this.ingestFile(
-      documentId,
-      filePath,
-      { copyFrom: filePath, chunkOptions },
-      'import',
-      onProgress
-    )
-
+    const documentId = this.createPendingFileDocument(notebookId, filePath)
+    await this.ingestPendingDocument(documentId, filePath, onProgress, chunkOptions)
     return documentId
   }
 
   /**
-   * 批量导入一组已经存在的文件路径（#98）。
+   * 批量导入（#176）：同步登记，后台索引。
    *
-   * 一个文件失败不会中止其余的：每个文件仍然走 `addDocumentFromFile`，所以每个都有自己
-   * 的 ingestion run 与失败记录。已经在这个 notebook 里的路径被跳过并报告，而不是重复
-   * 导入一份。
+   * 返回时每个文件都已经是一个 `pending` 的 source；解析 / 分块 / 嵌入在
+   * `IngestionQueue` 里继续，进度仍走 `knowledge:index-progress`。IPCC 不再把一次
+   * book-sized 导入挂在调用栈上。
    */
-  async addDocumentsFromPaths(
+  enqueueDocumentsFromPaths(
     notebookId: string,
     paths: readonly string[],
     onProgress?: IndexProgressCallback
-  ): Promise<BatchImportResult> {
+  ): BatchImportResult {
     const db = getDatabase()
     const existing = new Set(
       db
@@ -387,28 +367,92 @@ export class KnowledgeService {
     const skipped: BatchImportSkip[] = []
     const failed: BatchImportFailure[] = []
 
-    for (let index = 0; index < paths.length; index++) {
-      const filePath = paths[index]
-
+    for (const filePath of paths) {
       if (existing.has(filePath)) {
         skipped.push({ path: filePath, reason: 'already imported into this notebook' })
         continue
       }
 
       try {
-        added.push(await this.addDocumentFromFile(notebookId, filePath))
+        const documentId = this.createPendingFileDocument(notebookId, filePath)
         existing.add(filePath)
+        added.push(documentId)
+        this.ingestionQueue.enqueue({
+          documentId,
+          onProgress,
+          run: async (jobProgress) => {
+            try {
+              await this.ingestPendingDocument(documentId, filePath, jobProgress)
+            } catch (error) {
+              // 失败也要给前台一个信号，否则后台跑挂的那一行会一直停在 pending。
+              jobProgress('failed', 100)
+              throw error
+            }
+          }
+        })
       } catch (error) {
         failed.push({ path: filePath, error: (error as Error).message })
       }
-
-      onProgress?.(
-        `importing ${index + 1}/${paths.length}`,
-        Math.round(((index + 1) / paths.length) * 100)
-      )
     }
 
     return { added, skipped, failed }
+  }
+
+  /**
+   * 登记一份 `pending` 的 source 行（不解析）。
+   *
+   * source 行必须在解析之前存在（#95）：后台索引期间用户已经能在列表里看到它，也
+   * 让失败有地方落。
+   */
+  private createPendingFileDocument(notebookId: string, filePath: string): string {
+    const documentId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+    const now = new Date()
+
+    getDatabase()
+      .insert(documents)
+      .values({
+        id: documentId,
+        notebookId,
+        title: basename(filePath) || 'Untitled',
+        type: 'file',
+        sourceUri: filePath,
+        status: 'pending',
+        chunkCount: 0,
+        createdAt: now,
+        updatedAt: now
+      })
+      .run()
+
+    return documentId
+  }
+
+  /** 解析一份已登记的文件 source（同步与后台队列共用）。 */
+  private async ingestPendingDocument(
+    documentId: string,
+    filePath: string,
+    onProgress?: IndexProgressCallback,
+    chunkOptions?: ChunkOptions
+  ): Promise<void> {
+    const doc = this.getDocument(documentId)
+    if (!doc) {
+      Logger.warn('KnowledgeService', `Pending document ${documentId} disappeared before indexing`)
+      return
+    }
+
+    getDatabase()
+      .update(documents)
+      .set({ status: 'processing', updatedAt: new Date() })
+      .where(eq(documents.id, documentId))
+      .run()
+
+    // 先拷贝，再解析原文件：本地副本是重新索引/结构恢复时读取的东西。
+    await this.ingestFile(
+      documentId,
+      filePath,
+      { copyFrom: filePath, chunkOptions },
+      'import',
+      onProgress
+    )
   }
 
   /**
@@ -416,6 +460,8 @@ export class KnowledgeService {
    *
    * 扫描只挑解析器认识的扩展名，其余文件被跳过并计数，而不是静默忽略。这是一次快照
    * —— 之后新增到文件夹里的文件不会被自动带走，那是 #158 的监听。
+   *
+   * 登记完成后立即返回，索引在后台队列里继续（#176）。
    */
   async addFolder(
     notebookId: string,
@@ -423,7 +469,7 @@ export class KnowledgeService {
     onProgress?: IndexProgressCallback
   ): Promise<BatchImportResult> {
     const scanned = await scanFolder(folderPath, this.fileParserService.supportedExtensions())
-    return this.addDocumentsFromPaths(
+    return this.enqueueDocumentsFromPaths(
       notebookId,
       scanned.map((file) => file.path),
       onProgress

@@ -45,6 +45,14 @@ export default defineConfig({
     plugins: [copyMigrationsPlugin()],
     build: {
       rollupOptions: {
+        // Two entries: the Electron main process and the `worker_threads` entry that
+        // runs local ONNX inference off the main process (#176). Both land in
+        // out/main, so `WorkerEmbeddingBackend` can resolve the worker as a sibling
+        // of the main bundle.
+        input: {
+          index: resolve('src/main/index.ts'),
+          embeddingWorker: resolve('src/main/embedding/embeddingWorker.ts')
+        },
         // Only things rollup CANNOT inline may stay external. Every entry in
         // package.json `dependencies` is already externalized automatically
         // (electron-vite's build.externalizeDeps defaults to true); the two

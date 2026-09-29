@@ -3,10 +3,30 @@
  * 知识库相关的 IPC 处理函数
  */
 
-import { ipcMain, IpcMainInvokeEvent, dialog, shell } from 'electron'
+import { ipcMain, IpcMainInvokeEvent, dialog, shell, BrowserWindow } from 'electron'
 import { KnowledgeService } from '../services/KnowledgeService'
 import Logger from '../../shared/utils/logger'
 import { KnowledgeSchemas, validate } from './validation'
+
+/**
+ * 后台索引进度广播（#176）。
+ *
+ * 导入 IPC 现在在登记完 `pending` 行之后立即返回，进度来自后台队列；这时发起请求的
+ * `event.sender` 可能已经销毁（换了窗口、关了标签），所以发给所有活着的窗口，而不是
+ * 钉在当初那个 sender 上。
+ */
+function broadcastIndexProgress(payload: {
+  notebookId?: string
+  documentId?: string
+  stage: string
+  progress: number
+}): void {
+  BrowserWindow.getAllWindows().forEach((win) => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('knowledge:index-progress', payload)
+    }
+  })
+}
 
 /**
  * 注册知识库相关 IPC Handlers
@@ -346,11 +366,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
           params.notebookId,
           params.folderPath,
           (stage, progress) => {
-            event.sender.send('knowledge:index-progress', {
-              notebookId: params.notebookId,
-              stage,
-              progress
-            })
+            broadcastIndexProgress({ notebookId: params.notebookId, stage, progress })
           }
         )
 
@@ -397,15 +413,11 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
       Logger.debug('KnowledgeHandlers', 'add-files:', params.paths.length)
 
       try {
-        const result = await knowledgeService.addDocumentsFromPaths(
+        const result = knowledgeService.enqueueDocumentsFromPaths(
           params.notebookId,
           params.paths,
           (stage, progress) => {
-            event.sender.send('knowledge:index-progress', {
-              notebookId: params.notebookId,
-              stage,
-              progress
-            })
+            broadcastIndexProgress({ notebookId: params.notebookId, stage, progress })
           }
         )
         return { success: true, ...result }

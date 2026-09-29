@@ -38,4 +38,10 @@ export interface EmbeddingBackend {
     purpose: EmbeddingPurpose,
     onProgress?: (completed: number, total: number) => void
   ): Promise<BackendEmbeddingResult[]>
+
+  /**
+   * 后端自己在内部切 batch（#176 的 worker 后端）。缺省为 false：由
+   * `EmbeddingService` 在外层分批，`embedBatch` 一次收到的就是一批。
+   */
+  readonly batchesInternally?: boolean
 }

@@ -20,6 +20,7 @@ import type { ConnectionManager } from '../models/ConnectionManager'
 import Logger from '../../shared/utils/logger'
 import { LocalEmbeddingBackend } from '../embedding/LocalEmbeddingBackend'
 import type { TransformersModuleLoader } from '../embedding/LocalEmbeddingBackend'
+import { WorkerEmbeddingBackend } from '../embedding/WorkerEmbeddingBackend'
 import { RemoteEmbeddingBackend } from '../embedding/RemoteEmbeddingBackend'
 import type { BackendEmbeddingResult, EmbeddingBackend } from '../embedding/types'
 import { ModelDownloadService } from '../embedding/download/ModelDownloadService'
@@ -49,9 +50,15 @@ export interface EmbeddingServiceOptions extends EmbeddingServiceConfig {
   getSources?: () => string[] | Promise<string[]>
   /** 设置页里的下载进度广播 */
   onDownloadProgress?: (progress: EmbeddingDownloadProgress) => void
-  /** 测试注入 */
+  /**
+   * 测试注入。提供时本地推理退回进程内实现（假 pipeline），否则走
+   * `worker_threads`（#176）。
+   */
   loadTransformers?: TransformersModuleLoader
 }
+
+/** 本地后端都需要 Dispose（进程内是 ONNX session，worker 是线程）。 */
+type LocalBackend = EmbeddingBackend & { dispose(): Promise<void> }
 
 const DEFAULT_SOURCES = DEFAULT_EMBEDDING_SOURCES
 
@@ -66,7 +73,7 @@ export class EmbeddingService {
   private readonly loadTransformers?: TransformersModuleLoader
   private config: Required<EmbeddingServiceConfig>
 
-  private localBackend: LocalEmbeddingBackend | null = null
+  private localBackend: LocalBackend | null = null
   private downloadService: ModelDownloadService | null = null
   private downloadProgressListener: ((progress: EmbeddingDownloadProgress) => void) | null = null
   private lastDetectedRemoteDimensions = 0
@@ -173,6 +180,13 @@ export class EmbeddingService {
     purpose: EmbeddingPurpose,
     onProgress?: (completed: number, total: number) => void
   ): Promise<BackendEmbeddingResult[]> {
+    // worker 后端自己切 batch、逐批重试并在每次前向后回进度（#176）：重试与批次都
+    // 只在 worker 里定义一次，这里不再用 withRetry 把整本书重跑一遍。
+    if (backend.batchesInternally) {
+      Logger.info('EmbeddingService', `Local embedding via worker: ${texts.length} texts`)
+      return backend.embedBatch(texts, purpose, onProgress)
+    }
+
     const batches = this.chunk(texts, this.config.localBatchSize)
     const results: BackendEmbeddingResult[] = []
 
@@ -313,12 +327,20 @@ export class EmbeddingService {
     this.config = { ...this.config, ...config }
   }
 
-  private getLocalBackend(): LocalEmbeddingBackend {
+  private getLocalBackend(): LocalBackend {
     if (!this.localBackend) {
-      this.localBackend = new LocalEmbeddingBackend({
-        cacheDir: this.cacheDir,
-        loadTransformers: this.loadTransformers
-      })
+      // 注入 loader 表示这是测试路径：没有真实 ONNX 可隔离，也就没有必要开线程。
+      this.localBackend = this.loadTransformers
+        ? new LocalEmbeddingBackend({
+            cacheDir: this.cacheDir,
+            loadTransformers: this.loadTransformers
+          })
+        : new WorkerEmbeddingBackend({
+            cacheDir: this.cacheDir,
+            batchSize: this.config.localBatchSize,
+            maxRetries: this.config.maxRetries,
+            retryDelay: this.config.retryDelay
+          })
     }
     return this.localBackend
   }
