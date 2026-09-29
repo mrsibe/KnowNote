@@ -8,6 +8,7 @@ import {
   isAnswerLive,
   keepsPartialAnswer
 } from '../src/shared/utils/answerState.ts'
+import { messageText } from '../src/shared/utils/uiMessage.ts'
 
 /**
  * The renderer's half of the stream protocol (#141).
@@ -105,6 +106,10 @@ const textStream = (messageId: string, text: string): ChatTurnEvent[] => [
 const messageOf = (messageId: string): ChatMessage | undefined =>
   useChatStore.getState().messages.find((message) => message.id === messageId)
 
+/** The live answer as the UI reads it now (#177): from the turn, not the list. */
+const liveTextOf = (messageId: string): string =>
+  messageText(useChatStore.getState().turns[messageId]?.message)
+
 test('the events assemble into the answer on screen', async () => {
   installApi()
   const close = setupChatListeners()
@@ -112,7 +117,9 @@ test('the events assemble into the answer on screen', async () => {
 
   for (const event of textStream('msg_assemble', 'the answer')) deliver?.(event)
 
-  await waitFor(() => messageOf('msg_assemble')?.content === 'the answer')
+  // The streaming answer lives on the turn (#177); the message list is settled on
+  // the outcome so a chunk never remaps it.
+  await waitFor(() => liveTextOf('msg_assemble') === 'the answer')
 
   // The first event is what turns "waiting" into "streaming", the same transition
   // the execution makes in Main — and only the outcome event ends the turn, which is
@@ -143,7 +150,7 @@ test('the outcome ends the turn and applies what it carried', async () => {
   seedTurn('msg_outcome')
 
   for (const event of textStream('msg_outcome', 'the answer')) deliver?.(event)
-  await waitFor(() => messageOf('msg_outcome')?.content === 'the answer')
+  await waitFor(() => liveTextOf('msg_outcome') === 'the answer')
 
   deliver?.({
     type: 'outcome',
@@ -243,7 +250,7 @@ test('a continuation appends to the answer on screen instead of replacing it', a
   deliver?.(chunk('msg_continue', 2, { type: 'text-delta', id: 't1', delta: 'and the rest' }))
   deliver?.(chunk('msg_continue', 3, { type: 'text-end', id: 't1' }))
 
-  await waitFor(() => messageOf('msg_continue')?.content === 'the beginning. and the rest')
+  await waitFor(() => liveTextOf('msg_continue') === 'the beginning. and the rest')
 
   close()
 })

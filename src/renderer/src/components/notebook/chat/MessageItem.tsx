@@ -1,4 +1,4 @@
-import { ReactElement, useState } from 'react'
+import { memo, ReactElement, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -28,6 +28,7 @@ import {
   citationToSourceAnchor,
   sourceAnchorsEqual
 } from '../../../../../shared/utils/sourceAnchor'
+import { messageReasoning, messageText } from '../../../../../shared/utils/uiMessage'
 import { answerNoticeKey, canRecover, isAnswerLive } from '../../../../../shared/utils/answerState'
 import { useChatStore } from '../../../store/chatStore'
 import { Button } from '../../ui/button'
@@ -40,7 +41,7 @@ interface MessageItemProps {
   message: ChatMessage
 }
 
-export default function MessageItem({ message }: MessageItemProps): ReactElement {
+function MessageItem({ message }: MessageItemProps): ReactElement {
   const { t } = useTranslation(['common', 'chat'])
   const isUser = message.role === 'user'
   const isSystem = message.role === 'system'
@@ -62,6 +63,12 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   // Whether the model is still thinking. The one live detail that is not on the
   // message: it comes from the assembled answer, and only exists while one does.
   const reasoningLive = useChatStore((state) => state.turns[message.id]?.reasoningLive ?? false)
+  // The live answer is read from the turn this message owns (#177), not from a copy
+  // remapped in `messages` on every chunk. Only this component subscribes to this
+  // slice, so while one answer streams the others do not re-render at all.
+  const liveMessage = useChatStore((state) => state.turns[message.id]?.message)
+  const content = liveMessage ? messageText(liveMessage) : message.content
+  const reasoningContent = liveMessage ? messageReasoning(liveMessage) : message.reasoningContent
   const retryMessage = useChatStore((state) => state.retryMessage)
   const continueMessage = useChatStore((state) => state.continueMessage)
 
@@ -79,7 +86,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
   // Citation coverage (#156): which sentences carry a resolvable citation. Computed
   // from the answer and the persisted citations with the same pure function the
   // tests exercise, so "grounded" means one thing in the UI and in a test.
-  const coverage = message.content ? classifyClaimSupport(message.content, citations) : null
+  const coverage = content ? classifyClaimSupport(content, citations) : null
 
   // A chip is disabled only once the library has been read and the document is
   // provably absent. Before that (or after a failed load) the list is "unknown",
@@ -104,7 +111,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(message.content)
+      await navigator.clipboard.writeText(content)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (error) {
@@ -117,7 +124,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
     if (!currentNotebook) return
 
     try {
-      await createNote(currentNotebook.id, message.content)
+      await createNote(currentNotebook.id, content)
       setAddedToNote(true)
       setTimeout(() => setAddedToNote(false), 2000)
     } catch (error) {
@@ -212,11 +219,11 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
     <div className="flex justify-start group">
       <div className="flex flex-col gap-3 max-w-[85%] min-w-0">
         {/* Reasoning process display - only shown when reasoning content exists */}
-        {message.reasoningContent && (
-          <ReasoningContent content={message.reasoningContent} isStreaming={reasoningLive} />
+        {reasoningContent && (
+          <ReasoningContent content={reasoningContent} isStreaming={reasoningLive} />
         )}
 
-        {message.content ? (
+        {content ? (
           <div className="markdown-content text-foreground px-2">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath, remarkCitationMarkers]}
@@ -256,7 +263,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
                 )
               }}
             >
-              {message.content}
+              {content}
             </ReactMarkdown>
             {/* Streaming message cursor */}
             {isLive && (
@@ -275,7 +282,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
         {/* What the answer was built from. Only after the turn ends: during
             streaming there is nothing to show yet, and an empty evidence list
             mid-answer would read as "nothing was used". */}
-        {message.content && !isLive && (
+        {content && !isLive && (
           <AnswerSources
             sources={answerSources}
             retrieval={retrieval}
@@ -298,7 +305,7 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
           </p>
         )}
         {/* Action buttons - only shown when reply is complete and has content */}
-        {message.content && !isLive && (
+        {content && !isLive && (
           <div className="flex items-center gap-2 self-start ml-2">
             {/* Recovery, when the answer stopped early and asking again may help */}
             {canRecover(message.status) && (
@@ -389,3 +396,10 @@ export default function MessageItem({ message }: MessageItemProps): ReactElement
     </div>
   )
 }
+
+/**
+ * Memoized on the message's own record (#177). While one answer streams, every
+ * historical `MessageItem` keeps the same `message` object, so React skips it
+ * entirely — no Markdown parse, no syntax highlight, no KaTeX pass.
+ */
+export default memo(MessageItem)
