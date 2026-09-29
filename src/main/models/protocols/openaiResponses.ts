@@ -34,6 +34,13 @@ export const openaiResponsesAdapter: ProtocolAdapter = {
     return dimensions ? { [PROVIDER_OPTIONS_KEY]: { dimensions } } : undefined
   },
 
+  /** OpenAI Responses takes the same effort vocabulary (#179). */
+  chatProviderOptions(connection) {
+    return connection.reasoningEffort
+      ? { [PROVIDER_OPTIONS_KEY]: { reasoningEffort: connection.reasoningEffort } }
+      : undefined
+  },
+
   supportsModelListing: true,
 
   listModels: listOpenAICompatibleModels

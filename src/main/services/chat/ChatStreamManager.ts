@@ -77,6 +77,16 @@ const IDLE_TIMEOUT_MS = 60_000
 /** Waits before the next attempt. */
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * What an automatic continuation is asked for (#179).
+ *
+ * English like the manual continuation's instruction: it is a directive to the
+ * model, not copy the reader sees. One constant, because automatic and manual
+ * continuations must ask for exactly the same thing.
+ */
+export const CONTINUE_INSTRUCTION =
+  'Continue the answer from where it stopped. Do not repeat what has already been written, and do not restart it.'
+
 /** What the turn's persistence needs, as a port: see `turnStore.ts`. */
 export interface ChatTurnStore {
   createTurn(sessionId: string, attemptOf?: string): { id: string }
@@ -105,6 +115,18 @@ export interface ChatTurnRequest {
   resume?: { messageId: string; text: string; reasoning: string }
   /** The message the user sent, for the token estimate when no usage is reported. */
   userContent: string
+  /**
+   * Automatic continuation after the output ceiling ends an answer (#179).
+   *
+   * Present only when the setting is on. `limit` is the total number of
+   * continuations this answer may spend, automatic and manual together.
+   */
+  autoContinue?: { limit: number }
+  /**
+   * Continuations already spent on this answer, read from the persisted metadata
+   * (#179). A manual chain is bounded by the same counter.
+   */
+  continuations?: number
   /** The prompt as it was assembled, retrieval included. Empty means nothing to send. */
   messages: APIMessage[]
   /** Null when no chat model is configured. */
@@ -142,6 +164,8 @@ interface TurnEntry {
   timedOut?: boolean
   /** The attempt in flight, 1-based; logged, and what the retry bound counts. */
   attempts?: number
+  /** How many continuations this answer has spent (#179). */
+  continuations: number
   /** The watchdog for the attempt in flight. */
   idle?: { reset: () => void; stop: () => void }
   /** Monotonic per execution, so a consumer can detect a gap. */
@@ -208,6 +232,9 @@ export class ChatStreamManager {
       sources: request.sources,
       citations: request.citations
     }
+    // How much of this answer's continuation budget is already spent (#179). Written
+    // with the provenance so a manual continue after a reload is still bounded.
+    if (request.continuations !== undefined) baseMetadata.continuations = request.continuations
     // The retrieval parameters are part of what an answer was built from, so they
     // are written with the sources, before the model is called (#157).
     if (request.retrievalSnapshot) baseMetadata.retrievalSnapshot = request.retrievalSnapshot
@@ -222,7 +249,13 @@ export class ChatStreamManager {
       notebookId: request.notebookId
     })
 
-    const entry: TurnEntry = { execution, request, baseMetadata, seq: 0 }
+    const entry: TurnEntry = {
+      execution,
+      request,
+      baseMetadata,
+      seq: 0,
+      continuations: request.continuations ?? 0
+    }
     this.turns.set(execution.id, entry)
     this.turnIdByMessageId.set(execution.messageId, execution.id)
 
@@ -275,20 +308,40 @@ export class ChatStreamManager {
     return executionId === undefined ? undefined : this.turns.get(executionId)
   }
 
+  private async run(entry: TurnEntry): Promise<void> {
+    for (;;) {
+      const outcome = await this.runAttempts(entry)
+
+      // A stop the reader asked for has already settled the turn.
+      if (entry.execution.isSettled) return
+
+      // The output ceiling ended it and the answer may ask for more (#179):
+      // continue in place rather than settling a half answer.
+      if (outcome.status === 'truncated' && this.mayAutoContinue(entry)) {
+        this.beginContinuation(entry)
+        continue
+      }
+
+      this.settleTurn(entry, outcome)
+      return
+    }
+  }
+
   /**
-   * Run the turn, attempting it again while the retry policy says so (#150).
+   * Attempt the turn, retrying while the retry policy says so (#150).
    *
    * Each attempt is a fresh provider call with its own signal. A retry is only
    * reachable while nothing has reached the reader, so the answer on screen is never
-   * duplicated or silently replaced by a second attempt.
+   * duplicated or silently replaced by a second attempt. Returns the outcome the
+   * policy settled on; the caller decides whether that is the turn's end.
    */
-  private async run(entry: TurnEntry): Promise<void> {
+  private async runAttempts(entry: TurnEntry): Promise<ChatExecutionOutcome> {
     for (let attempt = 1; ; attempt += 1) {
       entry.attempts = attempt
       const outcome = await this.attempt(entry)
 
       // A stop the reader asked for has already settled the turn.
-      if (entry.execution.isSettled) return
+      if (entry.execution.isSettled) return outcome
 
       if (shouldRetry({ outcome, attempt, contentSent: entry.contentSent === true })) {
         const delay = retryDelayMs(attempt + 1)
@@ -299,13 +352,52 @@ export class ChatStreamManager {
           }); retrying in ${delay}ms`
         )
         await wait(delay)
-        if (entry.execution.isSettled) return
+        if (entry.execution.isSettled) return outcome
         continue
       }
 
-      this.settleTurn(entry, outcome)
-      return
+      return outcome
     }
+  }
+
+  /** Whether a truncated answer may be continued automatically (#179). */
+  private mayAutoContinue(entry: TurnEntry): boolean {
+    const limit = entry.request.autoContinue?.limit ?? 0
+    if (limit <= 0 || entry.continuations >= limit) return false
+    // Nothing to append to is not a continuation, and a turn that never reached the
+    // reader must not be continued silently.
+    return entry.contentSent === true && messageText(entry.message).length > 0
+  }
+
+  /**
+   * Seed the next provider call from what has arrived, plus the instruction to
+   * carry on (#179).
+   *
+   * The persisted answer keeps growing in the same message: the accumulated text is
+   * both the assembler's seed and the assistant turn handed back to the model, so a
+   * continuation cannot restart or duplicate the answer.
+   */
+  private beginContinuation(entry: TurnEntry): void {
+    entry.continuations += 1
+    const text = messageText(entry.message)
+    const reasoning = messageReasoning(entry.message)
+
+    entry.request.resume = { messageId: entry.execution.messageId, text, reasoning }
+    entry.request.messages = [
+      ...entry.request.messages,
+      { role: 'assistant', content: text },
+      { role: 'user', content: CONTINUE_INSTRUCTION }
+    ]
+    entry.baseMetadata.continuations = entry.continuations
+    // The new call starts from nothing on the wire; only the seed it is given has
+    // content. Resetting lets the retry policy cover a continuation that fails
+    // before producing anything, which is the whole point of retrying it.
+    entry.contentSent = false
+
+    Logger.info(
+      'ChatStreamManager',
+      `Turn ${entry.execution.id} hit the output ceiling; continuing (${entry.continuations}/${entry.request.autoContinue?.limit ?? 0})`
+    )
   }
 
   /**

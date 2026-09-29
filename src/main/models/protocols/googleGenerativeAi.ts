@@ -34,6 +34,18 @@ export const googleGenerativeAiAdapter: ProtocolAdapter = {
     return dimensions ? { [PROVIDER_OPTIONS_KEY]: { outputDimensionality: dimensions } } : undefined
   },
 
+  /**
+   * Gemini takes a thinking token budget rather than an effort level (#179), so
+   * only an explicit budget is sent. No budget means the provider's default.
+   */
+  chatProviderOptions(connection) {
+    return connection.reasoningBudget
+      ? {
+          [PROVIDER_OPTIONS_KEY]: { thinkingConfig: { thinkingBudget: connection.reasoningBudget } }
+        }
+      : undefined
+  },
+
   supportsModelListing: true,
 
   listModels: listGoogleModels

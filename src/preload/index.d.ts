@@ -211,9 +211,13 @@ declare global {
         messageId: string
       ) => Promise<{ success: boolean; messageId?: string; error?: string }>
       /** Continue an answer that stopped, into the same message (#151). */
-      continueMessage: (
-        messageId: string
-      ) => Promise<{ success: boolean; messageId?: string; error?: string }>
+      continueMessage: (messageId: string) => Promise<{
+        success: boolean
+        messageId?: string
+        error?: string
+        /** Why it was refused, when the reason is one the UI can translate (#179). */
+        reason?: 'continuation-limit'
+      }>
 
       // 流式回合监听：SDK 自己的事件，加上结束这一轮的唯一 outcome（#141）
       onTurnEvent: (callback: (event: ChatTurnEvent) => void) => () => void

@@ -119,5 +119,6 @@
   "searchHint": "Find exact text or a related passage. Ctrl/Cmd+K toggles this palette.",
   "searchMatchingText": "Matching text",
   "searchRelatedPassages": "Related passages",
-  "searchPage": "p. {{page}}"
+  "searchPage": "p. {{page}}",
+  "continueLimitReached": "This answer has reached its continuation limit."
 }

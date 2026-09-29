@@ -12,6 +12,12 @@ function mergeSettings(stored: Partial<AppSettings>): AppSettings {
     language: stored.language ?? defaultSettings.language,
     autoLaunch: stored.autoLaunch ?? defaultSettings.autoLaunch,
     hasCompletedOnboarding: stored.hasCompletedOnboarding ?? defaultSettings.hasCompletedOnboarding,
+    // An older store has neither key; the defaults are what keeps them meaningful
+    // rather than `undefined` reaching the chat handler (#179).
+    autoContinueOnTruncation:
+      stored.autoContinueOnTruncation ?? defaultSettings.autoContinueOnTruncation,
+    maxAutoContinueAttempts:
+      stored.maxAutoContinueAttempts ?? defaultSettings.maxAutoContinueAttempts,
     prompts: {
       mindMap: {
         'zh-CN': stored.prompts?.mindMap?.['zh-CN'] ?? defaultSettings.prompts!.mindMap!['zh-CN'],

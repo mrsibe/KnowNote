@@ -66,6 +66,16 @@ export interface AppSettings {
   language: 'zh-CN' | 'en-US'
   autoLaunch: boolean
   hasCompletedOnboarding: boolean
+  /**
+   * 截断时自动继续（#179）。An answer that hit the output ceiling is extended in
+   * place instead of being left half-written.
+   */
+  autoContinueOnTruncation?: boolean
+  /**
+   * 一次回答最多继续几次（#179）。Auto-continue and the manual「继续生成」chain
+   * share this bound, so neither can loop without end.
+   */
+  maxAutoContinueAttempts?: number
   prompts?: {
     mindMap?: {
       'zh-CN'?: string // 中文思维导图生成提示词

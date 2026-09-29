@@ -7,6 +7,7 @@
 
 import { embed, embedMany, streamText } from 'ai'
 import type { AsyncIterableStream, LanguageModel, LanguageModelUsage, UIMessageChunk } from 'ai'
+import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { APIMessage, ChatTokenUsage } from '../../shared/types/chat'
 import type { ModelCapability, ModelConnection } from '../../shared/types/connection'
 import { getProtocolAdapter } from './protocols'
@@ -82,6 +83,14 @@ export class ModelClient {
   }
 
   /**
+   * The provider options this connection's reasoning configuration translates to
+   * (#179), or undefined when nothing was declared.
+   */
+  private chatProviderOptions(): SharedV2ProviderOptions | undefined {
+    return this.adapter.chatProviderOptions?.(this.connection)
+  }
+
+  /**
    * 流式发送消息
    *
    * Returns the SDK's own event stream. Everything the previous callback API
@@ -93,6 +102,7 @@ export class ModelClient {
     Logger.debug('ModelClient', `Streaming with model: ${this.connection.modelId}`)
 
     const maxOutputTokens = this.connection.maxOutputTokens
+    const providerOptions = this.chatProviderOptions()
 
     const result = streamText({
       model: this.getAIModel(),
@@ -102,6 +112,10 @@ export class ModelClient {
       // default, which is what a reasoning model needs: its thinking shares this
       // budget with the answer, so 2048 of them was a ceiling reached early (#150).
       ...(maxOutputTokens !== undefined && { maxOutputTokens }),
+      // Only when the connection declares reasoning effort or a budget (#179).
+      // Absent keeps the request byte-for-byte what it was for an unknown
+      // OpenAI-compatible endpoint.
+      ...(providerOptions && { providerOptions }),
       // Owned by the caller, so that stopping a turn actually cancels the provider
       // request rather than only recording that it was stopped.
       abortSignal: options.signal

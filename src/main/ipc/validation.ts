@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod'
-import { API_PROTOCOLS, MODEL_CAPABILITIES } from '../../shared/types'
+import { API_PROTOCOLS, MODEL_CAPABILITIES, REASONING_EFFORTS } from '../../shared/types'
 import { Result, Err, Ok } from '../../shared/types/result'
 import Logger from '../../shared/utils/logger'
 
@@ -95,7 +95,13 @@ export const ConnectionSchemas = {
       apiKey: z.string(),
       modelId: z.string().min(1, 'Model ID 不能为空'),
       // Absent means "no ceiling": the provider's own default applies (#150).
-      maxOutputTokens: z.number().int().positive().optional()
+      maxOutputTokens: z.number().int().positive().optional(),
+      // Capability metadata (#179). All optional: a connection without any of it
+      // behaves exactly as connections did before they existed.
+      contextWindow: z.number().int().positive().optional(),
+      reasoning: z.boolean().optional(),
+      reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
+      reasoningBudget: z.number().int().positive().optional()
     })
   }),
 

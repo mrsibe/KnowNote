@@ -13,6 +13,8 @@ import {
 } from '../ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Button } from '../ui/button'
+import { Input } from '../ui/input'
+import { Switch } from '../ui/switch'
 
 interface GeneralSettingsProps {
   settings: AppSettings
@@ -107,6 +109,40 @@ export default function GeneralSettings({
               ))}
             </SelectContent>
           </Select>
+        </Field>
+
+        {/* 截断恢复（#179）。关掉时手动「继续生成」仍然可用，也仍然受同一个上限约束。 */}
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="auto-continue">{t('autoContinueOnTruncation')}</FieldLabel>
+            <FieldDescription>{t('autoContinueOnTruncationDesc')}</FieldDescription>
+          </FieldContent>
+          <Switch
+            id="auto-continue"
+            checked={settings.autoContinueOnTruncation === true}
+            onCheckedChange={(checked) => onSettingsChange({ autoContinueOnTruncation: checked })}
+          />
+        </Field>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="max-auto-continue">{t('maxAutoContinueAttempts')}</FieldLabel>
+            <FieldDescription>{t('maxAutoContinueAttemptsDesc')}</FieldDescription>
+          </FieldContent>
+          <Input
+            id="max-auto-continue"
+            type="number"
+            min={1}
+            max={10}
+            className="w-24"
+            value={String(settings.maxAutoContinueAttempts ?? 2)}
+            onChange={(event) => {
+              const parsed = Number.parseInt(event.target.value, 10)
+              onSettingsChange({
+                maxAutoContinueAttempts: Number.isFinite(parsed) && parsed > 0 ? parsed : 1
+              })
+            }}
+          />
         </Field>
       </FieldGroup>
     </FieldSet>

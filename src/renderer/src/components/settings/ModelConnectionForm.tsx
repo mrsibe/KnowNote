@@ -1,9 +1,16 @@
 import { ReactElement, useState } from 'react'
 import { Eye, EyeOff, Download, Loader2, Trash2, CheckCircle2, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { APIProtocol, ModelCapability, ModelConnection } from '../../../../shared/types'
+import type {
+  APIProtocol,
+  ModelCapability,
+  ModelConnection,
+  ReasoningEffort
+} from '../../../../shared/types'
+import { REASONING_EFFORTS } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { Switch } from '../ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 
 export interface ProtocolInfo {
@@ -65,6 +72,13 @@ const toCeiling = (raw: string): number | undefined => {
   const parsed = Number.parseInt(raw, 10)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
+
+/** The same rule for the capability metadata fields (#179). */
+const toPositive = (raw: string): number | undefined => toCeiling(raw)
+
+/** `low` -> `reasoningEffortLow`, the i18n key for an effort level. */
+const effortLabel = (effort: ReasoningEffort): string =>
+  `reasoningEffort${effort.charAt(0).toUpperCase()}${effort.slice(1)}`
 
 export default function ModelConnectionForm({
   capability,
@@ -325,6 +339,74 @@ export default function ModelConnectionForm({
             />
           )}
           <p className="text-xs text-muted-foreground">{t('maxOutputTokensHint')}</p>
+        </div>
+      )}
+
+      {/* Capability metadata (#179). Every field is optional, and a connection
+          without any of them sends exactly the same request as before. */}
+      {capability === 'chat' && (
+        <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+          <label className="flex items-center justify-between gap-4">
+            <span className="text-sm font-medium text-foreground">{t('reasoning')}</span>
+            <Switch
+              checked={value.reasoning === true}
+              onCheckedChange={(checked) => update({ reasoning: checked })}
+            />
+          </label>
+          <p className="text-xs text-muted-foreground">{t('reasoningHint')}</p>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-foreground">{t('reasoningEffort')}</label>
+            <Select
+              value={value.reasoningEffort ?? 'default'}
+              onValueChange={(effort) =>
+                update({
+                  reasoningEffort: effort === 'default' ? undefined : (effort as ReasoningEffort)
+                })
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {value.reasoningEffort
+                    ? t(effortLabel(value.reasoningEffort))
+                    : t('reasoningEffortDefault')}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">{t('reasoningEffortDefault')}</SelectItem>
+                {REASONING_EFFORTS.map((effort) => (
+                  <SelectItem key={effort} value={effort}>
+                    {t(effortLabel(effort))}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{t('reasoningEffortHint')}</p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-foreground">{t('reasoningBudget')}</label>
+            <Input
+              type="number"
+              min={1}
+              value={value.reasoningBudget === undefined ? '' : String(value.reasoningBudget)}
+              placeholder={t('reasoningEffortDefault')}
+              onChange={(e) => update({ reasoningBudget: toPositive(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">{t('reasoningBudgetHint')}</p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-foreground">{t('contextWindow')}</label>
+            <Input
+              type="number"
+              min={1}
+              value={value.contextWindow === undefined ? '' : String(value.contextWindow)}
+              placeholder={t('reasoningEffortDefault')}
+              onChange={(e) => update({ contextWindow: toPositive(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">{t('contextWindowHint')}</p>
+          </div>
         </div>
       )}
 

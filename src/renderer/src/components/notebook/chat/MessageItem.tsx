@@ -6,6 +6,7 @@ import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import { BookPlus, RotateCcw, Play } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import type { ChatMessage } from '../../../types/notebook'
 import ReasoningContent from './ReasoningContent'
 import AnswerSources from './AnswerSources'
@@ -103,7 +104,14 @@ function MessageItem({ message }: MessageItemProps): ReactElement {
   // ask the same question again beside it. Both need the notebook the turn belongs to.
   const recoveryNotebookId = message.notebookId ?? currentNotebook?.id
   const handleContinue = (): void => {
-    if (recoveryNotebookId) void continueMessage(recoveryNotebookId, message.id)
+    if (!recoveryNotebookId) return
+    void continueMessage(recoveryNotebookId, message.id).then((result) => {
+      // The main process refuses past the continuation bound (#179); say why the
+      // button did nothing instead of leaving it silent.
+      if (!result.started && result.reason === 'continuation-limit') {
+        toast.error(t('ui:continueLimitReached'))
+      }
+    })
   }
   const handleRetry = (): void => {
     if (recoveryNotebookId) void retryMessage(recoveryNotebookId, message.id)
@@ -296,18 +304,14 @@ function MessageItem({ message }: MessageItemProps): ReactElement {
         {/* Citation coverage (#156). Stated only when something is not backed by a
             source; a normal answer does not need an "all good" line. */}
         {coverage && !isLive && <AnswerCoverage coverage={coverage} />}
-        {/* Why the answer stops where it does, when the model did not decide to stop
-            there itself. Beside the answer, never instead of it: the part that
-            arrived is what the reader was left with. */}
+        {/* Why the answer stops where it does, and the two ways out of it (#151,
+            #179), as one unit under the answer. Beside the answer, never instead of
+            it: the part that arrived is what the reader was left with. */}
         {!isLive && noticeKey && (
-          <p className="px-2 text-xs text-subtle-foreground">
-            {t(`chat:${noticeKey}`, { error: message.error?.message ?? '' })}
-          </p>
-        )}
-        {/* Action buttons - only shown when reply is complete and has content */}
-        {content && !isLive && (
-          <div className="flex items-center gap-2 self-start ml-2">
-            {/* Recovery, when the answer stopped early and asking again may help */}
+          <div className="flex flex-wrap items-center gap-2 px-2">
+            <p className="text-xs text-subtle-foreground">
+              {t(`chat:${noticeKey}`, { error: message.error?.message ?? '' })}
+            </p>
             {canRecover(message.status) && (
               <>
                 <Button
@@ -330,6 +334,11 @@ function MessageItem({ message }: MessageItemProps): ReactElement {
                 </Button>
               </>
             )}
+          </div>
+        )}
+        {/* Action buttons - only shown when reply is complete and has content */}
+        {content && !isLive && (
+          <div className="flex items-center gap-2 self-start ml-2">
             {/* Copy button */}
             <Button
               onClick={handleCopy}

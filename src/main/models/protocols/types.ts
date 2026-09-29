@@ -32,6 +32,15 @@ export interface ProtocolAdapter {
   ): SharedV2ProviderOptions | undefined
 
   /**
+   * 把连接的推理配置翻译成该协议的 providerOptions（#179）。
+   *
+   * 只在用户显式声明了 reasoningEffort / reasoningBudget 时返回东西；其余情况返回
+   * undefined，请求体与引入这个能力之前完全一致 —— 未知的 OpenAI 兼容端点不会被
+   * 塞进它不认识的字段。
+   */
+  chatProviderOptions?(connection: ModelConnection): SharedV2ProviderOptions | undefined
+
+  /**
    * 该协议是否支持从端点拉取模型列表（/v1/models 等）。
    */
   supportsModelListing: boolean

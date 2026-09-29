@@ -74,7 +74,10 @@ interface ChatStore {
   /** Answer the same question again, as a sibling of an answer that stopped (#151). */
   retryMessage: (notebookId: string, messageId: string) => Promise<void>
   /** Continue an answer that stopped, into the same message (#151). */
-  continueMessage: (notebookId: string, messageId: string) => Promise<void>
+  continueMessage: (
+    notebookId: string,
+    messageId: string
+  ) => Promise<{ started: boolean; reason?: 'continuation-limit' }>
 }
 
 /**
@@ -484,7 +487,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
   continueMessage: async (notebookId, messageId) => {
     const message = get().messages.find((item) => item.id === messageId)
-    if (!message) return
+    if (!message) return { started: false }
 
     // Register the turn with the answer as its seed, and hand the message back to the
     // live state: what comes next is appended to it, not written elsewhere.
@@ -502,8 +505,12 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     const result = await window.api.continueMessage(messageId)
     if (!result.success) {
       console.error('[ChatStore] Failed to continue the answer:', result.error)
-      return
+      // The caller owns the wording (#179): the store does not import i18n, so the
+      // reason is handed back rather than translated here.
+      return { started: false, reason: result.reason }
     }
+
+    return { started: true }
   },
 
   abortMessage: async (notebookId: string) => {

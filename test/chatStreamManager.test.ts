@@ -753,3 +753,152 @@ test('a continuation writes into the answer it continues, and keeps what was the
   )
   assert.equal(turns.size, 1, 'the continuation created another row')
 })
+
+/**
+ * #179: a truncated answer is recoverable in place.
+ *
+ * A reasoning model's output budget is spent on thinking first, so the visible
+ * answer can end with `finishReason === 'length'`. When the connection enables it,
+ * the manager asks the model to continue, appending to the same message, and stops
+ * at the configured bound instead of looping.
+ */
+
+/** A provider that answers `texts[i]` with `reasons[i]` on its i-th call. */
+function ceilingClient(
+  texts: string[],
+  reasons: LanguageModelV2FinishReason[]
+): { client: ModelClient; calls: () => number } {
+  const model = new MockLanguageModelV2({
+    doStream: async () => {
+      const call = model.doStreamCalls.length - 1
+      const text = texts[Math.min(call, texts.length - 1)]
+      const reason = reasons[Math.min(call, reasons.length - 1)]
+      return {
+        stream: simulateReadableStream({
+          chunks: [
+            { type: 'stream-start', warnings: [] },
+            ...textChunks(text),
+            finishChunk(reason)
+          ] as never[]
+        })
+      }
+    }
+  })
+  const client = new ModelClient('chat', connection)
+  client.getAIModel = () => model
+  return { client, calls: () => model.doStreamCalls.length }
+}
+
+test('a truncated answer continues automatically until it is finished (#179)', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+  const { client, calls } = ceilingClient(
+    ['the beginning. ', 'and the middle. ', 'and the end.'],
+    ['length', 'length', 'stop']
+  )
+
+  const execution = manager.start({
+    ...turnRequest(client),
+    autoContinue: { limit: 2 },
+    continuations: 0,
+    emit: browser.emit
+  })
+
+  await browser.outcome
+  await settled()
+
+  assert.equal(calls(), 3, 'the answer was not continued to a real end')
+  assert.equal(turns.size, 1, 'a continuation opened a second bubble')
+  assert.equal(
+    turns.get(execution.messageId)?.content,
+    'the beginning. and the middle. and the end.',
+    'the continuation did not append to the answer in place'
+  )
+  assert.equal(
+    browser.outcomeEvent()?.outcome.status,
+    'completed',
+    'the final outcome was not the non-truncated one'
+  )
+  assert.equal(
+    turns.get(execution.messageId)?.metadata?.continuations,
+    2,
+    'the spent continuation budget was not recorded'
+  )
+})
+
+test('auto-continue stops after the limit when the model keeps truncating (#179)', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+  const { client, calls } = ceilingClient(
+    ['one ', 'two ', 'three '],
+    ['length', 'length', 'length']
+  )
+
+  const execution = manager.start({
+    ...turnRequest(client),
+    autoContinue: { limit: 2 },
+    continuations: 0,
+    emit: browser.emit
+  })
+
+  await browser.outcome
+  await settled()
+
+  assert.equal(calls(), 3, 'the attempt limit was not applied')
+  assert.equal(turns.get(execution.messageId)?.content, 'one two three ')
+  assert.equal(browser.outcomeEvent()?.outcome.status, 'truncated')
+  assert.equal(turns.get(execution.messageId)?.metadata?.continuations, 2)
+})
+
+test('without auto-continue a truncated answer is left exactly as before (#179)', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+  const { client, calls } = ceilingClient(['only part. '], ['length'])
+
+  const execution = manager.start({ ...turnRequest(client), emit: browser.emit })
+
+  await browser.outcome
+  await settled()
+
+  assert.equal(calls(), 1, 'a connection with no auto-continue made a second call')
+  assert.equal(browser.outcomeEvent()?.outcome.status, 'truncated')
+  assert.equal(turns.get(execution.messageId)?.content, 'only part. ')
+  assert.equal(turns.get(execution.messageId)?.metadata?.continuations, undefined)
+})
+
+test('a partly spent continuation budget bounds auto-continue (#179)', async () => {
+  const { store, turns } = fakeStore()
+  const manager = new ChatStreamManager({
+    store,
+    sessionAutoSwitchService: fakeAutoSwitch().service
+  })
+  const browser = collectEvents()
+  const { client, calls } = ceilingClient(['one ', 'two '], ['length', 'length'])
+
+  // One continuation was already spent manually, so only one more is allowed.
+  const execution = manager.start({
+    ...turnRequest(client),
+    autoContinue: { limit: 2 },
+    continuations: 1,
+    emit: browser.emit
+  })
+
+  await browser.outcome
+  await settled()
+
+  assert.equal(calls(), 2, 'the spent budget was not carried into the automatic bound')
+  assert.equal(turns.get(execution.messageId)?.metadata?.continuations, 2)
+  assert.equal(browser.outcomeEvent()?.outcome.status, 'truncated')
+})

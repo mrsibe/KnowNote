@@ -41,6 +41,15 @@ export function protocolSupportsEmbedding(protocol: APIProtocol): boolean {
 }
 
 /**
+ * Reasoning effort a model may be asked to spend, where its protocol supports it
+ * (#179). A lower effort leaves more of the output budget for the visible answer,
+ * which is the other way out of a truncated reasoning answer besides continuing it.
+ */
+export const REASONING_EFFORTS = ['low', 'medium', 'high'] as const
+
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number]
+
+/**
  * 单个 Model Connection
  */
 export interface ModelConnection {
@@ -56,6 +65,30 @@ export interface ModelConnection {
    * another — per-connection, like the model id itself.
    */
   maxOutputTokens?: number
+  /**
+   * The model's context window in tokens, when the user knows it (#179).
+   *
+   * Metadata, not a request parameter: KnowNote does not trim the prompt against
+   * it. It exists so a connection can describe its model, and so a future trims
+   * have something to read.
+   */
+  contextWindow?: number
+  /**
+   * Whether this model spends output budget on reasoning (#179). When true the
+   * connection's output ceiling covers thinking as well as the answer.
+   */
+  reasoning?: boolean
+  /**
+   * How much effort the model should spend thinking, for protocols that take it.
+   * Unknown OpenAI-compatible endpoints keep behaving exactly as before when this
+   * is absent — nothing is sent.
+   */
+  reasoningEffort?: ReasoningEffort
+  /**
+   * An explicit reasoning token budget, for protocols that take one (Anthropic
+   * thinking, Gemini thinkingConfig). Absent means the provider's default.
+   */
+  reasoningBudget?: number
 }
 
 /**

@@ -4,11 +4,12 @@ import { ConnectionManager } from '../models/ConnectionManager'
 import type { SessionAutoSwitchService } from '../services/SessionAutoSwitchService'
 import { KnowledgeService, toSearchResults } from '../services/KnowledgeService'
 import { buildRAGContext } from '../services/citations'
-import { ChatStreamManager } from '../services/chat/ChatStreamManager'
+import { ChatStreamManager, CONTINUE_INSTRUCTION } from '../services/chat/ChatStreamManager'
 import type { ChatTurnEvent } from '../../shared/types/chat'
 import { queriesTurnStore } from '../services/chat/turnStore'
 import { validateAndCleanMessages } from '../utils/messageValidator'
 import Logger from '../../shared/utils/logger'
+import { settingsManager } from '../config'
 import type { AnswerSource, RetrievalSnapshot, RetrievalStatus } from '../../shared/types/chat'
 import type { Citation, CitationContext } from '../../shared/types/citation'
 import { parseRetrievalScope, scopeDocumentIds } from '../../shared/types/scope'
@@ -17,16 +18,35 @@ import { ChatSchemas, validate } from './validation'
 /**
  * What a continuation is asked for.
  *
- * English like the other internal prompts: it is an instruction to the model, not copy
- * the reader sees.
+ * The constant itself is `ChatStreamManager`'s: automatic continuation (#179) and
+ * this manual path must ask for exactly the same thing.
  */
-const CONTINUE_INSTRUCTION =
-  'Continue the answer from where it stopped. Do not repeat what has already been written, and do not restart it.'
+const CONTINUE_MESSAGE = CONTINUE_INSTRUCTION
 
 /**
  * The renderer's view of a running turn: one channel, one shape.
  */
 const TURN_EVENT_CHANNEL = 'chat:turn-event'
+
+/**
+ * How many continuations one answer may spend, and whether a truncated one is
+ * continued automatically (#179).
+ *
+ * The manual「继续生成」chain and automatic continuation share the same bound, so a
+ * setting of 2 means "two more pieces of this answer", however they were asked for.
+ */
+function continuationSettings(): { limit: number; auto: boolean } {
+  const configured = settingsManager.getSettingSync('maxAutoContinueAttempts')
+  const limit = typeof configured === 'number' && configured > 0 ? Math.floor(configured) : 0
+  const auto = settingsManager.getSettingSync('autoContinueOnTruncation') === true
+  return { limit, auto }
+}
+
+/** How many continuations the persisted metadata says this answer already spent. */
+function continuationsSpent(metadata: unknown): number {
+  const value = (metadata as { continuations?: unknown } | null | undefined)?.continuations
+  return typeof value === 'number' && value > 0 ? Math.floor(value) : 0
+}
 
 /**
  * Register chat-related IPC Handlers
@@ -246,6 +266,7 @@ export function registerChatHandlers(
     // 4. 这一轮交给 ChatStreamManager（#140）。生命周期、唯一终态、落库与通知都在那里；
     //    handler 只负责把 prompt 和检索结果准备好。
     const client = await connectionManager.getChatClient()
+    const continuations = continuationSettings()
     const execution = streamManager.start({
       sessionId,
       notebookId: session?.notebookId,
@@ -257,6 +278,10 @@ export function registerChatHandlers(
       citations: retrieved.citations,
       citationContexts: retrieved.citationContexts,
       retrievalSnapshot: retrieved.retrievalSnapshot,
+      continuations: 0,
+      ...(continuations.auto && continuations.limit > 0
+        ? { autoContinue: { limit: continuations.limit } }
+        : {}),
       emit: (turnEvent: ChatTurnEvent) => event.sender.send(TURN_EVENT_CHANNEL, turnEvent)
     })
 
@@ -300,6 +325,7 @@ export function registerChatHandlers(
     if (!prompt) return { success: false, error: 'Nothing to retry' }
 
     const client = await connectionManager.getChatClient()
+    const continuations = continuationSettings()
     const execution = streamManager.start({
       sessionId: target.sessionId,
       notebookId: prompt.session?.notebookId,
@@ -312,6 +338,11 @@ export function registerChatHandlers(
       citations: prompt.retrieved.citations,
       citationContexts: prompt.retrieved.citationContexts,
       retrievalSnapshot: prompt.retrieved.retrievalSnapshot,
+      // A sibling is a fresh answer, so its continuation budget restarts (#179).
+      continuations: 0,
+      ...(continuations.auto && continuations.limit > 0
+        ? { autoContinue: { limit: continuations.limit } }
+        : {}),
       emit: (turnEvent: ChatTurnEvent) => event.sender.send(TURN_EVENT_CHANNEL, turnEvent)
     })
 
@@ -334,6 +365,18 @@ export function registerChatHandlers(
     const target = queries.getMessageById(messageId)
     if (!target) return { success: false, error: 'Message not found' }
 
+    const continuations = continuationSettings()
+    const spent = continuationsSpent(target.metadata)
+    // The bound is checked here as well as in the manager (#179): a manual chain
+    // must not be able to loop past the setting, however many times it is asked.
+    if (continuations.limit <= 0 || spent >= continuations.limit) {
+      return {
+        success: false,
+        reason: 'continuation-limit' as const,
+        error: `This answer has reached its continuation limit (${continuations.limit})`
+      }
+    }
+
     const prompt = await replayPrompt(target)
     if (!prompt) return { success: false, error: 'Nothing to continue' }
 
@@ -347,11 +390,17 @@ export function registerChatHandlers(
         reasoning: target.reasoningContent ?? ''
       },
       userContent: prompt.question,
+      // This continuation is being spent now, so the count this turn records is the
+      // one already spent plus this one (#179).
+      continuations: spent + 1,
+      ...(continuations.auto && continuations.limit > 0
+        ? { autoContinue: { limit: continuations.limit } }
+        : {}),
       messages: [
         ...prompt.messages,
         // What had been written, then the instruction to carry on from it.
         { role: 'assistant', content: target.content },
-        { role: 'user', content: CONTINUE_INSTRUCTION }
+        { role: 'user', content: CONTINUE_MESSAGE }
       ],
       client,
       retrieval: prompt.retrieved.retrieval,

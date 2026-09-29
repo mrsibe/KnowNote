@@ -119,5 +119,6 @@
   "searchHint": "查找精确文本或相关段落。Ctrl/Cmd+K 开关此面板。",
   "searchMatchingText": "匹配的文本",
   "searchRelatedPassages": "相关段落",
-  "searchPage": "第 {{page}} 页"
+  "searchPage": "第 {{page}} 页",
+  "continueLimitReached": "这条回答已达到继续次数上限。"
 }
