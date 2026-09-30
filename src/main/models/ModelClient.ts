@@ -5,7 +5,7 @@
  * 提供对话流式生成与 embedding 能力。业务代码只依赖它，不感知厂商。
  */
 
-import { embed, embedMany, streamText } from 'ai'
+import { embed, embedMany, streamText, toUIMessageStream } from 'ai'
 import type { AsyncIterableStream, LanguageModel, LanguageModelUsage, UIMessageChunk } from 'ai'
 import type { SharedV2ProviderOptions } from '@ai-sdk/provider'
 import type { APIMessage, ChatTokenUsage } from '../../shared/types/chat'
@@ -141,7 +141,10 @@ export class ModelClient {
     })
 
     return {
-      events: result.toUIMessageStream({
+      // The stateless helper, not `result.toUIMessageStream`: the result method is
+      // deprecated in v7 and logs a warning on every turn.
+      events: toUIMessageStream({
+        stream: result.stream,
         sendReasoning: true,
         // The SDK replaces a provider error with a generic sentence by default; the
         // reader is owed the real one, which is what the transcript has always shown.
