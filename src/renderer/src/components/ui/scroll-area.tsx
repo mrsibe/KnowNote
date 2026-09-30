@@ -20,7 +20,19 @@ const ScrollArea = React.forwardRef<
     className={cn('relative overflow-hidden', className)}
     {...props}
   >
-    <ScrollAreaPrimitive.Viewport ref={viewportRef} className="h-full w-full">
+    {/*
+     * Radix wraps `children` in an inner `min-width: 100%; display: table` box.
+     * A table shrink-wraps to its content's min-content width, so a `truncate`
+     * row with a fixed-width control beside it makes that box wider than the
+     * viewport at the panel's minimum width: the row then overflows over the
+     * list's own right padding (and under the scrollbar). Force the box back to
+     * a normal block so children are constrained to the viewport instead. The
+     * `!` is required because Radix writes both properties inline.
+     */}
+    <ScrollAreaPrimitive.Viewport
+      ref={viewportRef}
+      className="h-full w-full [&>div]:!block [&>div]:!min-w-0"
+    >
       {children}
     </ScrollAreaPrimitive.Viewport>
     <ScrollBar />
