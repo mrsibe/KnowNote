@@ -29,7 +29,7 @@ export const openaiCompletionsAdapter: ProtocolAdapter = {
   },
 
   createEmbeddingModel(connection): EmbeddingModel {
-    return createProvider(connection).textEmbeddingModel(connection.modelId)
+    return createProvider(connection).embeddingModel(connection.modelId)
   },
 
   embeddingProviderOptions(_connection, dimensions) {

@@ -150,7 +150,8 @@ export class MindMapService {
       const { partialObjectStream, object } = streamObject({
         model: model,
         schema: MindMapSchema,
-        prompt: prompt
+        prompt: prompt,
+        providerOptions: client.structuredOutputProviderOptions()
       })
 
       // 监听流式更新 (可选,用于显示进度)

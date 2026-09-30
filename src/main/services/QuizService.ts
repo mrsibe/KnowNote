@@ -217,7 +217,8 @@ export class QuizService {
       const { partialObjectStream, object } = streamObject({
         model: model,
         schema: QuizSchema,
-        prompt: prompt
+        prompt: prompt,
+        providerOptions: client.structuredOutputProviderOptions()
       })
 
       // 监听流式更新 (用于显示进度)

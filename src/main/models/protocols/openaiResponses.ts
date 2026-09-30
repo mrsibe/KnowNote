@@ -27,7 +27,7 @@ export const openaiResponsesAdapter: ProtocolAdapter = {
   },
 
   createEmbeddingModel(connection): EmbeddingModel {
-    return createProvider(connection).textEmbeddingModel(connection.modelId)
+    return createProvider(connection).embeddingModel(connection.modelId)
   },
 
   embeddingProviderOptions(_connection, dimensions) {
@@ -39,6 +39,14 @@ export const openaiResponsesAdapter: ProtocolAdapter = {
     return connection.reasoningEffort
       ? { [PROVIDER_OPTIONS_KEY]: { reasoningEffort: connection.reasoningEffort } }
       : undefined
+  },
+
+  /**
+   * AI SDK 6 把 `strictJsonSchema` 的默认值改为 true，而结构化输出服务用的 schema
+   * 带 `.optional()` 字段，strict 模式会拒绝。显式关掉，保持与 v5 相同的请求体。
+   */
+  structuredOutputProviderOptions() {
+    return { [PROVIDER_OPTIONS_KEY]: { strictJsonSchema: false } }
   },
 
   supportsModelListing: true,

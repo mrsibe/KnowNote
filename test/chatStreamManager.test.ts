@@ -1,7 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MockLanguageModelV2, simulateReadableStream } from 'ai/test'
-import type { LanguageModelV2FinishReason, LanguageModelV2StreamPart } from '@ai-sdk/provider'
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test'
+import type {
+  LanguageModelV3FinishReason,
+  LanguageModelV3StreamPart,
+  LanguageModelV3Usage
+} from '@ai-sdk/provider'
 import { ModelClient } from '../src/main/models/ModelClient.ts'
 import {
   ChatStreamManager,
@@ -38,20 +42,28 @@ const connection: ModelConnection = {
 }
 
 /** Provider-vocabulary chunks: `delta`, not `text`, and a terminal `finish`. */
-const textChunks = (text: string): LanguageModelV2StreamPart[] => [
+const textChunks = (text: string): LanguageModelV3StreamPart[] => [
   { type: 'text-start', id: 'text-1' },
   { type: 'text-delta', id: 'text-1', delta: text },
   { type: 'text-end', id: 'text-1' }
 ]
 
-const finishChunk = (finishReason: LanguageModelV2FinishReason): LanguageModelV2StreamPart => ({
-  type: 'finish',
-  finishReason,
-  usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 }
+/** The V3 usage shape: nested totals, not the flat numbers the V2 spec used. */
+const v3Usage = (input: number, output: number): LanguageModelV3Usage => ({
+  inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: output, text: output, reasoning: 0 }
 })
 
-function scriptedClient(chunks: LanguageModelV2StreamPart[]): ModelClient {
-  const model = new MockLanguageModelV2({
+const finishChunk = (
+  reason: LanguageModelV3FinishReason['unified']
+): LanguageModelV3StreamPart => ({
+  type: 'finish',
+  finishReason: { unified: reason, raw: reason },
+  usage: v3Usage(3, 5)
+})
+
+function scriptedClient(chunks: LanguageModelV3StreamPart[]): ModelClient {
+  const model = new MockLanguageModelV3({
     doStream: async () => ({
       stream: simulateReadableStream({
         chunks: [{ type: 'stream-start', warnings: [] }, ...chunks] as never[]
@@ -69,7 +81,7 @@ function scriptedClient(chunks: LanguageModelV2StreamPart[]): ModelClient {
  */
 function abortableClient(text: string): { client: ModelClient; cancelled: () => boolean } {
   let cancelled = false
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV3({
     doStream: async ({ abortSignal }) => ({
       stream: new ReadableStream({
         async start(controller) {
@@ -103,7 +115,7 @@ function abortableClient(text: string): { client: ModelClient; cancelled: () => 
 
 /** A provider whose stream dies mid-flight, as a dropped connection would. */
 function erroringClient(text: string): ModelClient {
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV3({
     doStream: async () => ({
       stream: new ReadableStream({
         async start(controller) {
@@ -133,7 +145,7 @@ function flakyClient(
   message: string,
   text: string
 ): { client: ModelClient; calls: () => number } {
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV3({
     doStream: async () => {
       const attempt = model.doStreamCalls.length
       if (attempt <= failures) {
@@ -169,7 +181,7 @@ function flakyClient(
  */
 function silentClient(text: string): { client: ModelClient; cancelled: () => boolean } {
   let cancelled = false
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV3({
     doStream: async ({ abortSignal }) => ({
       stream: new ReadableStream({
         async start(controller) {
@@ -766,9 +778,9 @@ test('a continuation writes into the answer it continues, and keeps what was the
 /** A provider that answers `texts[i]` with `reasons[i]` on its i-th call. */
 function ceilingClient(
   texts: string[],
-  reasons: LanguageModelV2FinishReason[]
+  reasons: LanguageModelV3FinishReason['unified'][]
 ): { client: ModelClient; calls: () => number } {
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV3({
     doStream: async () => {
       const call = model.doStreamCalls.length - 1
       const text = texts[Math.min(call, texts.length - 1)]

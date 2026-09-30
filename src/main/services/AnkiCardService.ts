@@ -214,7 +214,8 @@ export class AnkiCardService {
       const { partialObjectStream, object } = streamObject({
         model: model,
         schema: AnkiSchema,
-        prompt: prompt
+        prompt: prompt,
+        providerOptions: client.structuredOutputProviderOptions()
       })
 
       // 监听流式更新 (用于显示进度)

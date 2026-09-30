@@ -27,7 +27,7 @@ export const googleGenerativeAiAdapter: ProtocolAdapter = {
   },
 
   createEmbeddingModel(connection): EmbeddingModel {
-    return createProvider(connection).textEmbedding(connection.modelId)
+    return createProvider(connection).embedding(connection.modelId)
   },
 
   embeddingProviderOptions(_connection, dimensions) {

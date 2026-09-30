@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MockLanguageModelV2, simulateReadableStream } from 'ai/test'
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test'
 import { ModelClient } from '../src/main/models/ModelClient.ts'
 import { openaiCompletionsAdapter } from '../src/main/models/protocols/openaiCompletions.ts'
 import { openaiResponsesAdapter } from '../src/main/models/protocols/openaiResponses.ts'
@@ -85,20 +85,41 @@ test('gemini takes a thinking budget, not an effort level', () => {
   )
 })
 
+test('structured output pins the pre-v6 strictness default for openai-responses', () => {
+  // AI SDK 6 flips the OpenAI-family `strictJsonSchema` default to true. The
+  // structured-output schemas use `.optional()` fields, which strict mode rejects
+  // because every property has to be listed in `required`.
+  //
+  // Only openai-responses is affected: it always sends a JSON schema. The
+  // openai-completions adapter goes through `@ai-sdk/openai-compatible`, which
+  // only sends a schema when `structuredOutputs` is enabled and otherwise sends
+  // `json_object`, so its strictness never applies.
+  assert.deepEqual(openaiResponsesAdapter.structuredOutputProviderOptions?.(base), {
+    openai: { strictJsonSchema: false }
+  })
+  assert.equal(openaiCompletionsAdapter.structuredOutputProviderOptions?.(base), undefined)
+  // Anthropic and Gemini structured output is unaffected by that default.
+  assert.equal(anthropicMessagesAdapter.structuredOutputProviderOptions?.(base), undefined)
+  assert.equal(googleGenerativeAiAdapter.structuredOutputProviderOptions?.(base), undefined)
+})
+
 /** A client that records what reached the provider. */
 function inspectingClient(connection: Partial<ModelConnection>): {
   client: ModelClient
-  model: MockLanguageModelV2
+  model: MockLanguageModelV3
 } {
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV3({
     doStream: async () => ({
       stream: simulateReadableStream({
         chunks: [
           { type: 'stream-start', warnings: [] },
           {
             type: 'finish',
-            finishReason: 'stop',
-            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }
+            finishReason: { unified: 'stop', raw: 'stop' },
+            usage: {
+              inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+              outputTokens: { total: 1, text: 1, reasoning: 0 }
+            }
           }
         ] as never[]
       })

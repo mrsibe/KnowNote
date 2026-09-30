@@ -41,6 +41,16 @@ export interface ProtocolAdapter {
   chatProviderOptions?(connection: ModelConnection): SharedV2ProviderOptions | undefined
 
   /**
+   * 把结构化输出（streamObject）的 providerOptions 翻译成该协议的设置。
+   *
+   * AI SDK 6 把 OpenAI 系的 `strictJsonSchema` 默认值从 false 改成 true。本项目生成
+   * 的结构化输出 schema 大量使用 `.optional()`，而 strict 模式要求每个属性都出现在
+   * `required` 里，服务端会直接拒绝。显式回传 `strictJsonSchema: false` 是为了让线上
+   * 请求体与 v5 完全一致。结构化输出不受该默认值影响的协议返回 undefined。
+   */
+  structuredOutputProviderOptions?(connection: ModelConnection): SharedV2ProviderOptions | undefined
+
+  /**
    * 该协议是否支持从端点拉取模型列表（/v1/models 等）。
    */
   supportsModelListing: boolean

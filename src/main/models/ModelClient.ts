@@ -44,9 +44,9 @@ const toTokenUsage = (usage: LanguageModelUsage): ChatTokenUsage => ({
 })
 
 /**
- * 将 APIMessage 转换为 AI SDK 的 CoreMessage 格式
+ * 将 APIMessage 转换为 AI SDK 的 ModelMessage 格式
  */
-function convertToCoreMessages(messages: APIMessage[]) {
+function toModelMessages(messages: APIMessage[]) {
   return messages.map((msg) => ({
     role: msg.role,
     content: msg.content
@@ -91,6 +91,19 @@ export class ModelClient {
   }
 
   /**
+   * providerOptions for structured-output calls (streamObject).
+   *
+   * AI SDK 6 flipped the OpenAI-family `strictJsonSchema` default to true, and the
+   * schemas these services generate use `.optional()` fields, which strict mode
+   * rejects because every property has to be listed in `required`. This returns the
+   * protocol's pre-v6 setting so the request body is unchanged; protocols whose
+   * structured output is unaffected return undefined.
+   */
+  structuredOutputProviderOptions(): SharedV2ProviderOptions | undefined {
+    return this.adapter.structuredOutputProviderOptions?.(this.connection)
+  }
+
+  /**
    * 流式发送消息
    *
    * Returns the SDK's own event stream. Everything the previous callback API
@@ -106,7 +119,7 @@ export class ModelClient {
 
     const result = streamText({
       model: this.getAIModel(),
-      messages: convertToCoreMessages(messages),
+      messages: toModelMessages(messages),
       temperature: DEFAULT_TEMPERATURE,
       // Only when the connection asks for a ceiling. Absent means the model's own
       // default, which is what a reasoning model needs: its thinking shares this

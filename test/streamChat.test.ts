@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MockLanguageModelV2, simulateReadableStream } from 'ai/test'
-import type { LanguageModelV2StreamPart } from '@ai-sdk/provider'
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test'
+import type { LanguageModelV3StreamPart, LanguageModelV3Usage } from '@ai-sdk/provider'
 import type { UIMessageChunk } from 'ai'
 import { ModelClient } from '../src/main/models/ModelClient.ts'
 import type { ModelConnection } from '../src/shared/types/connection.ts'
@@ -38,8 +38,14 @@ const waitFor = async (condition: () => boolean, timeoutMs = 1000): Promise<void
   }
 }
 
-const clientFor = (chunks: LanguageModelV2StreamPart[]): ModelClient => {
-  const model = new MockLanguageModelV2({
+/** The V3 usage shape: nested totals, not the flat numbers the V2 spec used. */
+const v3Usage = (input: number, output: number): LanguageModelV3Usage => ({
+  inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: output, text: output, reasoning: 0 }
+})
+
+const clientFor = (chunks: LanguageModelV3StreamPart[]): ModelClient => {
+  const model = new MockLanguageModelV3({
     doStream: async () => ({
       stream: simulateReadableStream({
         chunks: [{ type: 'stream-start', warnings: [] }, ...chunks] as never[]
@@ -54,16 +60,16 @@ const clientFor = (chunks: LanguageModelV2StreamPart[]): ModelClient => {
 /** Builds a client and hands back the model, so the call args can be inspected. */
 const inspectingClient = (
   connectionOverride: Partial<ModelConnection>
-): { client: ModelClient; model: MockLanguageModelV2 } => {
-  const model = new MockLanguageModelV2({
+): { client: ModelClient; model: MockLanguageModelV3 } => {
+  const model = new MockLanguageModelV3({
     doStream: async () => ({
       stream: simulateReadableStream({
         chunks: [
           { type: 'stream-start', warnings: [] },
           {
             type: 'finish',
-            finishReason: 'stop',
-            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }
+            finishReason: { unified: 'stop', raw: 'stop' },
+            usage: v3Usage(1, 1)
           }
         ] as never[]
       })
@@ -84,8 +90,8 @@ test('the stream is the SDK’s own event stream, not a reduced protocol of ours
     { type: 'text-end', id: 't1' },
     {
       type: 'finish',
-      finishReason: 'stop',
-      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 }
+      finishReason: { unified: 'stop', raw: 'stop' },
+      usage: v3Usage(1, 2)
     }
   ])
 
@@ -117,8 +123,8 @@ test('a provider error arrives as an event carrying its real message', async () 
     { type: 'text-end', id: 't1' },
     {
       type: 'finish',
-      finishReason: 'stop',
-      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 }
+      finishReason: { unified: 'stop', raw: 'stop' },
+      usage: v3Usage(1, 2)
     }
   ])
 
@@ -138,7 +144,7 @@ test('a provider error arrives as an event carrying its real message', async () 
 })
 
 test('a transport failure surfaces as a rejection, which the owner turns into an outcome', async () => {
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV3({
     doStream: async () => ({
       stream: new ReadableStream({
         async start(controller) {
@@ -162,7 +168,7 @@ test('the signal the caller passes is the one that cancels the request', async (
   // What #145 got wrong: the execution owned a signal that nothing used, so the
   // provider stream kept running and only the bookkeeping was stopped.
   let observed: AbortSignal | undefined
-  const model = new MockLanguageModelV2({
+  const model = new MockLanguageModelV3({
     doStream: async ({ abortSignal }) => {
       observed = abortSignal
       return {
