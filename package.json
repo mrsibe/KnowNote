@@ -13,6 +13,9 @@
   "bugs": {
     "url": "https://github.com/MrSibe/KnowNote/issues"
   },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",

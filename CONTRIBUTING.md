@@ -20,7 +20,10 @@ mostly about keeping review cheap.
 
 Requirements:
 
-- **Node.js 24** — the version used by CI (`.github/workflows/verify.yml`).
+- **Node.js 24** — the version used by CI (`.github/workflows/verify.yml`) and the
+  only version `package.json`'s `engines` field allows. `.node-version` pins it for
+  version managers (nodenv, asdf, fnm, mise). Do not develop against Node 26
+  Current; Electron 44's runtime is Node 24 as well.
 - **npm** — KnowNote uses npm, not pnpm or yarn. The native-module collector in
   `electron-builder` is built around npm's `node_modules` layout and silently
   drops transitive dependencies under pnpm. See the `//dependencies` comment in
