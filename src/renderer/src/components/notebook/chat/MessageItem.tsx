@@ -226,12 +226,11 @@ function MessageItem({ message }: MessageItemProps): ReactElement {
   return (
     <div className="flex justify-start group">
       <div className="flex w-full max-w-[var(--answer-measure)] flex-col gap-3 min-w-0">
-        {/* Reasoning process display - only shown when reasoning content exists */}
-        {reasoningContent && (
-          <ReasoningContent content={reasoningContent} isStreaming={reasoningLive} />
+        {(reasoningContent || reasoningLive) && (
+          <ReasoningContent content={reasoningContent ?? ''} isStreaming={reasoningLive} />
         )}
 
-        {content ? (
+        {content && (
           <div className="markdown-content text-foreground px-2">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath, remarkCitationMarkers]}
@@ -273,19 +272,7 @@ function MessageItem({ message }: MessageItemProps): ReactElement {
             >
               {content}
             </ReactMarkdown>
-            {/* Streaming message cursor */}
-            {isLive && (
-              <span className="inline-block w-2 h-4 ml-1 bg-muted-foreground animate-pulse" />
-            )}
           </div>
-        ) : (
-          // Show cursor when message is empty and still streaming
-          isLive && (
-            <div className="flex items-center gap-2 px-2">
-              <span className="text-sm text-muted-foreground">{t('chat:thinking')}</span>
-              <span className="inline-block w-2 h-4 bg-muted-foreground animate-pulse" />
-            </div>
-          )
         )}
         {/* What the answer was built from. Only after the turn ends: during
             streaming there is nothing to show yet, and an empty evidence list

@@ -267,6 +267,7 @@ function applyOutcome(event: Extract<ChatTurnEvent, { type: 'outcome' }>): void 
               // turn is what the reader was left with, and the reason is a line
               // beside it, not a replacement for it (#142).
               content: messageText(turn?.message) || message.content,
+              reasoningContent: messageReasoning(turn?.message) || message.reasoningContent,
               status: event.outcome.status,
               finishReason: event.finishReason ?? null,
               error: event.outcome.status === 'failed' ? event.outcome.error : null,

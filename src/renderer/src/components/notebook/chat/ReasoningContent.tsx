@@ -1,4 +1,4 @@
-import { ReactElement, useState, useEffect } from 'react'
+import { ReactElement, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -20,19 +20,6 @@ export default function ReasoningContent({
   const { t } = useTranslation('chat')
   const [isExpanded, setIsExpanded] = useState(false)
 
-  // 监听思考状态变化，自动控制展开/折叠
-  // 思考开始 → 自动展开
-  // 思考结束 → 自动折叠
-  /* eslint-disable */
-  useEffect(() => {
-    if (isStreaming) {
-      setIsExpanded(true)
-    } else {
-      setIsExpanded(false)
-    }
-  }, [isStreaming])
-  /* eslint-enable */
-
   // 如果没有内容且不在流式传输，不显示
   if (!content && !isStreaming) {
     return <></>
@@ -43,6 +30,7 @@ export default function ReasoningContent({
       {/* 头部：展开/折叠按钮 */}
       <Button
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-expanded={isExpanded}
         variant="ghost"
         className="w-full flex items-center justify-between px-3 py-1.5 text-xs h-auto hover:bg-surface-hover"
       >
@@ -113,16 +101,11 @@ export default function ReasoningContent({
                   >
                     {content}
                   </ReactMarkdown>
-                  {/* 流式传输光标 */}
-                  {isStreaming && (
-                    <span className="inline-block w-2 h-3 ml-1 bg-muted-foreground/50 animate-pulse" />
-                  )}
                 </div>
               ) : (
                 // 空内容时显示占位符
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{t('thinkingShort')}</span>
-                  <span className="inline-block w-2 h-3 bg-muted-foreground/50 animate-pulse" />
                 </div>
               )}
             </div>

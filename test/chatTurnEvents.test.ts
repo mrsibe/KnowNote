@@ -135,6 +135,43 @@ test('the events assemble into the answer on screen', async () => {
   close()
 })
 
+test('reasoning survives the final snapshot when the turn ends', async () => {
+  installApi()
+  const close = setupChatListeners()
+  seedTurn('msg_reasoning')
+
+  try {
+    const events: UIMessageChunk[] = [
+      { type: 'start' },
+      { type: 'start-step' },
+      { type: 'reasoning-start', id: 'r1' },
+      { type: 'reasoning-delta', id: 'r1', delta: 'the reasoning' },
+      { type: 'reasoning-end', id: 'r1' },
+      { type: 'text-start', id: 't1' },
+      { type: 'text-delta', id: 't1', delta: 'the answer' },
+      { type: 'text-end', id: 't1' },
+      { type: 'finish-step' }
+    ]
+    events.forEach((event, index) => deliver?.(chunk('msg_reasoning', index + 1, event)))
+    // Deliver the outcome immediately: the last snapshot may still be assembling.
+    deliver?.({
+      type: 'outcome',
+      executionId: 'exec_1',
+      messageId: 'msg_reasoning',
+      seq: events.length + 1,
+      outcome: { status: 'completed' },
+      messageMetadata: {}
+    })
+
+    await waitFor(() => messageOf('msg_reasoning')?.status === 'completed')
+    assert.equal(messageOf('msg_reasoning')?.content, 'the answer')
+    assert.equal(messageOf('msg_reasoning')?.reasoningContent, 'the reasoning')
+    assert.equal(useChatStore.getState().turns['msg_reasoning'], undefined)
+  } finally {
+    close()
+  }
+})
+
 test('a gap in the sequence is recorded instead of shown as a short answer', async () => {
   installApi()
   const close = setupChatListeners()
