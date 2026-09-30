@@ -4,7 +4,7 @@
  * Google Generative AI (Gemini) API，含 embedding 端点。
  */
 
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { createGoogle } from '@ai-sdk/google'
 import type { EmbeddingModel, LanguageModel } from 'ai'
 import type { ModelConnection } from '../../../shared/types/connection'
 import type { ProtocolAdapter } from './types'
@@ -13,7 +13,7 @@ import { listGoogleModels } from './modelListing'
 const PROVIDER_OPTIONS_KEY = 'google'
 
 function createProvider(connection: ModelConnection) {
-  return createGoogleGenerativeAI({
+  return createGoogle({
     baseURL: connection.baseUrl,
     apiKey: connection.apiKey
   })

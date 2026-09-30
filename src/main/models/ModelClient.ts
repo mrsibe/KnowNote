@@ -119,6 +119,12 @@ export class ModelClient {
 
     const result = streamText({
       model: this.getAIModel(),
+      // KnowNote puts the retrieved context (and the title-generation prompt) into
+      // the history as a `system` message. AI SDK 7 rejects those by default, and
+      // it does not throw: the answer comes back empty. Every message here is
+      // built by this app, so the untrusted-injection case the default guards
+      // against does not apply.
+      allowSystemInMessages: true,
       messages: toModelMessages(messages),
       temperature: DEFAULT_TEMPERATURE,
       // Only when the connection asks for a ceiling. Absent means the model's own

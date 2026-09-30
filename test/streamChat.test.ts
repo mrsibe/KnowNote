@@ -231,3 +231,23 @@ test('no ceiling is sent unless the connection asks for one', async () => {
   await collect(withCeiling.client.streamChat([{ role: 'user', content: 'hi' }]).events)
   assert.equal(withCeiling.model.doStreamCalls[0]?.maxOutputTokens, 8192)
 })
+
+test('a system message in the history still reaches the provider', async () => {
+  // AI SDK 7 rejects system messages in `messages` by default. It does not throw:
+  // the answer comes back empty, which would make every RAG turn silently blank.
+  // KnowNote puts the retrieved context and the title prompt there, so the model
+  // has to receive them.
+  const inspecting = inspectingClient({})
+  await collect(
+    inspecting.client.streamChat([
+      { role: 'system', content: 'retrieved context' },
+      { role: 'user', content: 'question' }
+    ]).events
+  )
+
+  const system = inspecting.model.doStreamCalls[0]?.prompt.find(
+    (message) => message.role === 'system'
+  )
+  assert.ok(system, 'the system message never reached the provider')
+  assert.equal(system.content, 'retrieved context')
+})
