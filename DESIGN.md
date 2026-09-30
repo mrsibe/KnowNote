@@ -800,6 +800,14 @@ second outline to a rail that already sits in the gutter.
 </div>
 ```
 
+There are two scroll controls and they must look like one. `themed-scrollbar` is
+the native-scrolling variant above; a Radix `ScrollArea`
+(`components/ui/scroll-area.tsx`) draws its own bar instead, because a surface
+that needs to read or set scroll position (the chat transcript) cannot use a
+plain overflow container. The primitive's bar is deliberately the same control:
+8px track, a 4px `--muted-foreground` pill that darkens to `--foreground` on
+hover. Change them together, never one without the other.
+
 ### Panel header
 
 Implementation: `components/ui/panel-header.tsx`.
