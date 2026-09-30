@@ -11,7 +11,15 @@ import type { ModelConnection } from '../../../shared/types/connection'
 import type { ProtocolAdapter } from './types'
 import { listOpenAICompatibleModels } from './modelListing'
 
-export const PROVIDER_OPTIONS_KEY = 'openai-compatible'
+/**
+ * The provider's name, and the key its `providerOptions` are namespaced under.
+ *
+ * AI SDK 7 wants the camelCase form. Passing `'openai-compatible'` still works, but
+ * it emits a deprecation warning on every call and lands `providerMetadata` under
+ * the kebab-case key. This value is what both the provider name and the options
+ * key resolve from, so nothing has to be kept in sync by hand.
+ */
+export const PROVIDER_OPTIONS_KEY = 'openaiCompatible'
 
 function createProvider(connection: ModelConnection) {
   return createOpenAICompatible({

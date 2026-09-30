@@ -1,8 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MockLanguageModelV3, simulateReadableStream } from 'ai/test'
+import { streamText } from 'ai'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { ModelClient } from '../src/main/models/ModelClient.ts'
-import { openaiCompletionsAdapter } from '../src/main/models/protocols/openaiCompletions.ts'
+import {
+  openaiCompletionsAdapter,
+  PROVIDER_OPTIONS_KEY
+} from '../src/main/models/protocols/openaiCompletions.ts'
 import { openaiResponsesAdapter } from '../src/main/models/protocols/openaiResponses.ts'
 import { anthropicMessagesAdapter } from '../src/main/models/protocols/anthropicMessages.ts'
 import { googleGenerativeAiAdapter } from '../src/main/models/protocols/googleGenerativeAi.ts'
@@ -27,7 +32,7 @@ test('openai-compatible connections translate effort into reasoningEffort', () =
   assert.deepEqual(
     openaiCompletionsAdapter.chatProviderOptions?.({ ...base, reasoningEffort: 'low' }),
     {
-      'openai-compatible': { reasoningEffort: 'low' }
+      openaiCompatible: { reasoningEffort: 'low' }
     }
   )
   assert.equal(openaiCompletionsAdapter.chatProviderOptions?.({ ...base }), undefined)
@@ -142,7 +147,7 @@ test('the reasoning configuration reaches the provider request', async () => {
   await drain(client)
 
   assert.deepEqual(model.doStreamCalls[0]?.providerOptions, {
-    'openai-compatible': { reasoningEffort: 'low' }
+    openaiCompatible: { reasoningEffort: 'low' }
   })
 })
 
@@ -155,4 +160,36 @@ test('a connection with no reasoning metadata sends no provider options', async 
     undefined,
     'a connection that declared no reasoning settings was given some anyway'
   )
+})
+
+test('provider metadata is namespaced under the camelCase key', async () => {
+  // The provider picks the `providerMetadata` key from the key the caller sends in
+  // `providerOptions`. Sending the deprecated kebab-case key would put
+  // `providerMetadata['openai-compatible']` in front of every consumer and log a
+  // deprecation warning on each call, so this pins the camelCase form.
+  const sse = [
+    'data: {"id":"1","object":"chat.completion.chunk","created":0,"model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":null}]}\n\n',
+    'data: {"id":"1","object":"chat.completion.chunk","created":0,"model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n',
+    'data: [DONE]\n\n'
+  ].join('')
+
+  const provider = createOpenAICompatible({
+    name: PROVIDER_OPTIONS_KEY,
+    baseURL: 'https://example.invalid/v1',
+    apiKey: 'test',
+    fetch: async () =>
+      new Response(sse, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+  })
+
+  const result = streamText({
+    model: provider('test-model'),
+    prompt: 'hi',
+    providerOptions: { [PROVIDER_OPTIONS_KEY]: { reasoningEffort: 'low' } }
+  })
+  for await (const chunk of result.textStream) {
+    void chunk
+  }
+
+  assert.deepEqual(Object.keys((await result.providerMetadata) ?? {}), [PROVIDER_OPTIONS_KEY])
+  assert.equal(PROVIDER_OPTIONS_KEY, 'openaiCompatible')
 })
