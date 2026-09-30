@@ -19,7 +19,7 @@
 
   "createNotebook": "Create New Notebook",
   "closeNotebook": "Close Notebook",
-  "toggleKnowledgeBase": "Go to Library",
-  "toggleCreativeSpace": "Go to Notes",
+  "toggleKnowledgeBase": "Toggle Library",
+  "toggleCreativeSpace": "Toggle Notes",
   "saveNote": "Save Note"
 }

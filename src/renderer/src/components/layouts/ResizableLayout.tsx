@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState, ReactNode, ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import DragHandle from './DragHandle'
+import { REVEAL_LIBRARY_EVENT } from '../../lib/workspaceEvents'
 import { lockDrag } from '../../lib/dragLock'
 import {
   DEFAULT_LEFT_WIDTH,
@@ -303,42 +304,26 @@ export default function ResizableLayout({
   const leftZoneRef = useRef<HTMLDivElement>(null)
   const rightZoneRef = useRef<HTMLDivElement>(null)
 
-  /**
-   * Zone shortcuts enter the workspace (#65).
-   *
-   * The persisted action IDs are unchanged, but the behaviour is “go to the
-   * zone”, not “toggle the panel”: reveal a collapsed zone, then move focus into
-   * it. Collapsing stays on the panel-header buttons. Listening to the same
-   * `shortcut:toggle-*` events keeps the shortcut IDs stable.
-   */
+  // Shortcuts toggle just like the header buttons. Citation navigation only
+  // reveals the library, so repeated citation clicks never hide the reader.
   useEffect(() => {
-    const enterLibrary = (): void => {
+    const revealLibrary = (): void => {
       setIsLeftCollapsed((collapsed) => {
         const entry = planZoneEntry(collapsed, lastSizeRef.current.left, DEFAULT_LEFT_WIDTH)
         if (entry.width !== null) setPanelWidth('left', entry.width)
         return entry.collapsed
       })
-      // The wrapper mounts on this tick when it was collapsed, so focus after the
-      // commit rather than on an unmounted node.
-      requestAnimationFrame(() => leftZoneRef.current?.focus())
     }
 
-    const enterNotes = (): void => {
-      setIsRightCollapsed((collapsed) => {
-        const entry = planZoneEntry(collapsed, lastSizeRef.current.right, DEFAULT_RIGHT_WIDTH)
-        if (entry.width !== null) setPanelWidth('right', entry.width)
-        return entry.collapsed
-      })
-      requestAnimationFrame(() => rightZoneRef.current?.focus())
-    }
-
-    window.addEventListener('shortcut:toggle-knowledge-base', enterLibrary)
-    window.addEventListener('shortcut:toggle-creative-space', enterNotes)
+    window.addEventListener(REVEAL_LIBRARY_EVENT, revealLibrary)
+    window.addEventListener('shortcut:toggle-knowledge-base', toggleLeftPanel)
+    window.addEventListener('shortcut:toggle-creative-space', toggleRightPanel)
     return () => {
-      window.removeEventListener('shortcut:toggle-knowledge-base', enterLibrary)
-      window.removeEventListener('shortcut:toggle-creative-space', enterNotes)
+      window.removeEventListener(REVEAL_LIBRARY_EVENT, revealLibrary)
+      window.removeEventListener('shortcut:toggle-knowledge-base', toggleLeftPanel)
+      window.removeEventListener('shortcut:toggle-creative-space', toggleRightPanel)
     }
-  }, [setPanelWidth])
+  }, [setPanelWidth, toggleLeftPanel, toggleRightPanel])
 
   // Stable, so a drag frame does not hand the centre panel a new element.
   const centerPanelProps = useMemo(

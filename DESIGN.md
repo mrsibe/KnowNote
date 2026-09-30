@@ -94,12 +94,13 @@ the citation chip, not the row.
 - **Open a citation:** `Tab` to the chip, then `Enter` / `Space`. Chips are real
   buttons, so this is the platform behaviour, not a custom keybinding.
 - **Return:** `Escape` (or Back) returns focus to the chip that opened the reader.
-- **Move between the zones:** `Cmd/Ctrl+[` reveals Library (if collapsed) and
-  moves focus into it; `Cmd/Ctrl+]` does the same for Notes. The persisted action
-  IDs (`toggle_knowledge_base` / `toggle_creative_space`) are unchanged, but the
-  behaviour is “go to the zone”, not “show the panel” — this is the “move between
-  zones” path. Collapsing a side stays on its panel-header button. The centre
-  composer is reached through `FOCUS_CHAT_EVENT` (the reader's back fallback).
+- **Toggle side panels:** `Cmd/Ctrl+[` expands/collapses Library and
+  `Cmd/Ctrl+]` expands/collapses Notes, exactly like the panel-header buttons.
+  Reopening restores the remembered width. Citation navigation is separate:
+  it only reveals Library, never collapses it. The centre composer is reached
+  through `FOCUS_CHAT_EVENT` (the reader's back fallback).
+- **Close notebook:** `Cmd/Ctrl+D`, with the unsaved-note guard. Existing
+  Escape and Cmd/Ctrl+W defaults migrate to this binding; other custom bindings stay.
 
 The chip for the citation the reader is currently showing carries `aria-current`
 and a selected fill. That state is **derived** from `uiStore.focusedSource`
@@ -418,7 +419,7 @@ Two rules for the composer and for leaving the workspace:
   `pinToBottom` handle and `handleSend` calls it, so the follow state cannot hide
   the message the user just wrote.
 - **Leaving the workspace asks first when the note editor is dirty.** Closing a
-  tab, switching tabs, the Home tab and `Cmd+W` all unmount it. `NotePanel`
+  tab, switching tabs, the Home tab and `Cmd/Ctrl+D` all unmount it. `NotePanel`
   publishes its dirty state to `uiStore` (only it knows), and `NotebookLayout`
   owns the single `UnsavedChangesDialog` that every one of those paths goes
   through. The in-panel Back button is not special-cased — it uses the same

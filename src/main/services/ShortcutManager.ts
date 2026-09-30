@@ -3,21 +3,7 @@ import type Store from 'electron-store'
 import { ShortcutConfig, ShortcutAction } from '../../shared/types'
 import { defaultShortcuts } from '../config/defaults'
 import type { StoreSchema } from '../config/types'
-
-/**
- * Accelerators that shipped as a default and must not survive an upgrade.
- *
- * The merge in `registerShortcuts` only adds actions a stored config has never
- * seen, so *changing* a default never reaches anyone who has already run the app.
- * Bare `Escape` was bound to closing the notebook, which the main process claims
- * before the renderer sees it: it destroyed the workspace — unsaved note text
- * included — and made Escape unusable for dismissing anything. Replacing it by
- * value is the migration; there is no need for a version counter because a
- * modifier-less accelerator is no longer accepted by the recorder either.
- */
-const SUPERSEDED_ACCELERATORS: Partial<Record<ShortcutAction, string[]>> = {
-  [ShortcutAction.CLOSE_NOTEBOOK]: ['Escape']
-}
+import { migrateShortcuts } from '../../shared/utils/shortcutMigration'
 
 /**
  * 快捷键管理器
@@ -27,7 +13,7 @@ export class ShortcutManager {
   private store: Store<StoreSchema>
   private mainWindow: BrowserWindow | null = null
   private shortcuts: ShortcutConfig[] = []
-  private keyboardHandler: ((event: Event, input: Electron.Input) => void) | null = null
+  private keyboardHandler: ((event: Electron.Event, input: Electron.Input) => void) | null = null
 
   constructor(store: Store<StoreSchema>) {
     this.store = store
@@ -53,27 +39,8 @@ export class ShortcutManager {
       return
     }
 
-    // 合并新增的默认快捷键（向后兼容旧版本配置），
-    // 并替换掉已废弃的默认加速键（见 SUPERSEDED_ACCELERATORS）。
-    const mergedShortcuts = [...shortcuts]
-    let hasNewShortcut = false
-    for (const defaultShortcut of defaultShortcuts) {
-      const index = mergedShortcuts.findIndex((s) => s.action === defaultShortcut.action)
-      if (index === -1) {
-        mergedShortcuts.push({ ...defaultShortcut })
-        hasNewShortcut = true
-        continue
-      }
-      const superseded = SUPERSEDED_ACCELERATORS[defaultShortcut.action]
-      if (superseded?.includes(mergedShortcuts[index].accelerator)) {
-        mergedShortcuts[index] = {
-          ...mergedShortcuts[index],
-          accelerator: defaultShortcut.accelerator
-        }
-        hasNewShortcut = true
-      }
-    }
-    if (hasNewShortcut) {
+    const mergedShortcuts = migrateShortcuts(shortcuts, defaultShortcuts)
+    if (JSON.stringify(mergedShortcuts) !== JSON.stringify(shortcuts)) {
       this.store.set('shortcuts', mergedShortcuts)
     }
 
@@ -86,31 +53,23 @@ export class ShortcutManager {
 
     // 移除旧的监听器
     if (this.keyboardHandler) {
-      ;(this.mainWindow.webContents as any).removeListener(
-        'before-input-event',
-        this.keyboardHandler
-      )
+      this.mainWindow.webContents.removeListener('before-input-event', this.keyboardHandler)
     }
 
     // 创建新的处理器
-    this.keyboardHandler = (event: Event, input: Electron.Input) => {
+    this.keyboardHandler = (event: Electron.Event, input: Electron.Input) => {
       this.handleKeyboardEvent(event, input)
     }
 
-    // 等待 webContents ready 后再注册
-    if (this.mainWindow.webContents.isLoading()) {
-      this.mainWindow.webContents.once('did-finish-load', () => {
-        ;(this.mainWindow!.webContents as any).on('before-input-event', this.keyboardHandler!)
-      })
-    } else {
-      ;(this.mainWindow.webContents as any).on('before-input-event', this.keyboardHandler)
-    }
+    // Input belongs to webContents, not to a loaded document. Attach immediately
+    // so failed/restarted loads cannot leave the window without shortcuts.
+    this.mainWindow.webContents.on('before-input-event', this.keyboardHandler)
   }
 
   /**
    * 处理键盘事件
    */
-  private handleKeyboardEvent(event: Event, input: Electron.Input): void {
+  private handleKeyboardEvent(event: Electron.Event, input: Electron.Input): void {
     // 只处理 keyDown 事件
     if (input.type !== 'keyDown') return
 
@@ -148,7 +107,10 @@ export class ShortcutManager {
    * 注销所有快捷键
    */
   unregisterShortcuts(): void {
-    // 清空菜单（移除所有快捷键）
+    if (this.keyboardHandler && this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.removeListener('before-input-event', this.keyboardHandler)
+    }
+    this.keyboardHandler = null
     Menu.setApplicationMenu(null)
   }
 

@@ -19,7 +19,7 @@
 
   "createNotebook": "新建笔记本",
   "closeNotebook": "关闭笔记本",
-  "toggleKnowledgeBase": "跳转到资料库",
-  "toggleCreativeSpace": "跳转到笔记",
+  "toggleKnowledgeBase": "展开 / 收起资料库",
+  "toggleCreativeSpace": "展开 / 收起笔记",
   "saveNote": "保存笔记"
 }

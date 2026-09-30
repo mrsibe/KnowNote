@@ -64,7 +64,7 @@ export default function NotebookListPage(): ReactElement {
     })
   }, [])
 
-  const handleCreateNotebook = async (): Promise<void> => {
+  const handleCreateNotebook = useCallback(async (): Promise<void> => {
     const newId = await addNotebook({
       title: t('newNotebook', { index: notebooks.length + 1 }),
       description: t('notebookDescription')
@@ -74,7 +74,23 @@ export default function NotebookListPage(): ReactElement {
     setCurrentNotebook(newId)
     rememberOpen(newId)
     navigate(`/notebook/${newId}`)
-  }
+  }, [
+    addNotebook,
+    t,
+    notebooks.length,
+    addOpenedNotebook,
+    setCurrentNotebook,
+    rememberOpen,
+    navigate
+  ])
+
+  useEffect(() => {
+    const create = (): void => {
+      void handleCreateNotebook()
+    }
+    window.addEventListener('shortcut:create-notebook', create)
+    return () => window.removeEventListener('shortcut:create-notebook', create)
+  }, [handleCreateNotebook])
 
   const handleNotebookClick = (id: string): void => {
     addOpenedNotebook(id)

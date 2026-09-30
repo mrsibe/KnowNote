@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import type { SourceAnchor } from '../../../shared/types/source'
 import { withSourceAnchor } from '../../../shared/utils/sourceAnchor'
 import { useUIStore } from '../store/uiStore'
+import { REVEAL_LIBRARY_EVENT } from '../lib/workspaceEvents'
 import { rememberSourceOrigin, type FocusableOrigin } from './sourceFocusReturn'
 
 /**
@@ -49,6 +50,7 @@ export function useSourceAnchorNavigation(): {
       rememberSourceOrigin(
         origin ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
       )
+      window.dispatchEvent(new CustomEvent(REVEAL_LIBRARY_EVENT))
       setFocusedSource(anchor)
       navigateTo(anchor)
     },

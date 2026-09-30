@@ -43,9 +43,8 @@ function greetingKey(hour: number): string {
  *
  * Four sections at most, in the order they are used: a greeting, the search entry,
  * the notebooks, then what the user was doing and what recently arrived. The
- * greeting is small on purpose; the entry below it is the thing the eye should land
- * on, because a long-lived tool's Home is opened a hundred times and a hero banner
- * is paid for on every one of them.
+ * greeting is the page's focus heading; search stays immediately below it without
+ * turning the workspace into a promotional hero.
  *
  * Every section is allowed to render nothing. A workspace with no conversations and
  * no sources shows a greeting, a search box and the shelf — not four empty boxes
@@ -85,10 +84,10 @@ export default function Home({
 
   const header = (
     <header>
-      <h1 className="text-xl font-medium tracking-tight text-foreground">
+      <h1 className="text-3xl font-medium tracking-tight text-foreground">
         {t(greetingKey(new Date().getHours()))}
       </h1>
-      <p className="mt-1 text-sm text-muted-foreground">{t('homePrompt')}</p>
+      <p className="mt-2 text-base text-muted-foreground">{t('homePrompt')}</p>
     </header>
   )
 

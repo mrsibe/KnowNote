@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import GeneralSettings from './GeneralSettings'
 import { useUIStore } from '../../store/uiStore'
 import ModelsSettings from './ModelsSettings'
-import PromptsSettings from './PromptsSettings'
 import ShortcutSettings from './ShortcutSettings'
 import AboutSettings from './AboutSettings'
 import SettingsContentPanel from './SettingsContentPanel'
@@ -69,18 +68,18 @@ export default function SettingsDialog(): ReactElement {
       description: t('generalSettingsDesc')
     },
     {
-      id: 'models',
-      icon: Database,
-      label: t('modelConnections'),
-      title: t('modelConnections'),
-      description: t('modelConnectionsDesc')
+      id: 'chat',
+      icon: MessageSquare,
+      label: t('chatModel'),
+      title: t('chatModel'),
+      description: t('chatModelDesc')
     },
     {
-      id: 'prompts',
-      icon: MessageSquare,
-      label: t('promptSettings'),
-      title: t('promptSettings'),
-      description: t('mindMapPromptDesc')
+      id: 'embedding',
+      icon: Database,
+      label: t('embeddingModel'),
+      title: t('embeddingModel'),
+      description: t('embeddingModelDesc')
     },
     {
       id: 'shortcuts',
@@ -169,13 +168,18 @@ export default function SettingsDialog(): ReactElement {
                     const isActive = activeSection === item.id
                     return (
                       <SidebarMenuItem key={item.id}>
+                        {item.id === 'chat' && (
+                          <p className="px-2 pt-3 pb-1 text-xs text-subtle-foreground">
+                            {t('modelConnections')}
+                          </p>
+                        )}
                         <SidebarMenuButton
                           onClick={() => setActiveSection(item.id)}
                           isActive={isActive}
                           className={
                             isActive
-                              ? 'bg-surface-selected! text-foreground! font-medium'
-                              : 'hover:bg-surface-hover hover:text-foreground'
+                              ? `bg-surface-selected! text-foreground! font-medium ${item.id === 'chat' || item.id === 'embedding' ? 'pl-4' : ''}`
+                              : `hover:bg-surface-hover hover:text-foreground ${item.id === 'chat' || item.id === 'embedding' ? 'pl-4' : ''}`
                           }
                         >
                           <Icon className="w-4 h-4" />
@@ -208,16 +212,12 @@ export default function SettingsDialog(): ReactElement {
                       onSettingsChange={updatePendingSettings}
                     />
                   )}
-                  {activeSection === 'models' && (
+                  {(activeSection === 'chat' || activeSection === 'embedding') && (
                     <ModelsSettings
+                      key={activeSection}
+                      capability={activeSection}
                       connections={pendingConnections}
                       onConnectionsChange={setPendingConnections}
-                    />
-                  )}
-                  {pendingSettings && activeSection === 'prompts' && (
-                    <PromptsSettings
-                      settings={pendingSettings}
-                      onSettingsChange={updatePendingSettings}
                     />
                   )}
                   {activeSection === 'shortcuts' && <ShortcutSettings />}

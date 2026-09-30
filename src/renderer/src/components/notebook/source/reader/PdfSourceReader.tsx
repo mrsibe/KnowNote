@@ -380,7 +380,7 @@ const PdfSourceReader = forwardRef<ReaderHandle, PdfSourceReaderProps>(function 
       ) : (
         <div
           ref={scrollRef}
-          className="kn-reader"
+          className="kn-reader themed-scrollbar"
           onScroll={handleScroll}
           onMouseUp={handleSelection}
         >

@@ -39,10 +39,6 @@ export function useShortcutExecutor() {
     }
 
     // 监听来自主进程的快捷键触发事件
-    window.electron.ipcRenderer.on('shortcut:triggered', handleShortcut)
-
-    return () => {
-      window.electron.ipcRenderer.removeAllListeners('shortcut:triggered')
-    }
+    return window.electron.ipcRenderer.on('shortcut:triggered', handleShortcut)
   }, [])
 }

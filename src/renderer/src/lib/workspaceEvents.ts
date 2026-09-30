@@ -8,3 +8,4 @@
  * the keyboard is*.
  */
 export const FOCUS_CHAT_EVENT = 'workspace:focus-chat'
+export const REVEAL_LIBRARY_EVENT = 'workspace:reveal-library'

@@ -45,9 +45,11 @@ const TextSourceReader = forwardRef<ReaderHandle, TextSourceReaderProps>(functio
   const contentRef = useRef<HTMLDivElement>(null)
   const lastSelection = useRef<ReaderSelection | null>(null)
   const [highlightRects, setHighlightRects] = useState<HighlightRect[]>([])
+  const activeAnchor = useRef<ReaderAnchor | null>(null)
 
   const applyAnchor = useCallback(
-    (target: ReaderAnchor): void => {
+    (target: ReaderAnchor, scroll = true): void => {
+      activeAnchor.current = target
       const { block } = resolveAnchor(blocks, target)
       const start = target.startOffset ?? block?.startOffset ?? null
       const end = target.endOffset ?? block?.endOffset ?? null
@@ -58,7 +60,7 @@ const TextSourceReader = forwardRef<ReaderHandle, TextSourceReaderProps>(functio
         // 定位不到就清掉上一次的高亮，并回到文本顶部：否则从一条 citation 切到 document-only
         // anchor 时会清掉高亮、却停在旧滚动位置。
         setHighlightRects([])
-        container?.scrollTo({ top: 0, behavior: 'auto' })
+        if (scroll) container?.scrollTo({ top: 0, behavior: 'auto' })
         return
       }
 
@@ -77,7 +79,8 @@ const TextSourceReader = forwardRef<ReaderHandle, TextSourceReaderProps>(functio
       setHighlightRects(rects)
 
       const first = rects[0]
-      if (first) container.scrollTo({ top: Math.max(0, first.top - 80), behavior: 'auto' })
+      if (scroll && first)
+        container.scrollTo({ top: Math.max(0, first.top - 80), behavior: 'auto' })
     },
     [blocks]
   )
@@ -100,6 +103,18 @@ const TextSourceReader = forwardRef<ReaderHandle, TextSourceReaderProps>(functio
     const frame = requestAnimationFrame(() => applyAnchor(anchor))
     return () => cancelAnimationFrame(frame)
   }, [anchor, blocks, applyAnchor])
+
+  useEffect(() => {
+    const container = scrollRef.current
+    const body = contentRef.current
+    if (!container || !body) return
+    const observer = new ResizeObserver(() => {
+      if (activeAnchor.current) applyAnchor(activeAnchor.current, false)
+    })
+    observer.observe(container)
+    observer.observe(body)
+    return () => observer.disconnect()
+  }, [applyAnchor, content])
 
   const handleSelection = useCallback((): void => {
     const selection = window.getSelection()
@@ -127,7 +142,7 @@ const TextSourceReader = forwardRef<ReaderHandle, TextSourceReaderProps>(functio
   return (
     <div
       ref={scrollRef}
-      className="kn-reader"
+      className="kn-reader themed-scrollbar"
       onMouseUp={handleSelection}
       onKeyUp={handleSelection}
     >

@@ -4,11 +4,13 @@ import ModelConnectionForm, { type ProtocolInfo } from './ModelConnectionForm'
 import EmbeddingSettings from './EmbeddingSettings'
 
 interface ModelsSettingsProps {
+  capability: ModelCapability
   connections: ConnectionMap
   onConnectionsChange: (connections: ConnectionMap) => void
 }
 
 export default function ModelsSettings({
+  capability,
   connections,
   onConnectionsChange
 }: ModelsSettingsProps): ReactElement {
@@ -37,20 +39,23 @@ export default function ModelsSettings({
 
   return (
     <div className="flex flex-col gap-10">
-      <ModelConnectionForm
-        capability="chat"
-        connection={connections.chat}
-        protocols={protocols}
-        onChange={(connection) => setConnection('chat', connection)}
-        onClear={() => clearConnection('chat')}
-      />
-      <div className="border-t border-border" />
-      <EmbeddingSettings
-        connection={connections.embedding}
-        protocols={protocols}
-        onChange={(connection) => setConnection('embedding', connection)}
-        onClear={() => clearConnection('embedding')}
-      />
+      {capability === 'chat' && (
+        <ModelConnectionForm
+          capability="chat"
+          connection={connections.chat}
+          protocols={protocols}
+          onChange={(connection) => setConnection('chat', connection)}
+          onClear={() => clearConnection('chat')}
+        />
+      )}
+      {capability === 'embedding' && (
+        <EmbeddingSettings
+          connection={connections.embedding}
+          protocols={protocols}
+          onChange={(connection) => setConnection('embedding', connection)}
+          onClear={() => clearConnection('embedding')}
+        />
+      )}
     </div>
   )
 }
