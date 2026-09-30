@@ -318,60 +318,65 @@ function ProcessPanel({
          * content while the transcript keeps its place, because the fade and the
          * transcript reserve are both measured from this element.
          */}
-        <div className="relative bg-surface-overlay rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-elevation pointer-events-auto select-none">
-          {/* 范围选择（#94）：这次问题用哪些来源回答。放在输入框上方，跟在要提问的地方。 */}
-          {currentSession && (
-            <ScopeSelector
-              scope={scope}
-              documents={documents}
-              currentDocumentId={focusedSource?.documentId ?? null}
-              onChange={(next) => void setSessionScope(currentSession.id, next)}
+        {/* Centred on the same canvas as the transcript: the input and the answers
+            it produces line up, so a wide panel adds margin to both instead of
+            stretching the composer past the text it is answering. */}
+        <div className="mx-auto w-full max-w-5xl">
+          <div className="relative bg-surface-overlay rounded-lg border border-border focus-within:ring-2 focus-within:ring-ring shadow-elevation pointer-events-auto select-none">
+            {/* 范围选择（#94）：这次问题用哪些来源回答。放在输入框上方，跟在要提问的地方。 */}
+            {currentSession && (
+              <ScopeSelector
+                scope={scope}
+                documents={documents}
+                currentDocumentId={focusedSource?.documentId ?? null}
+                onChange={(next) => void setSessionScope(currentSession.id, next)}
+              />
+            )}
+
+            {/* 多行输入框 */}
+            <Textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              placeholder={!hasChatModel ? t('noProviderConfigured') : t('inputMessage')}
+              disabled={!hasChatModel}
+              rows={1}
+              className="w-full bg-transparent border-0 pl-4 pr-14 py-3 text-sm text-foreground placeholder-muted-foreground resize-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto min-h-[56px] max-h-[280px] themed-scrollbar select-text"
             />
-          )}
 
-          {/* 多行输入框 */}
-          <Textarea
-            ref={textareaRef}
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            placeholder={!hasChatModel ? t('noProviderConfigured') : t('inputMessage')}
-            disabled={!hasChatModel}
-            rows={1}
-            className="w-full bg-transparent border-0 pl-4 pr-14 py-3 text-sm text-foreground placeholder-muted-foreground resize-none focus-visible:ring-0 focus-visible:ring-offset-0 overflow-y-auto min-h-[56px] max-h-[280px] themed-scrollbar select-text"
-          />
-
-          {/* 发送/停止按钮 - 动态切换 */}
-          {isCurrentNotebookStreaming ? (
-            // 停止按钮
-            <Button
-              onClick={handleStop}
-              disabled={!canStop}
-              title={t('stopGenerating', { ns: 'chat' })}
-              variant="destructive"
-              size="icon"
-              className="absolute right-2 bottom-3 w-8 h-8 rounded-full"
-            >
-              <StopCircle className="w-4 h-4" />
-            </Button>
-          ) : (
-            // 发送按钮
-            <Button
-              onClick={handleSend}
-              disabled={!canSend}
-              title={
-                !hasChatModel
-                  ? t('noProviderConfigured')
-                  : !currentSession
-                    ? t('selectSession')
-                    : ''
-              }
-              size="icon"
-              className="absolute right-2 bottom-3 w-8 h-8 rounded-full"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          )}
+            {/* 发送/停止按钮 - 动态切换 */}
+            {isCurrentNotebookStreaming ? (
+              // 停止按钮
+              <Button
+                onClick={handleStop}
+                disabled={!canStop}
+                title={t('stopGenerating', { ns: 'chat' })}
+                variant="destructive"
+                size="icon"
+                className="absolute right-2 bottom-3 w-8 h-8 rounded-full"
+              >
+                <StopCircle className="w-4 h-4" />
+              </Button>
+            ) : (
+              // 发送按钮
+              <Button
+                onClick={handleSend}
+                disabled={!canSend}
+                title={
+                  !hasChatModel
+                    ? t('noProviderConfigured')
+                    : !currentSession
+                      ? t('selectSession')
+                      : ''
+                }
+                size="icon"
+                className="absolute right-2 bottom-3 w-8 h-8 rounded-full"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </Card>

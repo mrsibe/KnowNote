@@ -87,10 +87,14 @@
 
   /*
    * The measure long-form content is set to, in `ch` so it follows the font.
-   * Every reading surface shares it — the chat transcript and the note editor
-   * today — so a paragraph is the same width wherever it is read, and widening
-   * a panel adds margin instead of lengthening the line. 72ch at 14px Inter is
-   * roughly 600px, inside the 65–75ch band a body copy line wants.
+   * Every long-form reading surface shares it — the note editor today — so a
+   * paragraph is the same width wherever it is read, and widening a panel adds
+   * margin instead of lengthening the line. 72ch at 14px Inter is roughly 600px,
+   * inside the 65–75ch band a body copy line wants.
+   *
+   * The chat transcript is deliberately not one of them: a workspace is wider
+   * than a reading column, so its canvas is `max-w-5xl` and the answer inside it
+   * is capped by `--answer-measure`. See DESIGN.md, "Measure".
    *
    * The source reader is the one surface that does not read this yet: its
    * highlight rectangles are measured once from the laid-out range
@@ -98,6 +102,14 @@
    * the highlight behind. Fix that measurement before capping that surface.
    */
   --reading-measure: 72ch;
+
+  /*
+   * The chat answer's measure. Wider than `--reading-measure` because an answer
+   * carries tables and code as often as prose, and the chat canvas is a workspace
+   * rather than a page; still capped so a line stays readable when the centre
+   * panel is dragged wide. 88ch at 14px Inter is roughly 740px.
+   */
+  --answer-measure: 88ch;
 
   --font-sans: 'Inter', sans-serif;
   --font-serif: 'Lora', serif;

@@ -225,7 +225,7 @@ function MessageItem({ message }: MessageItemProps): ReactElement {
   // AI message: no background, left-aligned, Markdown rendered
   return (
     <div className="flex justify-start group">
-      <div className="flex flex-col gap-3 max-w-[85%] min-w-0">
+      <div className="flex w-full max-w-[var(--answer-measure)] flex-col gap-3 min-w-0">
         {/* Reasoning process display - only shown when reasoning content exists */}
         {reasoningContent && (
           <ReasoningContent content={reasoningContent} isStreaming={reasoningLive} />

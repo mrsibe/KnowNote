@@ -647,24 +647,36 @@ express selection — pair it with `bg-surface-selected`.
 Line height: UI text uses Tailwind defaults. Long-form reading surfaces
 (`markdown.css`, `noteEditor.css`) use 14px / `line-height: 1.75`.
 
-**Measure.** A long-form reading surface is capped at `--reading-measure` (72ch)
-and centred:
+**Measure.** There are two widths, because a workspace and a reading column are
+different things.
+
+A long-form reading surface is capped at `--reading-measure` (72ch) and centred:
 
 ```tsx
 <div className="mx-auto w-full max-w-[var(--reading-measure)] px-4 py-6">
 ```
 
-The chat transcript (`MessageList.tsx`) and the note editor (`NoteEditor.tsx`,
-`p-4`) both read the token, so a paragraph is the same width on either surface.
-Widening a panel adds margin around the column; it must never lengthen the line —
-uncapped, a 1000px centre panel sets an answer at roughly 130 characters per
-line. The token is defined once in `theme.css`; take it as a variant rather than
+The note editor (`NoteEditor.tsx`, `p-4`) is that surface. Widening a panel adds
+margin around the column; it must never lengthen the line — uncapped, a 1000px
+centre panel sets prose at roughly 130 characters per line.
+
+The chat transcript is not a reading column. Its canvas — the notebook header,
+the empty state and the message list in `MessageList.tsx` — is `max-w-5xl`
+(~1024px), the same width as the home page, so a wide centre panel is actually
+used. Inside that canvas an answer is capped at `--answer-measure` (88ch) rather
+than by `--reading-measure`: an answer carries tables and code as often as prose,
+and a paragraph at 88ch is still inside a comfortable band. A user message keeps
+its narrower bubble. The composer (`ProcessPanel.tsx`) is centred on the same
+`max-w-5xl` canvas, so the input lines up with the transcript it answers.
+
+Both tokens are defined once in `theme.css`; take them as variants rather than
 hard-coding a `ch` value or a pixel width.
 
-The source reader does **not** read it yet, and the reason is a contract rather
-than an oversight: `TextSourceReader` measures its highlight rectangles once from
-the laid-out range, so a column that re-centres on resize would strand the
-highlight. Make that measurement resize-aware before capping that surface.
+The source reader does **not** read `--reading-measure` yet, and the reason is a
+contract rather than an oversight: `TextSourceReader` measures its highlight
+rectangles once from the laid-out range, so a column that re-centres on resize
+would strand the highlight. Make that measurement resize-aware before capping
+that surface.
 
 ## Accent and states
 

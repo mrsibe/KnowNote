@@ -181,14 +181,12 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
       </div>
 
       <ScrollArea className="h-full" viewportRef={viewportRef}>
-        {header && (
-          <div className="mx-auto w-full max-w-[var(--reading-measure)] px-4">{header}</div>
-        )}
+        {header && <div className="mx-auto w-full max-w-5xl px-4">{header}</div>}
 
         {!hasMessages ? (
           // No `min-h-full`: with the header above it, a full-height box would
           // push the empty state down by a viewport and invent a scrollbar.
-          <div className="mx-auto flex w-full max-w-[var(--reading-measure)] items-center justify-center px-4 py-16">
+          <div className="mx-auto flex w-full max-w-5xl items-center justify-center px-4 py-16">
             <Empty className="border-none">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -204,7 +202,7 @@ const MessageList = forwardRef<MessageListHandle, MessageListProps>(function Mes
           // event. The reserved space keeps the last line above the composer.
           <div
             ref={contentRef}
-            className="mx-auto w-full max-w-[var(--reading-measure)] px-4 py-6"
+            className="mx-auto w-full max-w-5xl px-4 py-6"
             style={{ paddingBottom: COMPOSER_RESERVE }}
           >
             <div className="space-y-4">

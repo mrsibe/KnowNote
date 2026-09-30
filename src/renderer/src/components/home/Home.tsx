@@ -95,7 +95,7 @@ export default function Home({
   if (notebooks.length === 0) {
     return (
       <ScrollArea className="flex-1">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-10">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
           {header}
           <Empty>
             <EmptyHeader>
@@ -119,7 +119,7 @@ export default function Home({
 
   return (
     <ScrollArea className="flex-1">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10">
         {header}
 
         <HomeSearch
