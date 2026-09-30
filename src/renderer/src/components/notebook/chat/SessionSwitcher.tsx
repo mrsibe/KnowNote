@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { ChatMessageSearchHit } from '../../../../../shared/types/chat'
 import { useChatStore } from '../../../store/chatStore'
 import { useNotebookStore } from '../../../store/notebookStore'
+import { useDismissOnOutsidePointer } from '../../../hooks/useDismissOnOutsidePointer'
 import { formatRelativeDate } from '../../../lib/relativeDate'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
@@ -41,6 +42,8 @@ export default function SessionSwitcher(): ReactElement {
   const [renameValue, setRenameValue] = useState('')
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   const notebookId = currentNotebook?.id ?? currentSession?.notebookId
   const hasQuery = query.trim().length > 0
@@ -62,6 +65,10 @@ export default function SessionSwitcher(): ReactElement {
   useEffect(() => {
     if (isOpen) searchRef.current?.focus()
   }, [isOpen])
+
+  // A press anywhere outside the button or the panel closes it. This replaces the
+  // full-viewport overlay, whose clicks the draggable panel header could swallow.
+  useDismissOnOutsidePointer(isOpen, [triggerRef, panelRef], close)
 
   // Escape closes the panel. The rename input handles Escape itself and stops
   // nothing else, so this is the one place the whole panel closes.
@@ -133,6 +140,7 @@ export default function SessionSwitcher(): ReactElement {
   return (
     <>
       <Button
+        ref={triggerRef}
         type="button"
         variant="ghost"
         size="sm"
@@ -151,8 +159,8 @@ export default function SessionSwitcher(): ReactElement {
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-30" onClick={close} />
           <div
+            ref={panelRef}
             role="dialog"
             aria-label={t('chat:sessions')}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}

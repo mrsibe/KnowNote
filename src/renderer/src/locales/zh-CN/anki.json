@@ -4,6 +4,7 @@
   "export": "导出",
   "noCardsYet": "还没有卡片，点击生成按钮创建",
   "generateCards": "生成卡片",
+  "generateCardsDesc": "选择生成多少张卡片以及难度",
   "cardList": "卡片列表",
   "cards": "张卡片",
   "noCards": "暂无卡片",

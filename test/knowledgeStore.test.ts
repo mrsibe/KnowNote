@@ -67,10 +67,9 @@ const resetStore = (): void => {
     documents: [],
     stats: null,
     error: null,
-    isIndexing: false,
+    indexingJobs: {},
     isLoading: false,
-    documentsLoaded: false,
-    indexProgress: null
+    documentsLoaded: false
   })
 }
 
@@ -120,7 +119,7 @@ for (const entry of entryPoints) {
     assert.equal(log.getStats, 1, 'the stats were not re-read')
     assert.equal(state().documents.length, 1, 'the failed row did not reach the list')
     assert.equal(state().documents[0].status, 'failed', 'the row lost its status')
-    assert.equal(state().isIndexing, false, 'the panel is still showing the import as running')
+    assert.deepEqual(Object.keys(state().indexingJobs), [], 'a failed import left a job running')
   })
 }
 
@@ -157,5 +156,5 @@ test('an import whose IPC call rejects is reported and still re-reads the librar
   assert.equal(state().error, 'An object could not be cloned', 'the rejection was not recorded')
   assert.equal(log.getDocuments, 1, 'the library was not re-read after a rejection')
   assert.equal(state().documents.length, 1, 'the list did not pick up what really happened')
-  assert.equal(state().isIndexing, false, 'the panel is still showing the import as running')
+  assert.deepEqual(Object.keys(state().indexingJobs), [], 'a refused import left a job running')
 })

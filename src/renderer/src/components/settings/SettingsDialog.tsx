@@ -8,7 +8,7 @@ import PromptsSettings from './PromptsSettings'
 import ShortcutSettings from './ShortcutSettings'
 import AboutSettings from './AboutSettings'
 import SettingsContentPanel from './SettingsContentPanel'
-import { Dialog, DialogContent } from '../ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../ui/dialog'
 import {
   Sidebar,
   SidebarContent,
@@ -31,7 +31,7 @@ export default function SettingsDialog(): ReactElement {
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      closeSettings()
+      handleClose()
     }
   }
 
@@ -138,12 +138,26 @@ export default function SettingsDialog(): ReactElement {
     setPendingConnections(originalConnections)
   }
 
+  /**
+   * Every way of leaving the dialog — X, Esc, the overlay, the panel's own X —
+   * must discard the pending edits. `pendingSettings` is only seeded on mount, so
+   * without this an unsaved API key survives a close and reappears on reopen.
+   */
+  const handleClose = () => {
+    handleCancel()
+    closeSettings()
+  }
+
   return (
     <Dialog open={isSettingsOpen} onOpenChange={handleOpenChange}>
       <DialogContent
         className="max-w-5xl h-[80vh] p-0 flex flex-col bg-surface-sunken"
         showCloseButton={false}
       >
+        {/* Radix needs a real title and description in the tree for its
+            accessibility contract; the visible heading lives in the panel. */}
+        <DialogTitle className="sr-only">{t('settings')}</DialogTitle>
+        <DialogDescription className="sr-only">{t('settingsDesc')}</DialogDescription>
         <SidebarProvider className="flex flex-1 min-h-0">
           <div className="flex flex-1 min-h-0 gap-3 p-3 w-full">
             {/* 使用 Shadcn Sidebar */}
@@ -186,7 +200,7 @@ export default function SettingsDialog(): ReactElement {
                   hasChanges={hasChanges}
                   onCancel={handleCancel}
                   onConfirm={handleConfirm}
-                  onClose={() => closeSettings()}
+                  onClose={handleClose}
                 >
                   {pendingSettings && activeSection === 'general' && (
                     <GeneralSettings

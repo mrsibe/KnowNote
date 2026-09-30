@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import TopNavigationBar from '../common/TopNavigationBar'
 import RenameDialog from '../common/RenameDialog'
-import DeleteConfirmDialog from '../common/DeleteConfirmDialog'
+import ConfirmActionDialog from '../common/ConfirmActionDialog'
 import Home from '../home/Home'
 import { useNotebookStore } from '../../store/notebookStore'
 import type { WorkspaceOverview } from '../../../../shared/types/workspace'
@@ -163,11 +163,13 @@ export default function NotebookListPage(): ReactElement {
       />
 
       {/* 删除确认对话框 */}
-      <DeleteConfirmDialog
+      <ConfirmActionDialog
         isOpen={deleteNotebookId !== null}
-        notebookTitle={deleteNotebookTitle}
         onClose={handleDeleteClose}
         onConfirm={handleDeleteConfirm}
+        title={t('notebook:deleteNotebook')}
+        description={t('notebook:deleteConfirm', { name: deleteNotebookTitle })}
+        confirmLabel={t('common:delete')}
       />
     </div>
   )

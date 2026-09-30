@@ -11,10 +11,11 @@ import { useNotebookStore } from '../../store/notebookStore'
 import { useChatStore } from '../../store/chatStore'
 import { useUIStore } from '../../store/uiStore'
 import { setupQuizListeners } from '../../store/quizStore'
-import UnsavedChangesDialog from '../common/UnsavedChangesDialog'
+import ConfirmActionDialog from '../common/ConfirmActionDialog'
 
 export default function NotebookLayout(): ReactElement {
   const { t } = useTranslation('ui')
+  const { t: tNotebook } = useTranslation('notebook')
   const navigate = useNavigate()
   const { id } = useParams()
   const { notebooks, addNotebook, addOpenedNotebook, setCurrentNotebook, removeOpenedNotebook } =
@@ -109,10 +110,14 @@ export default function NotebookLayout(): ReactElement {
         rightPanel={<NotePanel />}
       />
 
-      <UnsavedChangesDialog
+      <ConfirmActionDialog
         isOpen={isDiscardPromptOpen}
         onClose={handleDiscardClose}
         onConfirm={handleDiscardConfirm}
+        title={tNotebook('unsavedChangesTitle')}
+        description={tNotebook('unsavedChangesWarning')}
+        confirmLabel={tNotebook('leave')}
+        confirmVariant="default"
       />
 
       {/* Global search (#96): Ctrl/Cmd+K from anywhere in the notebook. */}

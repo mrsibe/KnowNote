@@ -19,7 +19,14 @@ import { useKnowledgeStore, setupKnowledgeListeners } from '../../store/knowledg
 import { useItemStore } from '../../store/itemStore'
 import { useUIStore } from '../../store/uiStore'
 import { ScrollArea } from '../ui/scroll-area'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '../ui/dialog'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Textarea } from '../ui/textarea'
@@ -37,6 +44,7 @@ import {
 } from '../../../../shared/utils/sourceAnchor'
 import { buildExcerptMarkdown } from '../../../../shared/utils/excerpt'
 import { useSourceAnchorNavigation } from '../../hooks/useSourceAnchorNavigation'
+import { useDismissOnOutsidePointer } from '../../hooks/useDismissOnOutsidePointer'
 import { restoreSourceOriginFocus } from '../../hooks/sourceFocusReturn'
 import { FOCUS_CHAT_EVENT } from '../../lib/workspaceEvents'
 import { requestAppendExcerpt } from './note/appendExcerptCommand'
@@ -94,11 +102,19 @@ function AddSourceModal({
     return ''
   }
 
+  const getDescription = () => {
+    if (type === 'url') return t('importUrlDesc')
+    if (type === 'text') return t('pasteTextDesc')
+    if (type === 'note') return t('importNoteDesc')
+    return ''
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={isLoading ? undefined : onClose}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>{getTitle()}</DialogTitle>
+          <DialogDescription>{getDescription()}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -171,15 +187,20 @@ function AddSourceModal({
 // 索引进度组件
 function IndexingProgress() {
   const { t } = useTranslation('ui')
-  const { indexProgress, isIndexing } = useKnowledgeStore()
+  const { indexingJobs, activeNotebookId } = useKnowledgeStore()
 
-  if (!isIndexing || !indexProgress) return null
+  const jobs = Object.values(indexingJobs).filter(
+    (job) => !activeNotebookId || !job.notebookId || job.notebookId === activeNotebookId
+  )
+  if (jobs.length === 0) return null
+
+  const progress = Math.round(jobs.reduce((sum, job) => sum + job.progress, 0) / jobs.length)
 
   return (
     <div className="px-4 py-3 border-b border-border">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="w-4 h-4 animate-spin" />
-        {t('indexing')} ({indexProgress.progress}%)
+        {t('indexingSources', { count: jobs.length, progress })}
       </div>
     </div>
   )
@@ -313,16 +334,20 @@ export default function SourcePanel(): ReactElement {
   const [isDragging, setIsDragging] = useState(false)
   const [modalType, setModalType] = useState<AddSourceType | null>(null)
   const [hasEmbeddingModel, setHasEmbeddingModel] = useState(false)
+  // Short-lived: only while a source is being *registered*. Indexing itself is
+  // background work (#176), so the dialog must not stay disabled until embedding ends.
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<KnowledgeDocument | null>(null)
   // The source list is a full-panel view that unmounts while a source is open.
   // Focus returns here after “Back” so a keyboard user does not land on <body>.
   const listRef = useRef<HTMLDivElement>(null)
+  // The Add menu and its trigger: the layer that closes on an outside press.
+  const addMenuRef = useRef<HTMLDivElement>(null)
 
   const {
     documents,
     documentsLoaded,
     isLoading,
-    isIndexing,
     loadDocuments,
     loadStats,
     addDocument,
@@ -340,6 +365,8 @@ export default function SourcePanel(): ReactElement {
   const { notes, loadNotes, currentNote, createNote } = useItemStore()
 
   const { openSettings } = useUIStore()
+
+  useDismissOnOutsidePointer(showAddMenu, [addMenuRef], () => setShowAddMenu(false))
 
   // Embedding 是基础设施：没有远程 connection 时由内置本地模型承担（首次 RAG 使用按需下载）。
   // 因此可用性取决于真实后端状态，而不是 connections.embedding 是否存在——内置模式不会写入 connection。
@@ -498,13 +525,25 @@ export default function SourcePanel(): ReactElement {
     [t]
   )
 
+  /**
+   * Missing embedding model is an actionable state, not an error to interrupt with a
+   * native `alert()`: the toast carries the way to fix it (the same guidance the
+   * empty library already shows), and matches the rest of the app's notifications.
+   */
+  const warnNoEmbeddingModel = useCallback((): void => {
+    toast.error(t('noEmbeddingModelConfigured'), {
+      id: 'no-embedding-model',
+      action: { label: t('goToSettings'), onClick: openSettings }
+    })
+  }, [t, openSettings])
+
   // 处理文件上传（多选 → 批量导入，#98）
   const handleFileUpload = useCallback(async () => {
     if (!notebookId) return
 
     // 检查是否配置了默认嵌入模型
     if (!hasEmbeddingModel) {
-      alert(t('noEmbeddingModelConfigured'))
+      warnNoEmbeddingModel()
       return
     }
 
@@ -513,14 +552,14 @@ export default function SourcePanel(): ReactElement {
     if (files.length === 0) return
     // 一次批量导入：重复路径被跳过并报告，一个失败不中止其余。
     reportBatch(await addFiles(notebookId, files))
-  }, [notebookId, hasEmbeddingModel, selectFiles, addFiles, reportBatch, t])
+  }, [notebookId, hasEmbeddingModel, selectFiles, addFiles, reportBatch, warnNoEmbeddingModel])
 
   // 处理文件夹导入（#98 快照 / #158 监听）
   const handleFolderUpload = useCallback(
     async (watch: boolean) => {
       if (!notebookId) return
       if (!hasEmbeddingModel) {
-        alert(t('noEmbeddingModelConfigured'))
+        warnNoEmbeddingModel()
         return
       }
 
@@ -530,7 +569,7 @@ export default function SourcePanel(): ReactElement {
         reportBatch(await addFolder(notebookId, folder, watch))
       }
     },
-    [notebookId, hasEmbeddingModel, selectFolder, addFolder, reportBatch, t]
+    [notebookId, hasEmbeddingModel, selectFolder, addFolder, reportBatch, warnNoEmbeddingModel]
   )
 
   // 拖放文件/文件夹（#98）。Electron 39 下路径必须由 preload 的 webUtils 给出。
@@ -550,23 +589,28 @@ export default function SourcePanel(): ReactElement {
     [notebookId, hasEmbeddingModel, addFiles, reportBatch]
   )
 
-  // 处理 URL 导入
+  // 处理 URL 导入：只等 source 登记，抓取/解析/嵌入在后台（#176）
   const handleUrlImport = useCallback(
     async (data: { url?: string }) => {
       if (!notebookId || !data.url) return
 
       // 检查是否配置了默认嵌入模型
       if (!hasEmbeddingModel) {
-        alert(t('noEmbeddingModelConfigured'))
+        warnNoEmbeddingModel()
         setModalType(null)
         return
       }
 
-      const result = await addDocumentFromUrl(notebookId, data.url)
-      reportImportFailure(data.url, result)
-      setModalType(null)
+      setIsSubmitting(true)
+      try {
+        const result = await addDocumentFromUrl(notebookId, data.url)
+        reportImportFailure(data.url, result)
+      } finally {
+        setIsSubmitting(false)
+        setModalType(null)
+      }
     },
-    [notebookId, hasEmbeddingModel, addDocumentFromUrl, reportImportFailure, t]
+    [notebookId, hasEmbeddingModel, addDocumentFromUrl, reportImportFailure, warnNoEmbeddingModel]
   )
 
   // 处理文本粘贴
@@ -576,20 +620,25 @@ export default function SourcePanel(): ReactElement {
 
       // 检查是否配置了默认嵌入模型
       if (!hasEmbeddingModel) {
-        alert(t('noEmbeddingModelConfigured'))
+        warnNoEmbeddingModel()
         setModalType(null)
         return
       }
 
-      const result = await addDocument(notebookId, {
-        title: data.title,
-        type: 'text',
-        content: data.content
-      })
-      reportImportFailure(data.title, result)
-      setModalType(null)
+      setIsSubmitting(true)
+      try {
+        const result = await addDocument(notebookId, {
+          title: data.title,
+          type: 'text',
+          content: data.content
+        })
+        reportImportFailure(data.title, result)
+      } finally {
+        setIsSubmitting(false)
+        setModalType(null)
+      }
     },
-    [notebookId, hasEmbeddingModel, addDocument, reportImportFailure, t]
+    [notebookId, hasEmbeddingModel, addDocument, reportImportFailure, warnNoEmbeddingModel]
   )
 
   // 处理笔记导入
@@ -599,20 +648,32 @@ export default function SourcePanel(): ReactElement {
 
       // 检查是否配置了默认嵌入模型
       if (!hasEmbeddingModel) {
-        alert(t('noEmbeddingModelConfigured'))
+        warnNoEmbeddingModel()
         setModalType(null)
         return
       }
 
-      const noteTitle = notes.find((note) => note.id === data.noteId)?.title ?? data.noteId
-      const result = await addNoteToKnowledge(notebookId, data.noteId)
-      // 空笔记是唯一需要换文案的原因，其余由主进程给出
-      const isEmpty = (result.error ?? '').toLowerCase().includes('empty')
-      reportImportFailure(noteTitle, result, isEmpty ? t('emptyNoteCannotImport') : undefined)
-
-      setModalType(null)
+      setIsSubmitting(true)
+      try {
+        const noteTitle = notes.find((note) => note.id === data.noteId)?.title ?? data.noteId
+        const result = await addNoteToKnowledge(notebookId, data.noteId)
+        // 空笔记是唯一需要换文案的原因，其余由主进程给出
+        const isEmpty = (result.error ?? '').toLowerCase().includes('empty')
+        reportImportFailure(noteTitle, result, isEmpty ? t('emptyNoteCannotImport') : undefined)
+      } finally {
+        setIsSubmitting(false)
+        setModalType(null)
+      }
     },
-    [notebookId, hasEmbeddingModel, addNoteToKnowledge, notes, reportImportFailure, t]
+    [
+      notebookId,
+      hasEmbeddingModel,
+      addNoteToKnowledge,
+      notes,
+      reportImportFailure,
+      warnNoEmbeddingModel,
+      t
+    ]
   )
 
   // 处理删除文档
@@ -745,6 +806,7 @@ export default function SourcePanel(): ReactElement {
             }
             right={
               <div
+                ref={addMenuRef}
                 className="relative"
                 style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
               >
@@ -857,15 +919,16 @@ export default function SourcePanel(): ReactElement {
           isOpen={true}
           onClose={() => setModalType(null)}
           onSubmit={handleModalSubmit}
-          isLoading={isIndexing}
+          isLoading={isSubmitting}
           notes={notes
             .filter((n) => n.content.trim().length > 0)
             .map((n) => ({ id: n.id, title: n.title }))}
         />
       )}
 
-      {/* 点击外部关闭菜单 */}
-      {showAddMenu && <div className="fixed inset-0 z-0" onClick={() => setShowAddMenu(false)} />}
+      {/* 点击外部关闭菜单由 `useDismissOnOutsidePointer` 负责：全屏遮罩在
+          兄弟面板（且是 `position: relative` 的卡片）之上会排到它们下面，点不到的
+          区域就关不掉了。 */}
     </Card>
   )
 }

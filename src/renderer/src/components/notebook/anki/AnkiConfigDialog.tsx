@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAnkiStore } from '../../../store/ankiStore'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '../../ui/dialog'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Slider } from '../../ui/slider'
@@ -28,8 +35,25 @@ export default function AnkiConfigDialog({
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium')
   const [customPrompt, setCustomPrompt] = useState('')
 
+  /** Restore the defaults: what a closed dialog should never carry back in. */
+  const reset = (): void => {
+    setCardCount(20)
+    setDifficulty('medium')
+    setCustomPrompt('')
+  }
+
+  /**
+   * Closing without generating discards the temporary input, so X / Esc / the
+   * overlay all mean Cancel rather than "remember what I typed".
+   */
+  const handleOpenChange = (open: boolean): void => {
+    if (!open) reset()
+    onOpenChange(open)
+  }
+
   const handleGenerate = async () => {
     // 立即关闭对话框
+    reset()
     onOpenChange(false)
 
     // 在后台开始生成（不等待完成）
@@ -48,10 +72,11 @@ export default function AnkiConfigDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>{t('generateCards')}</DialogTitle>
+          <DialogDescription>{t('generateCardsDesc')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">

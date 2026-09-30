@@ -126,6 +126,18 @@ export interface SearchResult {
  */
 export type IndexProgressCallback = (stage: string, progress: number) => void
 
+/**
+ * 后台导入的进度回调（#176）。
+ *
+ * 带 `documentId`：一份 source 的进度要能落在它自己的那一行上，而不是只能让整个
+ * notebook 共用一个布尔值。
+ */
+export type DocumentIndexProgressCallback = (
+  documentId: string,
+  stage: string,
+  progress: number
+) => void
+
 /** 批量导入里被跳过的文件（#98）：已经在同一个 notebook 里。 */
 export interface BatchImportSkip {
   path: string
@@ -350,7 +362,7 @@ export class KnowledgeService {
   enqueueDocumentsFromPaths(
     notebookId: string,
     paths: readonly string[],
-    onProgress?: IndexProgressCallback
+    onProgress?: DocumentIndexProgressCallback
   ): BatchImportResult {
     const db = getDatabase()
     const existing = new Set(
@@ -379,7 +391,7 @@ export class KnowledgeService {
         added.push(documentId)
         this.ingestionQueue.enqueue({
           documentId,
-          onProgress,
+          onProgress: (stage, progress) => onProgress?.(documentId, stage, progress),
           run: async (jobProgress) => {
             try {
               await this.ingestPendingDocument(documentId, filePath, jobProgress)
@@ -466,7 +478,7 @@ export class KnowledgeService {
   async addFolder(
     notebookId: string,
     folderPath: string,
-    onProgress?: IndexProgressCallback
+    onProgress?: DocumentIndexProgressCallback
   ): Promise<BatchImportResult> {
     const scanned = await scanFolder(folderPath, this.fileParserService.supportedExtensions())
     return this.enqueueDocumentsFromPaths(
@@ -918,6 +930,159 @@ export class KnowledgeService {
       },
       onProgress
     )
+  }
+
+  /**
+   * 统一后台导入（#176）：登记 `pending` 行，解析 / 分块 / 嵌入在队列里继续。
+   *
+   * 内容已经可用的来源（粘贴文本 / 笔记）走这里；URL 要先抓取，见
+   * `enqueueDocumentFromUrl`。返回时列表里已经有这一行，Dialog 不必再等索引结束。
+   */
+  enqueueContentDocument(
+    notebookId: string,
+    options: AddDocumentOptions,
+    onProgress?: DocumentIndexProgressCallback
+  ): string {
+    const db = getDatabase()
+    const documentId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+    const now = new Date()
+    const contentHash = createHash('md5').update(options.content).digest('hex')
+
+    const newDoc: NewDocument = {
+      id: documentId,
+      notebookId,
+      title: options.title,
+      type: options.type,
+      sourceUri: options.sourceUri,
+      sourceNoteId: options.sourceNoteId,
+      content: options.content,
+      contentHash,
+      mimeType: options.mimeType,
+      fileSize: options.fileSize,
+      metadata: options.metadata,
+      status: 'pending',
+      chunkCount: 0,
+      createdAt: now,
+      updatedAt: now
+    }
+    db.insert(documents).values(newDoc).run()
+
+    this.ingestionQueue.enqueue({
+      documentId,
+      onProgress: (stage, progress) => onProgress?.(documentId, stage, progress),
+      run: async (jobProgress) => {
+        const runId = startRun(documentId, 'import')
+        try {
+          await this.indexDocument(
+            documentId,
+            runId,
+            options.content,
+            undefined,
+            { chunkOptions: options.chunkOptions },
+            jobProgress
+          )
+          completeRun(runId)
+        } catch (error) {
+          failRun(runId, (error as Error).message)
+          jobProgress('failed', 100)
+          throw error
+        }
+      }
+    })
+
+    return documentId
+  }
+
+  /**
+   * 从 Note 后台导入。空笔记在登记前就拒绝 —— 那不是延迟反馈，是输入本身不合法。
+   */
+  enqueueNoteDocument(
+    notebookId: string,
+    noteId: string,
+    onProgress?: DocumentIndexProgressCallback
+  ): string {
+    const note = getDatabase().select().from(notes).where(eq(notes.id, noteId)).get()
+    if (!note) throw new Error(`Note ${noteId} not found`)
+
+    if (note.content.trim().length === 0) {
+      throw new Error('Note content is empty. Cannot add empty note to knowledge base.')
+    }
+
+    return this.enqueueContentDocument(
+      notebookId,
+      {
+        title: note.title,
+        type: 'note',
+        content: note.content,
+        sourceNoteId: noteId
+      },
+      onProgress
+    )
+  }
+
+  /**
+   * 从 URL 后台导入：先登记 `pending` 行，抓取 / 解析 / 嵌入都在队列里。
+   *
+   * URL 校验（协议、可解析）应在调用前完成；这里只负责登记与后台处理。
+   */
+  enqueueDocumentFromUrl(
+    notebookId: string,
+    url: string,
+    onProgress?: DocumentIndexProgressCallback
+  ): string {
+    const db = getDatabase()
+    const documentId = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+    const now = new Date()
+
+    const newDoc: NewDocument = {
+      id: documentId,
+      notebookId,
+      title: url,
+      type: 'url',
+      sourceUri: url,
+      status: 'pending',
+      chunkCount: 0,
+      createdAt: now,
+      updatedAt: now
+    }
+    db.insert(documents).values(newDoc).run()
+
+    this.ingestionQueue.enqueue({
+      documentId,
+      onProgress: (stage, progress) => onProgress?.(documentId, stage, progress),
+      run: async (jobProgress) => {
+        const runId = startRun(documentId, 'import')
+        try {
+          jobProgress('fetching_url', 0)
+          const fetchResult = await this.webFetchService.fetchUrl(url)
+          const content = fetchResult.content
+
+          db.update(documents)
+            .set({
+              title: fetchResult.title || url,
+              content,
+              contentHash: createHash('md5').update(content).digest('hex'),
+              mimeType: fetchResult.mimeType,
+              metadata: {
+                ...fetchResult.metadata,
+                description: fetchResult.description
+              },
+              updatedAt: new Date()
+            })
+            .where(eq(documents.id, documentId))
+            .run()
+
+          await this.indexDocument(documentId, runId, content, undefined, {}, jobProgress)
+          completeRun(runId)
+        } catch (error) {
+          failRun(runId, (error as Error).message)
+          jobProgress('failed', 100)
+          throw error
+        }
+      }
+    })
+
+    return documentId
   }
 
   /**

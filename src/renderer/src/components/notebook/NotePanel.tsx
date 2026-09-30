@@ -14,8 +14,7 @@ import { ScrollArea } from '../ui/scroll-area'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { PanelHeader } from '../ui/panel-header'
-import UnsavedChangesDialog from '../common/UnsavedChangesDialog'
-import DeleteNoteConfirmDialog from '../common/DeleteNoteConfirmDialog'
+import ConfirmActionDialog from '../common/ConfirmActionDialog'
 import type { Note } from '../../../../shared/types'
 
 // 编辑器面板子组件 - 管理编辑状态
@@ -426,17 +425,24 @@ export default function NotePanel(): ReactElement {
       )}
 
       {/* 未保存修改确认对话框 */}
-      <UnsavedChangesDialog
+      <ConfirmActionDialog
         isOpen={showUnsavedDialog}
         onClose={() => setShowUnsavedDialog(false)}
         onConfirm={confirmLeave}
+        title={t('unsavedChangesTitle')}
+        description={t('unsavedChangesWarning')}
+        confirmLabel={t('leave')}
+        confirmVariant="default"
       />
 
       {/* 删除笔记确认对话框 */}
-      <DeleteNoteConfirmDialog
+      <ConfirmActionDialog
         isOpen={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
         onConfirm={confirmDelete}
+        title={t('deleteNote')}
+        description={t('deleteNoteWarning')}
+        confirmLabel={t('common:delete')}
       />
 
       {/* 答题启动对话框 */}

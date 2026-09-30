@@ -285,12 +285,15 @@ function ProcessPanel({
         />
       </div>
 
-      {/* 底部渐变遮罩 - 独立于消息区域，避免堆叠上下文问题 */}
+      {/* 底部渐变遮罩 - 独立于消息区域，避免堆叠上下文问题。
+          `right-2` 让出右侧 8px：Radix 的滚动条正好占这条轨道（`w-2`），
+          全宽的遮罩会把它的下半段盖住。内容本身有 `px-4` 内边距，这 8px 里没有
+          正文，所以让开它不会让任何一行失去淡出。 */}
       <div
         // Height tracks the measured composer reserve (the CSS variable written
         // above), so the fade covers exactly the space the composer floats over
         // and never dims the last line of an answer.
-        className="absolute bottom-0 left-0 right-0 pointer-events-none rounded-b-lg z-10"
+        className="absolute bottom-0 left-0 right-2 pointer-events-none rounded-b-lg z-10"
         style={{
           height: COMPOSER_RESERVE,
           // A scroll fade, not decoration: it keeps the transcript readable as it

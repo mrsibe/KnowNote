@@ -14,6 +14,20 @@ import type {
   BatchImportOutcome
 } from '../../../shared/types/knowledge'
 
+/**
+ * 一份 source 正在后台索引（#176）。
+ *
+ * 取代了单一的 `isIndexing: boolean`：导入登记完 `pending` 行就返回，索引在后台队列里
+ * 继续推进，队列里同时可能有多份来源。一个布尔值说不清「有几份、各自到哪一步」，也会
+ * 在第一次 `refreshAfterImport` 时被过早置回 false，让顶部进度在真正索引期间消失。
+ */
+export interface IndexingJob {
+  documentId: string
+  notebookId?: string
+  stage: string
+  progress: number
+}
+
 interface KnowledgeStore {
   // 状态
   documents: KnowledgeDocument[]
@@ -21,8 +35,8 @@ interface KnowledgeStore {
   stats: KnowledgeStats | null
   isLoading: boolean
   isSearching: boolean
-  isIndexing: boolean
-  indexProgress: IndexProgress | null
+  /** 后台索引任务，按 documentId 去重；`completed` / `failed` 后删除。 */
+  indexingJobs: Record<string, IndexingJob>
   error: string | null
   /**
    * 文档列表是否已经成功读过一次。用来区分「列表为空」和「还没加载」：
@@ -41,8 +55,8 @@ interface KnowledgeStore {
   setStats: (stats: KnowledgeStats | null) => void
   setIsLoading: (value: boolean) => void
   setIsSearching: (value: boolean) => void
-  setIsIndexing: (value: boolean) => void
-  setIndexProgress: (progress: IndexProgress | null) => void
+  applyIndexProgress: (progress: IndexProgress) => void
+  clearIndexingJob: (documentId: string) => void
   setError: (error: string | null) => void
   clearSearchResults: () => void
 
@@ -98,6 +112,8 @@ interface KnowledgeStore {
  * 无论成败都要重新读列表：失败时这一行可能已经以 `status: 'failed'` 落库了，而只刷新成功
  * 的路径会让这次失败在界面上**完全不存在** —— 面板保持空状态，用户以为上传成功了（#146）。
  * 失败同时记进 `error`：抛异常和返回 `{success:false}` 都是失败，没道理只记前者。
+ *
+ * 不再触碰 `indexingJobs`：后台队列还在跑，任务由进度事件自己增删，不在这里清空。
  */
 async function refreshAfterImport(
   notebookId: string,
@@ -108,11 +124,7 @@ async function refreshAfterImport(
   await get().loadDocuments(notebookId)
   await get().loadStats(notebookId)
 
-  set({
-    isIndexing: false,
-    indexProgress: null,
-    error: result.success ? null : (result.error ?? null)
-  })
+  set({ error: result.success ? null : (result.error ?? null) })
 }
 
 export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
@@ -122,8 +134,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
   stats: null,
   isLoading: false,
   isSearching: false,
-  isIndexing: false,
-  indexProgress: null,
+  indexingJobs: {},
   error: null,
   documentsLoaded: false,
   activeNotebookId: null,
@@ -134,10 +145,42 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
   setStats: (stats) => set({ stats }),
   setIsLoading: (isLoading) => set({ isLoading }),
   setIsSearching: (isSearching) => set({ isSearching }),
-  setIsIndexing: (isIndexing) => set({ isIndexing }),
-  setIndexProgress: (indexProgress) => set({ indexProgress }),
   setError: (error) => set({ error }),
   clearSearchResults: () => set({ searchResults: [] }),
+
+  /**
+   * Upsert or retire one background job.
+   *
+   * `completed` / `failed` are the two terminal stages; both mean the row now has its
+   * final status, so the job leaves the map and the top progress stops counting it.
+   */
+  applyIndexProgress: (progress) => {
+    if (!progress.documentId) return
+    const documentId = progress.documentId
+
+    set((state) => {
+      const jobs = { ...state.indexingJobs }
+      if (progress.stage === 'completed' || progress.stage === 'failed') {
+        delete jobs[documentId]
+      } else {
+        jobs[documentId] = {
+          documentId,
+          notebookId: progress.notebookId,
+          stage: progress.stage,
+          progress: progress.progress
+        }
+      }
+      return { indexingJobs: jobs }
+    })
+  },
+
+  clearIndexingJob: (documentId) =>
+    set((state) => {
+      if (!state.indexingJobs[documentId]) return state
+      const jobs = { ...state.indexingJobs }
+      delete jobs[documentId]
+      return { indexingJobs: jobs }
+    }),
 
   // 加载文档列表
   loadDocuments: async (notebookId) => {
@@ -160,9 +203,9 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 添加文档
+  // 添加文档（粘贴文本）。登记后立即返回，索引在后台队列（#176）。
   addDocument: async (notebookId, options) => {
-    set({ isIndexing: true, error: null })
+    set({ error: null })
     try {
       const result = await window.api.knowledge.addDocument(notebookId, options)
       await refreshAfterImport(notebookId, result, set, get)
@@ -176,7 +219,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
 
   // 从文件添加文档
   addDocumentFromFile: async (notebookId, filePath) => {
-    set({ isIndexing: true, error: null })
+    set({ error: null })
     try {
       const result = await window.api.knowledge.addDocumentFromFile(notebookId, filePath)
       await refreshAfterImport(notebookId, result, set, get)
@@ -188,9 +231,9 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 从 URL 添加文档
+  // 从 URL 添加文档。抓取与索引进后台队列，Dialog 只等登记。
   addDocumentFromUrl: async (notebookId, url) => {
-    set({ isIndexing: true, error: null })
+    set({ error: null })
     try {
       const result = await window.api.knowledge.addDocumentFromUrl(notebookId, url)
       await refreshAfterImport(notebookId, result, set, get)
@@ -202,9 +245,9 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 将 Note 添加到知识库
+  // 将 Note 添加到知识库。登记后立即返回，索引进后台队列。
   addNoteToKnowledge: async (notebookId, noteId) => {
-    set({ isIndexing: true, error: null })
+    set({ error: null })
     try {
       const result = await window.api.knowledge.addNote(notebookId, noteId)
       await refreshAfterImport(notebookId, result, set, get)
@@ -218,14 +261,14 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
 
   // 文件夹 / 批量导入（#98）
   addFolder: async (notebookId, folderPath, watch = false) => {
-    set({ isIndexing: true, error: null })
+    set({ error: null })
     const result = await window.api.knowledge.addFolder(notebookId, folderPath, watch)
     await refreshAfterImport(notebookId, result, set, get)
     return result
   },
 
   addFiles: async (notebookId, paths) => {
-    set({ isIndexing: true, error: null })
+    set({ error: null })
     const result = await window.api.knowledge.addFiles(notebookId, paths)
     await refreshAfterImport(notebookId, result, set, get)
     return result
@@ -240,28 +283,32 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     }
   },
 
-  // 重新索引 / 重试（#95）
+  // 重新索引 / 重试（#95）。这两条 IPC 仍然等到索引结束，所以任务在这里显式收尾。
   retryDocument: async (notebookId, documentId) => {
-    set({ isIndexing: true, error: null })
+    set({ error: null })
     try {
       const result = await window.api.knowledge.retryDocument(documentId)
+      get().clearIndexingJob(documentId)
       await refreshAfterImport(notebookId, result, set, get)
       return result
     } catch (error) {
       const message = (error as Error).message
+      get().clearIndexingJob(documentId)
       await refreshAfterImport(notebookId, { success: false, error: message }, set, get)
       return { success: false, error: message }
     }
   },
 
   reindexDocument: async (notebookId, documentId) => {
-    set({ isIndexing: true, error: null })
+    set({ error: null })
     try {
       const result = await window.api.knowledge.reindexDocument(documentId)
+      get().clearIndexingJob(documentId)
       await refreshAfterImport(notebookId, result, set, get)
       return result
     } catch (error) {
       const message = (error as Error).message
+      get().clearIndexingJob(documentId)
       await refreshAfterImport(notebookId, { success: false, error: message }, set, get)
       return { success: false, error: message }
     }
@@ -292,6 +339,7 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
     try {
       const result = await window.api.knowledge.deleteDocument(documentId)
       if (result.success) {
+        get().clearIndexingJob(documentId)
         set((state) => ({
           documents: state.documents.filter((d) => d.id !== documentId)
         }))
@@ -319,16 +367,15 @@ export const useKnowledgeStore = create<KnowledgeStore>()((set, get) => ({
  */
 export function setupKnowledgeListeners(): () => void {
   const cleanupProgress = window.api.knowledge.onIndexProgress((data: IndexProgress) => {
-    useKnowledgeStore.getState().setIndexProgress(data)
+    const { applyIndexProgress, activeNotebookId, loadDocuments, loadStats } =
+      useKnowledgeStore.getState()
+    applyIndexProgress(data)
 
     // 后台导入的最后一步（#176）：这一行刚从 pending/processing 变成 indexed 或 failed。
     // 进度事件是唯一信号，所以在这里重读一次列表与统计。
-    if (data.stage === 'completed' || data.stage === 'failed') {
-      const { activeNotebookId, loadDocuments, loadStats } = useKnowledgeStore.getState()
-      if (activeNotebookId) {
-        void loadDocuments(activeNotebookId)
-        void loadStats(activeNotebookId)
-      }
+    if ((data.stage === 'completed' || data.stage === 'failed') && activeNotebookId) {
+      void loadDocuments(activeNotebookId)
+      void loadStats(activeNotebookId)
     }
   })
 

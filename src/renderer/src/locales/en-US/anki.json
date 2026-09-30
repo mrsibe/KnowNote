@@ -4,6 +4,7 @@
   "export": "Export",
   "noCardsYet": "No cards yet. Click Generate to create some",
   "generateCards": "Generate Cards",
+  "generateCardsDesc": "Choose how many cards to generate and how hard they should be",
   "cardList": "Card List",
   "cards": "cards",
   "noCards": "No cards",

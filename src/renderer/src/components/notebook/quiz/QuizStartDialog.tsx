@@ -35,6 +35,13 @@ export default function QuizStartDialog({
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium')
   const [customPrompt, setCustomPrompt] = useState('')
 
+  /** Restore the defaults: what a closed dialog should never carry back in. */
+  const reset = (): void => {
+    setQuestionCount(10)
+    setDifficulty('medium')
+    setCustomPrompt('')
+  }
+
   const handleStart = () => {
     const params: QuizStartParams = {
       questionCount,
@@ -42,17 +49,28 @@ export default function QuizStartDialog({
       customPrompt: customPrompt.trim() || undefined
     }
     onStart(params)
-    // 重置状态
-    setQuestionCount(10)
-    setDifficulty('medium')
-    setCustomPrompt('')
+    // 成功开始后恢复默认值
+    reset()
     onClose()
+  }
+
+  /**
+   * Closing without starting discards the temporary input.
+   *
+   * Otherwise a half-configured dialog that stayed mounted "remembers" its value
+   * by accident: X, Esc and the overlay must all mean Cancel, not Save.
+   */
+  const handleOpenChange = (open: boolean): void => {
+    if (!open) {
+      reset()
+      onClose()
+    }
   }
 
   const canStart = questionCount >= 5 && questionCount <= 20
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('generateQuiz')}</DialogTitle>

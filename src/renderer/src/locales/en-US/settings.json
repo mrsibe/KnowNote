@@ -12,6 +12,7 @@
   "updateAvailable": "New version {{version}} available",
   "shortcuts": "Shortcuts",
   "settings": "Settings",
+  "settingsDesc": "Configure models, prompts, shortcuts, and app behaviour",
   "generalSettings": "General Settings",
   "autoLaunch": "Auto Launch",
   "themeMode": "Theme Mode",

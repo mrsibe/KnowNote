@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2, Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { useAnkiStore } from '../../store/ankiStore'
 import FlashcardView from '../notebook/anki/FlashcardView'
 import AnkiConfigDialog from '../notebook/anki/AnkiConfigDialog'
@@ -83,11 +84,11 @@ export default function AnkiPage() {
 
       if (!result.success) {
         console.error('Export failed:', result.error)
-        alert(t('exportFailed', { error: result.error }))
+        toast.error(t('exportFailed', { error: result.error }))
       }
     } catch (error) {
       console.error('Failed to export cards:', error)
-      alert(t('exportFailed', { error: (error as Error).message }))
+      toast.error(t('exportFailed', { error: (error as Error).message }))
     }
   }
 

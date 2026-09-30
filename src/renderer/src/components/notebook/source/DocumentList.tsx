@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
-import ConfirmDialog from '../../common/ConfirmDialog'
+import ConfirmActionDialog from '../../common/ConfirmActionDialog'
 import {
   Empty,
   EmptyHeader,
@@ -271,12 +271,13 @@ function DocumentItem({
       </DropdownMenuContent>
 
       {/* 删除文档确认对话框 */}
-      <ConfirmDialog
+      <ConfirmActionDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleConfirmDelete}
         title={t('deleteDocument')}
-        message={t('confirmDeleteDocument')}
+        description={t('confirmDeleteDocument')}
+        confirmLabel={t('common:delete')}
       />
     </DropdownMenu>
   )

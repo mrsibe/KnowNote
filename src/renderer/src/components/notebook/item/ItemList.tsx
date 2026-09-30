@@ -35,7 +35,7 @@ import {
   DialogTitle
 } from '../../ui/dialog'
 import { Input } from '../../ui/input'
-import ConfirmDialog from '../../common/ConfirmDialog'
+import ConfirmActionDialog from '../../common/ConfirmActionDialog'
 
 interface ItemListProps {
   items: ItemDetail[]
@@ -361,7 +361,7 @@ function SortableItemRow({
       </Dialog>
 
       {/* 删除确认对话框 */}
-      <ConfirmDialog
+      <ConfirmActionDialog
         isOpen={isDeleteDialogOpen}
         onClose={() => setIsDeleteDialogOpen(false)}
         onConfirm={handleConfirmDelete}
@@ -374,7 +374,7 @@ function SortableItemRow({
                 ? t('deleteQuiz')
                 : t('deleteAnki')
         }
-        message={
+        description={
           isNote
             ? t('deleteNoteWarning')
             : isMindMap
@@ -383,6 +383,7 @@ function SortableItemRow({
                 ? t('confirmDeleteQuiz')
                 : t('confirmDeleteAnki')
         }
+        confirmLabel={t('common:delete')}
       />
     </>
   )

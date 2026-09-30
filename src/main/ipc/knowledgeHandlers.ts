@@ -41,13 +41,13 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
       })
 
       try {
-        const documentId = await knowledgeService.addDocument(
+        const documentId = knowledgeService.enqueueContentDocument(
           params.notebookId,
           params.options,
-          (stage, progress) => {
-            // 发送进度更新
-            event.sender.send('knowledge:index-progress', {
+          (id, stage, progress) => {
+            broadcastIndexProgress({
               notebookId: params.notebookId,
+              documentId: id,
               stage,
               progress
             })
@@ -101,12 +101,13 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
         Logger.debug('KnowledgeHandlers', 'add-document-from-url:', params)
 
         try {
-          const documentId = await knowledgeService.addDocumentFromUrl(
+          const documentId = knowledgeService.enqueueDocumentFromUrl(
             params.notebookId,
             params.url,
-            (stage, progress) => {
-              event.sender.send('knowledge:index-progress', {
+            (id, stage, progress) => {
+              broadcastIndexProgress({
                 notebookId: params.notebookId,
+                documentId: id,
                 stage,
                 progress
               })
@@ -129,12 +130,13 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
       Logger.debug('KnowledgeHandlers', 'add-note:', params)
 
       try {
-        const documentId = await knowledgeService.addNoteToKnowledge(
+        const documentId = knowledgeService.enqueueNoteDocument(
           params.notebookId,
           params.noteId,
-          (stage, progress) => {
-            event.sender.send('knowledge:index-progress', {
+          (id, stage, progress) => {
+            broadcastIndexProgress({
               notebookId: params.notebookId,
+              documentId: id,
               stage,
               progress
             })
@@ -276,11 +278,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
 
       try {
         await knowledgeService.reindexDocument(params.documentId, (stage, progress) => {
-          event.sender.send('knowledge:index-progress', {
-            documentId: params.documentId,
-            stage,
-            progress
-          })
+          broadcastIndexProgress({ documentId: params.documentId, stage, progress })
         })
         return { success: true }
       } catch (error) {
@@ -299,11 +297,7 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
 
       try {
         await knowledgeService.retryDocument(params.documentId, (stage, progress) => {
-          event.sender.send('knowledge:index-progress', {
-            documentId: params.documentId,
-            stage,
-            progress
-          })
+          broadcastIndexProgress({ documentId: params.documentId, stage, progress })
         })
         return { success: true }
       } catch (error) {
@@ -365,8 +359,8 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
         const result = await knowledgeService.addFolder(
           params.notebookId,
           params.folderPath,
-          (stage, progress) => {
-            broadcastIndexProgress({ notebookId: params.notebookId, stage, progress })
+          (documentId, stage, progress) => {
+            broadcastIndexProgress({ notebookId: params.notebookId, documentId, stage, progress })
           }
         )
 
@@ -416,8 +410,8 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
         const result = knowledgeService.enqueueDocumentsFromPaths(
           params.notebookId,
           params.paths,
-          (stage, progress) => {
-            broadcastIndexProgress({ notebookId: params.notebookId, stage, progress })
+          (documentId, stage, progress) => {
+            broadcastIndexProgress({ notebookId: params.notebookId, documentId, stage, progress })
           }
         )
         return { success: true, ...result }

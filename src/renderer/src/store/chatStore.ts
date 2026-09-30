@@ -580,8 +580,36 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     const message = get().messages.find((item) => item.id === messageId)
     if (!message) return { started: false }
 
-    // Register the turn with the answer as its seed, and hand the message back to the
-    // live state: what comes next is appended to it, not written elsewhere.
+    // What a refusal has to put back. Main can refuse before it starts a turn
+    // (`continuation-limit`), so the optimistic live state below must be reversible:
+    // otherwise the message sits at `pending` and the notebook streams forever.
+    const previousStatus = message.status
+    const previousTurn = get().turns[messageId]
+
+    const rollback = (): void => {
+      useChatStore.setState((current) => {
+        const turns = { ...current.turns }
+        if (previousTurn) turns[messageId] = previousTurn
+        else delete turns[messageId]
+
+        return {
+          turns,
+          messages: current.messages.map((item) =>
+            item.id === messageId ? { ...item, status: previousStatus } : item
+          )
+        }
+      })
+      get().setStreamingMessage(notebookId, null)
+      // A refusal arrives before any chunk, so no assembler should exist; deleting
+      // anyway keeps a raced event from leaving a half-built one behind.
+      assemblers.delete(messageId)
+      lastSequences.delete(messageId)
+      pendingSnapshots.delete(messageId)
+    }
+
+    // Register the turn with the answer as its seed *before* the IPC call: the seed
+    // has to be in place for the first chunk, which Main may emit before the invoke
+    // resolves. Rolling back on refusal is what keeps the optimism safe.
     set((current) => ({
       turns: {
         ...current.turns,
@@ -593,8 +621,19 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     }))
     get().setStreamingMessage(notebookId, messageId)
 
-    const result = await window.api.continueMessage(messageId)
+    let result: Awaited<ReturnType<typeof window.api.continueMessage>>
+    try {
+      result = await window.api.continueMessage(messageId)
+    } catch (error) {
+      // A rejected IPC round trip is a refusal too: roll back and report it instead
+      // of leaving the spinner running.
+      rollback()
+      console.error('[ChatStore] Failed to continue the answer:', error)
+      return { started: false }
+    }
+
     if (!result.success) {
+      rollback()
       console.error('[ChatStore] Failed to continue the answer:', result.error)
       // The caller owns the wording (#179): the store does not import i18n, so the
       // reason is handed back rather than translated here.
