@@ -776,6 +776,22 @@ async function runChecks(): Promise<string[]> {
     'reconcile did not import a file added to a watched folder'
   )
 
+  // Reconciliation enqueues imports; it does not await indexing. Let both
+  // imports finish before deleting a source, otherwise an in-flight parse can
+  // still mark that source available after the deletion check.
+  const importDeadline = Date.now() + 30_000
+  while (
+    ['watched.md', 'added.md'].some(
+      (name) =>
+        knowledge
+          .getDocuments(reindexNotebook)
+          .find((doc) => doc.sourceUri === join(watchedFolder, name))?.status !== 'indexed'
+    )
+  ) {
+    assert(Date.now() < importDeadline, 'watched folder imports did not finish indexing')
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+
   // A file disappears: the source is marked missing; the row, its chunks and its
   // citations survive, because a citation is a snapshot.
   rmSync(join(watchedFolder, 'watched.md'))

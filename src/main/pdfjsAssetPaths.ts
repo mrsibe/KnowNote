@@ -9,21 +9,17 @@
  * 开发时直接读 `node_modules/pdfjs-dist`，省掉"先打包再调试"。
  */
 
-import * as electron from 'electron'
+import { createRequire } from 'node:module'
 import { join } from 'path'
 import type { PdfjsAssetDir } from '../shared/utils/pdfjsAssets'
 
 type ElectronApp = { isPackaged?: boolean; getAppPath?: () => string }
 
-/**
- * `electron` 在纯 Node 下解析成一个可执行文件路径字符串，`app` 因此是 `undefined`；
- * `test/parsers.test.ts`、`test/blocks.test.ts` 等会在不启动 Electron 的情况下跑
- * `PdfLoader`，所以这里不能假设自己运行在 Electron 里。
- */
-// SAFETY: `electron` outside a running Electron process resolves to a path string
-// with no `app` property, so the runtime value is genuinely `undefined` there. The
-// cast narrows that one case away instead of pretending `app` is always present.
-const electronApp = (electron as unknown as { app?: ElectronApp }).app
+// Pure Node parser tests must not load the Electron package: resolving its
+// executable can trigger a binary download even though these tests need no app.
+const electronApp = process.versions.electron
+  ? (createRequire(import.meta.url)('electron') as { app?: ElectronApp }).app
+  : undefined
 
 /** 三类资源的共同根目录。 */
 export function pdfjsAssetRoot(): string {

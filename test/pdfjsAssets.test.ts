@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { registerHooks } from 'node:module'
 import {
   PDFJS_ASSET_SCHEME,
   PDFJS_ASSET_DIRS,
@@ -18,6 +19,22 @@ import {
  */
 
 const read = (path: string): string => readFileSync(join(process.cwd(), path), 'utf8')
+
+test('Node asset resolution does not load or download Electron', async () => {
+  const hook = registerHooks({
+    resolve(specifier, context, nextResolve) {
+      assert.notEqual(specifier, 'electron', 'pure Node asset resolution loaded Electron')
+      return nextResolve(specifier, context)
+    }
+  })
+  try {
+    const { pdfjsAssetRoot, pdfjsNodeAssetUrls } = await import('../src/main/pdfjsAssetPaths.ts')
+    assert.equal(pdfjsAssetRoot(), join(process.cwd(), 'node_modules', 'pdfjs-dist'))
+    for (const url of Object.values(pdfjsNodeAssetUrls())) assert.ok(url.endsWith('/'))
+  } finally {
+    hook.deregister()
+  }
+})
 
 test('every asset URL ends with the slash PDF.js requires', () => {
   for (const dir of PDFJS_ASSET_DIRS) {
