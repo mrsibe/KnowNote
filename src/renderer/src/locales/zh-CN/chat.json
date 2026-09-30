@@ -29,5 +29,17 @@
   "answerStopped": "回答已停止，上面是已生成的部分。",
   "answerFailed": "生成中断：{{error}}",
   "continueAnswer": "继续生成",
-  "retryAnswer": "重新生成"
+  "retryAnswer": "重新生成",
+  "sessions": "会话列表",
+  "newChatTitle": "新会话",
+  "untitledSession": "未命名会话",
+  "sessionArchived": "已归档",
+  "searchSessionsPlaceholder": "搜索消息...",
+  "sessionSearchHeading": "消息",
+  "sessionSearchNoResults": "没有匹配的消息。",
+  "renameSession": "重命名会话",
+  "deleteSession": "删除会话",
+  "deleteSessionConfirm": "删除“{{title}}”？它的消息会被移除，资料和笔记本不受影响。",
+  "continuedFrom": "本会话续自“{{title}}”；它达到上下文上限后被归档。",
+  "openArchivedSession": "打开已归档会话"
 }

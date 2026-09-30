@@ -40,23 +40,31 @@ export const chatSessions = sqliteTable(
       .notNull()
       .references(() => notebooks.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
+    // 标题是否为自动生成（#97）。新建会话先留一个占位标题，第一条用户消息到达时
+    // 由它推导出真正的标题；用户手动改名后置为 false，推导就不再覆盖。
+    titleIsAuto: integer('title_is_auto', { mode: 'boolean' }).notNull().default(false),
     // 自动切换 session 相关字段
     summary: text('summary'), // 之前会话的摘要（如果是自动切换生成的）
     totalTokens: integer('total_tokens').notNull().default(0), // 当前会话累计 token 数
     status: text('status', { enum: ['active', 'archived'] })
       .notNull()
-      .default('active'), // 会话状态
+      .default('active'), // 'archived' = 上下文上限触发的自动归档（#97），不代表会话不可用
     parentSessionId: text('parent_session_id').references(() => chatSessions.id, {
       onDelete: 'set null'
     }), // 指向上一个被切换的 session
     // 这个会话用于回答的来源范围（#94）。NULL = 整个 notebook，与旧会话一致。
     retrievalScope: text('retrieval_scope', { mode: 'json' }).$type<RetrievalScope>(),
+    // 用户最近一次打开这个会话的时间（#97）。打开笔记本时回到「上次用的那个」就是
+    // 按它排序；旧数据为 NULL 时退回 updatedAt，所以单会话笔记本迁移后行为不变。
+    lastOpenedAt: integer('last_opened_at', { mode: 'timestamp' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
   },
   (table) => ({
     // 优化按笔记本查询会话的性能
-    notebookIdx: index('idx_sessions_notebook').on(table.notebookId, table.updatedAt)
+    notebookIdx: index('idx_sessions_notebook').on(table.notebookId, table.updatedAt),
+    // 打开笔记本时取「最近使用的会话」（#97）
+    openedIdx: index('idx_sessions_notebook_opened').on(table.notebookId, table.lastOpenedAt)
   })
 )
 

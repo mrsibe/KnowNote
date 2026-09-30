@@ -2,8 +2,9 @@ import { create } from 'zustand'
 import { readUIMessageStream } from 'ai'
 import type { UIMessage, UIMessageChunk } from 'ai'
 import type { ChatSession, ChatMessage } from '../types/notebook'
-import type { ChatTurnEvent } from '../../../shared/types/chat'
+import type { ChatTurnEvent, ChatMessageSearchHit } from '../../../shared/types/chat'
 import type { RetrievalScope } from '../../../shared/types/scope'
+import { deriveSessionTitle } from '../../../shared/utils/sessionTitle'
 import {
   isReasoningLive,
   isSequenceContinuing,
@@ -66,6 +67,14 @@ interface ChatStore {
   loadSessions: (notebookId: string) => Promise<void>
   loadActiveSession: (notebookId: string) => Promise<void>
   loadMessages: (sessionId: string) => Promise<void>
+  /** Switch to a session and record it as the last one used (#97). */
+  openSession: (sessionId: string) => Promise<void>
+  /** Delete one session; its messages go with it, the notebook and sources stay (#97). */
+  deleteSession: (sessionId: string) => Promise<void>
+  /** Search message bodies across the notebook's sessions (#97). */
+  searchMessages: (notebookId: string, query: string) => Promise<ChatMessageSearchHit[]>
+  /** Rename a session; a manual name is never overwritten by auto-derivation (#97). */
+  renameSession: (sessionId: string, title: string) => Promise<void>
   createSession: (notebookId: string, title: string) => Promise<ChatSession>
   /** 设置本会话的检索范围（#94）；scope 存在 session 上，不是 notebook 上。 */
   setSessionScope: (sessionId: string, scope: RetrievalScope) => Promise<void>
@@ -335,17 +344,82 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   },
 
   loadActiveSession: async (notebookId) => {
-    const activeSession = await window.api.getActiveSession(notebookId)
+    const [activeSession] = await Promise.all([
+      window.api.getActiveSession(notebookId),
+      // The list travels with the session: the continuation notice and the switcher
+      // both need it without the reader having to open the list first (#97).
+      get().loadSessions(notebookId)
+    ])
 
     if (activeSession) {
-      // 找到活跃session，设置为当前session
+      // 找到最近使用的 session，设置为当前 session（#97：不再只有一个 active）。
       set({ currentSession: activeSession })
       await get().loadMessages(activeSession.id)
     } else {
-      // 没有活跃session，创建第一个
-      const newSession = await get().createSession(notebookId, `Session ${Date.now()}`)
+      // 没有会话，创建第一个。标题留占位，第一条消息会把它命名（#97）。
+      const newSession = await get().createSession(notebookId, '')
       set({ currentSession: newSession })
     }
+  },
+
+  openSession: async (sessionId) => {
+    const state = get()
+    const session = state.sessions.find((item) => item.id === sessionId)
+    if (!session) return
+
+    // Touch before loading so "last used" is the session actually on screen, even
+    // if loading its messages fails.
+    const openedAt = new Date()
+    set({
+      currentSession: { ...session, lastOpenedAt: openedAt },
+      sessions: state.sessions.map((item) =>
+        item.id === sessionId ? { ...item, lastOpenedAt: openedAt } : item
+      )
+    })
+    await get().loadMessages(sessionId)
+    void window.api.touchSession(sessionId)
+  },
+
+  deleteSession: async (sessionId) => {
+    const state = get()
+    const target = state.sessions.find((item) => item.id === sessionId)
+    await window.api.deleteSession(sessionId)
+
+    const remaining = state.sessions.filter((item) => item.id !== sessionId)
+    set({ sessions: remaining })
+
+    // Deleting the open session must leave the notebook usable: fall to the next
+    // session, or open a fresh one, rather than a blank chat with no session.
+    if (state.currentSession?.id !== sessionId || !target) return
+
+    const next = remaining.find((item) => item.notebookId === target.notebookId)
+    if (next) {
+      await get().openSession(next.id)
+    } else {
+      const created = await get().createSession(target.notebookId, '')
+      set({ currentSession: created })
+      await get().loadMessages(created.id)
+    }
+  },
+
+  searchMessages: async (notebookId, query) => {
+    if (!query.trim()) return []
+    return window.api.searchMessages(notebookId, query)
+  },
+
+  renameSession: async (sessionId, title) => {
+    const trimmed = title.trim()
+    if (!trimmed) return
+    await window.api.updateSessionTitle(sessionId, trimmed)
+    set((state) => ({
+      currentSession:
+        state.currentSession?.id === sessionId
+          ? { ...state.currentSession, title: trimmed, titleIsAuto: false }
+          : state.currentSession,
+      sessions: state.sessions.map((session) =>
+        session.id === sessionId ? { ...session, title: trimmed, titleIsAuto: false } : session
+      )
+    }))
   },
 
   loadMessages: async (sessionId) => {
@@ -374,7 +448,10 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     const session = await window.api.createChatSession(notebookId, title)
     set((state) => ({
       sessions: [session, ...state.sessions],
-      currentSession: session
+      currentSession: session,
+      // A new session has no transcript; without this the previous session's
+      // messages stay on screen under the new session's name until a reload.
+      messages: []
     }))
     return session
   },
@@ -418,7 +495,21 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     }
     get().addMessage(userMessage)
 
-    // 3. 发送消息并获取 assistant messageId
+    // 3. 发送消息并获取 assistant messageId。
+    //    第一条消息给会话命名（#97）：主进程是权威版本，这里用同一个纯函数先显示，
+    //    否则列表会一直挂着占位标题直到下一次加载。
+    const derivedTitle = session.titleIsAuto ? deriveSessionTitle(content) || null : null
+    if (derivedTitle) {
+      set((state) => ({
+        currentSession: state.currentSession
+          ? { ...state.currentSession, title: derivedTitle, titleIsAuto: false }
+          : state.currentSession,
+        sessions: state.sessions.map((item) =>
+          item.id === sessionId ? { ...item, title: derivedTitle, titleIsAuto: false } : item
+        )
+      }))
+    }
+
     const messageId = await window.api.sendMessage(sessionId, content)
 
     // 4. 添加 assistant 消息占位符（包含推理字段）
@@ -621,16 +712,23 @@ export function setupChatListeners(): () => void {
         break
       }
 
-      // Session 自动切换
+      // Session 自动切换（#97）：不再静默。列表重新加载、切到新会话并显示它的
+      // 消息会为空；会话顶部的边界条会把刚归档的那个会话连同入口一起呈现，所以
+      // 这次切换是可见、可返回的，而不是内容凭空消失。
       case 'session-auto-switched': {
         void (async () => {
           const state = useChatStore.getState()
-          if (!state.currentSession) return
+          const notebookId = state.currentSession?.notebookId
+          if (!notebookId) return
 
-          const newSession = await window.api.getActiveSession(state.currentSession.notebookId)
-          if (newSession && newSession.id === event.newSessionId) {
-            state.setCurrentSession(newSession)
-          }
+          await state.loadSessions(notebookId)
+          const newSession = useChatStore
+            .getState()
+            .sessions.find((session) => session.id === event.newSessionId)
+          if (!newSession) return
+
+          useChatStore.getState().setCurrentSession(newSession)
+          await useChatStore.getState().loadMessages(newSession.id)
         })()
         break
       }

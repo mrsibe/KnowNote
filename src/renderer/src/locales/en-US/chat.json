@@ -29,5 +29,17 @@
   "answerStopped": "The answer was stopped; this is the part that had been written.",
   "answerFailed": "Generation was interrupted: {{error}}",
   "continueAnswer": "Continue",
-  "retryAnswer": "Retry"
+  "retryAnswer": "Retry",
+  "sessions": "Chat sessions",
+  "newChatTitle": "New chat",
+  "untitledSession": "Untitled chat",
+  "sessionArchived": "Archived",
+  "searchSessionsPlaceholder": "Search messages...",
+  "sessionSearchHeading": "Messages",
+  "sessionSearchNoResults": "No messages match.",
+  "renameSession": "Rename chat",
+  "deleteSession": "Delete chat",
+  "deleteSessionConfirm": "Delete “{{title}}”? Its messages are removed. Sources and the notebook are not affected.",
+  "continuedFrom": "This chat continues “{{title}}”, which was archived when it reached the context limit.",
+  "openArchivedSession": "Open archived chat"
 }

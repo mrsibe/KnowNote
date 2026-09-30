@@ -17,6 +17,8 @@ import { FOCUS_CHAT_EVENT } from '../../lib/workspaceEvents'
 import MessageList, { type MessageListHandle } from './chat/MessageList'
 import NotebookHeader from './chat/NotebookHeader'
 import ScopeSelector from './chat/ScopeSelector'
+import SessionSwitcher from './chat/SessionSwitcher'
+import SessionContinuationNotice from './chat/SessionContinuationNotice'
 import { COMPOSER_GAP, COMPOSER_RESERVE, COMPOSER_RESERVE_VAR } from './chat/stickToBottom'
 import { Button } from '../ui/button'
 import { Textarea } from '../ui/textarea'
@@ -231,13 +233,12 @@ function ProcessPanel({
         }
         center={
           /*
-           * Empty on purpose, and not omitted: the centre column is what keeps a
-           * wide drag surface between the two toggles. The notebook's name used to
-           * live here as a `text-sm` label; it is now the document header's job
-           * (`NotebookHeader`), and the window's tab strip already carries the name
-           * at all times, so nothing is lost by leaving this blank.
+           * The notebook's name lives in the document header below; the centre of
+           * the chat panel is the session switcher (#97), because the session is
+           * what the panel is showing. Leaving it empty kept the drag surface, but
+           * there is no longer a reason to.
            */
-          <span aria-hidden="true" />
+          <SessionSwitcher />
         }
         right={
           onToggleRight && (
@@ -269,13 +270,17 @@ function ProcessPanel({
           ref={messageListRef}
           messages={messages}
           header={
-            currentNotebook ? (
-              <NotebookHeader
-                notebook={currentNotebook}
-                sourceCount={documents.length}
-                onRename={(title) => updateNotebook(currentNotebook.id, { title })}
-              />
-            ) : null
+            <div className="flex flex-col gap-2">
+              {currentNotebook && (
+                <NotebookHeader
+                  notebook={currentNotebook}
+                  sourceCount={documents.length}
+                  onRename={(title) => updateNotebook(currentNotebook.id, { title })}
+                />
+              )}
+              {/* The rollover boundary, above the transcript it continues (#97). */}
+              <SessionContinuationNotice />
+            </div>
           }
         />
       </div>

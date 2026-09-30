@@ -173,10 +173,16 @@ export function registerChatHandlers(
   }
 
   // ==================== Chat Session ====================
+  // A notebook holds many sessions (#97). Creating one always starts from a
+  // placeholder title; the first message names it, and a manual rename wins.
   ipcMain.handle(
     'create-chat-session',
     validate(ChatSchemas.createSession, async (args) => {
-      return queries.createSession(args.notebookId, args.title)
+      // A caller that already has a name keeps it; an empty one is named by the
+      // first message (a `.trim()` guard, so a whitespace title does not count).
+      return queries.createSession(args.notebookId, args.title, {
+        titleIsAuto: !args.title.trim()
+      })
     })
   )
 
@@ -187,10 +193,28 @@ export function registerChatHandlers(
     })
   )
 
+  // Opening a notebook returns to the last session the user had open (#97).
   ipcMain.handle(
     'get-active-session',
     validate(ChatSchemas.getActiveSession, async (args) => {
-      return queries.getActiveSessionByNotebook(args.notebookId)
+      return queries.getMostRecentSessionByNotebook(args.notebookId)
+    })
+  )
+
+  // Switching sessions is what "last used" means; recording it is what keeps the
+  // session list ordered by use rather than by last message.
+  ipcMain.handle(
+    'touch-session',
+    validate(ChatSchemas.touchSession, async (args) => {
+      queries.touchSession(args.sessionId)
+      return { success: true }
+    })
+  )
+
+  ipcMain.handle(
+    'search-messages',
+    validate(ChatSchemas.searchMessages, async (args) => {
+      return queries.searchMessagesInNotebook(args.notebookId, args.query.trim(), args.limit)
     })
   )
 
@@ -240,6 +264,9 @@ export function registerChatHandlers(
 
     // 1. 保存用户消息
     queries.createMessage(sessionId, 'user', content)
+
+    // 1.1 第一条消息给会话命名（#97）。放在保存之后：标题来自刚写下的那句话。
+    queries.deriveSessionTitleIfAuto(sessionId, content)
 
     const session = queries.getSessionById(sessionId)
 

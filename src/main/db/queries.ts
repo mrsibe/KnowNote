@@ -1,6 +1,7 @@
-import { eq, desc, and, sql } from 'drizzle-orm'
+import { eq, desc, and, sql, like } from 'drizzle-orm'
 import { getDatabase, executeCheckpoint, dropNotebookVectorTable } from './index'
 import { chatSessions, chatMessages, notebooks, notes, documents, items } from './schema'
+import { deriveSessionTitle } from '../../shared/utils/sessionTitle'
 import type {
   ChatMessageMetadata,
   ChatExecutionOutcome,
@@ -13,9 +14,17 @@ import type { WorkspaceOverview } from '../../shared/types/workspace'
 // ==================== Chat Sessions ====================
 
 /**
- * 创建新的聊天会话
+ * 创建新的聊天会话（#97）。
+ *
+ * `title` 允许为空：会话先以一个占位标题出现，第一条用户消息到达时由
+ * `deriveSessionTitleIfAuto` 推导出真正的标题。`titleIsAuto` 记录「还没被用户
+ * 或推导改过」，手动改名会把它置为 false。
  */
-export function createSession(notebookId: string, title: string, parentSessionId?: string) {
+export function createSession(
+  notebookId: string,
+  title: string,
+  options: { parentSessionId?: string; titleIsAuto?: boolean } = {}
+) {
   const db = getDatabase()
   const id = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`
   const now = new Date()
@@ -26,7 +35,10 @@ export function createSession(notebookId: string, title: string, parentSessionId
       id,
       notebookId,
       title,
-      parentSessionId,
+      titleIsAuto: options.titleIsAuto ?? false,
+      parentSessionId: options.parentSessionId,
+      // Newly created is newly opened: it is where the notebook returns to.
+      lastOpenedAt: now,
       createdAt: now,
       updatedAt: now
     })
@@ -37,22 +49,27 @@ export function createSession(notebookId: string, title: string, parentSessionId
 }
 
 /**
- * 获取指定笔记本的活跃会话（栈顶）
- * 每个笔记本只有一个 active session
+ * 打开笔记本时要回到的会话（#97）。
+ *
+ * 多个会话可以有同一个 `status`，所以「active」不再能唯一定位一个会话；这里按
+ * 「最近打开」排序，NULL（旧数据）退回 `updatedAt`。旧笔记本只有一个会话，两条路径
+ * 都指向它，迁移因此无感。
  */
-export function getActiveSessionByNotebook(notebookId: string) {
+export function getMostRecentSessionByNotebook(notebookId: string) {
   const db = getDatabase()
 
   return db
     .select()
     .from(chatSessions)
-    .where(and(eq(chatSessions.notebookId, notebookId), eq(chatSessions.status, 'active')))
+    .where(eq(chatSessions.notebookId, notebookId))
+    .orderBy(desc(sql`coalesce(${chatSessions.lastOpenedAt}, ${chatSessions.updatedAt})`))
+    .limit(1)
     .get()
 }
 
 /**
- * 获取指定笔记本的所有会话
- * 按更新时间倒序排列
+ * 获取指定笔记本的所有会话（#97）。
+ * 最近打开的在前；旧数据没有 lastOpenedAt，退回更新时间。
  */
 export function getSessionsByNotebook(notebookId: string) {
   const db = getDatabase()
@@ -61,12 +78,28 @@ export function getSessionsByNotebook(notebookId: string) {
     .select()
     .from(chatSessions)
     .where(eq(chatSessions.notebookId, notebookId))
-    .orderBy(desc(chatSessions.updatedAt))
+    .orderBy(
+      desc(sql`coalesce(${chatSessions.lastOpenedAt}, ${chatSessions.updatedAt})`),
+      desc(chatSessions.updatedAt)
+    )
     .all()
 }
 
 /**
- * 更新会话标题
+ * 记录用户打开了某个会话（#97）。切换会话本身不写消息，所以要单独记一笔，
+ * 否则「上次用的是哪个」只能靠最后一条消息猜。
+ */
+export function touchSession(sessionId: string) {
+  const db = getDatabase()
+
+  db.update(chatSessions)
+    .set({ lastOpenedAt: new Date() })
+    .where(eq(chatSessions.id, sessionId))
+    .run()
+}
+
+/**
+ * 更新会话标题。用户手动改名后，自动推导不再覆盖（`titleIsAuto` 置 false）。
  */
 export function updateSessionTitle(sessionId: string, title: string) {
   const db = getDatabase()
@@ -74,10 +107,62 @@ export function updateSessionTitle(sessionId: string, title: string) {
   db.update(chatSessions)
     .set({
       title,
+      titleIsAuto: false,
       updatedAt: new Date()
     })
     .where(eq(chatSessions.id, sessionId))
     .run()
+}
+
+/**
+ * 第一条用户消息到达后，用消息内容给还带着占位标题的会话命名（#97）。
+ *
+ * 只写一次：`titleIsAuto` 是「还没被命名」，不是「标题是自动生成的」；用户手动
+ * 改过名就永远是 false，不会被下一条消息覆盖。
+ */
+export function deriveSessionTitleIfAuto(sessionId: string, firstMessage: string) {
+  const db = getDatabase()
+  const session = getSessionById(sessionId)
+  if (!session?.titleIsAuto) return session ?? null
+
+  const title = deriveSessionTitle(firstMessage)
+  if (!title) return session
+
+  db.update(chatSessions)
+    .set({ title, titleIsAuto: false, updatedAt: new Date() })
+    .where(eq(chatSessions.id, sessionId))
+    .run()
+
+  return { ...session, title, titleIsAuto: false }
+}
+
+/**
+ * 在笔记本内按消息内容搜索（#97）。
+ *
+ * 搜的是消息正文而不是会话标题：标题只是一个标签，真正要找的是「我在哪次对话里
+ * 问过这件事」。返回消息连同它属于哪个会话，列表才能显示每一条命中来自哪里。
+ */
+export function searchMessagesInNotebook(notebookId: string, query: string, limit = 20) {
+  const db = getDatabase()
+  // `%` / `_` in the query act as LIKE wildcards: a search box may be loose, and
+  // SQLite has no ESCAPE clause here to make an escaped backslash mean anything.
+  const pattern = `%${query}%`
+
+  return db
+    .select({
+      id: chatMessages.id,
+      sessionId: chatMessages.sessionId,
+      sessionTitle: chatSessions.title,
+      role: chatMessages.role,
+      content: chatMessages.content,
+      createdAt: chatMessages.createdAt
+    })
+    .from(chatMessages)
+    .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
+    .where(and(eq(chatSessions.notebookId, notebookId), like(chatMessages.content, pattern)))
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(limit)
+    .all()
 }
 
 /**
@@ -142,6 +227,19 @@ export function updateSessionTokens(sessionId: string, tokensToAdd: number) {
     .run()
 
   return newTotal
+}
+
+/**
+ * 笔记本里有多少个会话（#97）。自动切换用它给续接会话编号。
+ */
+export function countSessionsByNotebook(notebookId: string): number {
+  const db = getDatabase()
+  const row = db
+    .select({ count: sql<number>`count(*)` })
+    .from(chatSessions)
+    .where(eq(chatSessions.notebookId, notebookId))
+    .get()
+  return row?.count ?? 0
 }
 
 /**

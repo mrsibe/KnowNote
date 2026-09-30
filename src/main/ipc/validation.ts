@@ -271,6 +271,18 @@ export const ChatSchemas = {
     title: z.string().min(1, '标题不能为空').max(200, '标题不能超过200个字符')
   }),
 
+  // 打开会话（#97）：只记录「最近使用」，不改消息。
+  touchSession: z.object({
+    sessionId: z.string().min(1, '会话 ID 不能为空')
+  }),
+
+  // 跨会话搜索消息（#97）。
+  searchMessages: z.object({
+    notebookId: z.string().min(1, '笔记本 ID 不能为空'),
+    query: z.string().min(1, '搜索内容不能为空').max(200, '搜索内容不能超过200个字符'),
+    limit: z.number().int().min(1).max(50).optional()
+  }),
+
   setRetrievalScope: z.object({
     sessionId: z.string().min(1, '会话 ID 不能为空'),
     scope: z.discriminatedUnion('type', [

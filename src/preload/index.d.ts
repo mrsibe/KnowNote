@@ -1,5 +1,10 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { ChatSession, ChatMessage, ChatTurnEvent } from '../shared/types/chat'
+import type {
+  ChatSession,
+  ChatMessage,
+  ChatTurnEvent,
+  ChatMessageSearchHit
+} from '../shared/types/chat'
 import type { RetrievalScope } from '../shared/types/scope'
 import type {
   Notebook,
@@ -199,6 +204,14 @@ declare global {
       getChatSessions: (notebookId: string) => Promise<ChatSession[]>
       getActiveSession: (notebookId: string) => Promise<ChatSession | null>
       updateSessionTitle: (sessionId: string, title: string) => Promise<void>
+      /** Record that the user opened this session (#97). */
+      touchSession: (sessionId: string) => Promise<{ success: boolean }>
+      /** Search message bodies across the notebook's sessions (#97). */
+      searchMessages: (
+        notebookId: string,
+        query: string,
+        limit?: number
+      ) => Promise<ChatMessageSearchHit[]>
       setSessionScope: (sessionId: string, scope: RetrievalScope) => Promise<{ success: boolean }>
       deleteSession: (sessionId: string) => Promise<void>
 

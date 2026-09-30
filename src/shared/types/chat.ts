@@ -200,6 +200,22 @@ export interface ChatMessage extends Omit<DBChatMessage, 'metadata' | 'reasoning
 }
 
 /**
+ * One message the session search found (#97).
+ *
+ * The session's title travels with the hit so the list can say *which*
+ * conversation it came from; searching titles alone would miss the thing the user
+ * actually remembers, which is what was said.
+ */
+export interface ChatMessageSearchHit {
+  id: string
+  sessionId: string
+  sessionTitle: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  createdAt: Date
+}
+
+/**
  * API 消息格式（用于与 LLM Provider 通信）
  * 这是简化版本，只包含 API 需要的字段
  */

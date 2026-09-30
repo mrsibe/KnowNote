@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { EmbeddingDownloadProgress } from '../shared/types'
-import type { ChatTurnEvent } from '../shared/types/chat'
+import type { ChatTurnEvent, ChatMessageSearchHit } from '../shared/types/chat'
 import type { RetrievalScope } from '../shared/types/scope'
 
 /**
@@ -98,6 +98,15 @@ const api = {
     ipcRenderer.invoke('get-active-session', { notebookId }),
   updateSessionTitle: (sessionId: string, title: string) =>
     ipcRenderer.invoke('update-session-title', { sessionId, title }),
+  // 记录「最近打开」，打开笔记本时靠它回到上次的会话（#97）
+  touchSession: (sessionId: string) => ipcRenderer.invoke('touch-session', { sessionId }),
+  // 跨会话搜索消息正文（#97）
+  searchMessages: (
+    notebookId: string,
+    query: string,
+    limit?: number
+  ): Promise<ChatMessageSearchHit[]> =>
+    ipcRenderer.invoke('search-messages', { notebookId, query, limit }),
   setSessionScope: (sessionId: string, scope: RetrievalScope) =>
     ipcRenderer.invoke('set-chat-session-scope', { sessionId, scope }),
   deleteSession: (sessionId: string) => ipcRenderer.invoke('delete-session', { sessionId }),

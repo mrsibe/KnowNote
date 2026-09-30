@@ -33,6 +33,11 @@ function installApi(): void {
         }
       },
       getActiveSession: async () => activeSession,
+      // A rollover now reloads the notebook's sessions and opens the new one by id
+      // (#97), instead of re-fetching the single active session.
+      getChatSessions: async () => (activeSession ? [activeSession] : []),
+      getMessages: async () => [],
+      touchSession: async () => ({ success: true }),
       retryMessage: async (messageId: string) => ({
         success: true,
         messageId: `msg_retry_of_${messageId}`

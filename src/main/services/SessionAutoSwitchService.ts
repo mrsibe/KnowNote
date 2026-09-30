@@ -1,6 +1,7 @@
 import * as queries from '../db/queries'
 import { ConnectionManager } from '../models/ConnectionManager'
 import { collectMessageText } from '../../shared/utils/uiMessage'
+import { continuedSessionTitle } from '../../shared/utils/sessionTitle'
 import Logger from '../../shared/utils/logger'
 
 /**
@@ -43,7 +44,14 @@ export class SessionAutoSwitchService {
   }
 
   /**
-   * Switch session: generate summary, archive old session, create new session
+   * Switch session: generate summary, archive old session, create new session.
+   *
+   * The rollover is a fact the reader must be able to see (#97): the old session is
+   * kept in the notebook with `status: 'archived'` and the new one points back at it
+   * through `parentSessionId`. Nothing is hidden and nothing is deleted — the UI can
+   * name the archive boundary and open the previous session. The old code wrote a
+   * system message into the new session instead and never surfaced the old one; the
+   * message was the only trace of an event the reader could not act on.
    */
   private async switchSession(oldSessionId: string): Promise<string> {
     // 1. Get old session info
@@ -60,19 +68,13 @@ export class SessionAutoSwitchService {
     queries.updateSessionSummary(oldSessionId, summary, 'archived')
     Logger.info('SessionAutoSwitch', 'Old session archived')
 
-    // 4. Create new session, set parent session ID
+    // 4. Create new session, set parent session ID. The title keeps the thread's
+    //    identity and adds its position so the two rows are distinguishable.
+    const sequence = queries.countSessionsByNotebook(oldSession.notebookId) + 1
     const newSession = queries.createSession(
       oldSession.notebookId,
-      oldSession.title, // Keep same title
-      oldSessionId // Set parent session ID to form chain
-    )
-
-    // 5. Add lightweight system message in new session (optional)
-    // Users shouldn't notice session switch, so simplify prompt
-    queries.createMessage(
-      newSession.id,
-      'system',
-      `💡 Context optimized, conversation continues...`
+      continuedSessionTitle(oldSession.title, sequence),
+      { parentSessionId: oldSessionId }
     )
 
     Logger.info('SessionAutoSwitch', `Created new session: ${newSession.id}`)
