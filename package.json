@@ -107,7 +107,7 @@
     "onnxruntime-node": "^1.30.0",
     "pdfjs-dist": "^6.3.289",
     "sharp": "^0.35.4",
-    "sqlite-vec": "0.1.7-alpha.2"
+    "sqlite-vec": "0.1.9"
   },
   "//devDependencies": [
     "Everything else, including packages the main process uses. electron-vite",

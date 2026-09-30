@@ -15,12 +15,12 @@ added here only when a committed feature is blocked by it, with that feature as 
 
 Verdicts up front:
 
-| Dependency                                       | Verdict                                                                |
-| ------------------------------------------------ | ---------------------------------------------------------------------- |
-| `sqlite-vec`                                     | **KEEP** — with a recorded, low-risk option to leave the alpha channel |
-| `pdfjs-dist`                                     | **REPLACE (upgrade)** → tracked as #121, a v1.4 blocker                |
-| `@huggingface/transformers` + `onnxruntime-node` | **KEEP** — already on the latest published versions                    |
-| FTS5 (for #77's BM25/hybrid)                     | **available** — proven in the packaged app, see below                  |
+| Dependency                                       | Verdict                                                 |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| `sqlite-vec`                                     | **KEEP** — now on the stable `0.1.9`, exact-pinned      |
+| `pdfjs-dist`                                     | **REPLACE (upgrade)** → tracked as #121, a v1.4 blocker |
+| `@huggingface/transformers` + `onnxruntime-node` | **KEEP** — already on the latest published versions     |
+| FTS5 (for #77's BM25/hybrid)                     | **available** — proven in the packaged app, see below   |
 
 ## Read `dependencies` vs `devDependencies` the way this repo means it
 
@@ -56,13 +56,13 @@ Consequences that matter:
 
 ## 1. `sqlite-vec` — KEEP
 
-|                      |                                                                                          |
-| -------------------- | ---------------------------------------------------------------------------------------- |
-| Declared / installed | `0.1.7-alpha.2` (exact pin, no range)                                                    |
-| Ships as             | confirmed at runtime by the packaged app: `vec_version()` → `v0.1.7-alpha.2`             |
-| Upstream             | `latest` dist-tag is **`0.1.9`**; `alpha` is `0.1.10-alpha.4`; last published 2026-05-18 |
-| Licence              | MIT OR Apache-2.0                                                                        |
-| Native               | yes — loadable SQLite extension, unpacked (`sqlite-vec-linux-x64`, ~156 KB shipped)      |
+|                      |                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| Declared / installed | `0.1.9` (exact pin, no range)                                                       |
+| Ships as             | confirmed at runtime by the packaged app: `vec_version()` → `v0.1.9`                |
+| Upstream             | `latest` dist-tag is **`0.1.9`** (this pin); `alpha` is `0.1.10-alpha.4`            |
+| Licence              | MIT OR Apache-2.0                                                                   |
+| Native               | yes — loadable SQLite extension, unpacked (`sqlite-vec-linux-x64`, ~156 KB shipped) |
 
 **What it constrains.** `vec0` is the substrate every retrieval strategy sits on. Its capability
 set (distance metrics, metadata filtering, table lifecycle) bounds what `DenseRetriever` and
@@ -71,9 +71,11 @@ just its search: `SQLiteVectorStore` treats vector width as a per-notebook decis
 width change without an explicit rebuild, and drops a notebook's vector table when the notebook is
 deleted — all of that is `vec0` semantics, and the packaged smoke test asserts it.
 
-**The alpha question.** We pin an alpha while a stable `0.1.9` exists upstream. That is a real
-inconsistency, but it is not currently causing a problem, and the pin is exact so the resolved
-version cannot drift on its own.
+**The alpha question.** This pin used to be an alpha (`0.1.7-alpha.2`) while a stable `0.1.9`
+existed upstream. That is no longer true: the pin is the stable `0.1.9` itself, so the manifest no
+longer sits on a pre-release. The pin stays exact, so the resolved version still cannot drift on
+its own — upstream is pre-v1 and a range (`^0.1.9`) would pull `0.1.10-alpha.*`, which is not a
+change to take implicitly.
 
 **Replacement cost.** There is no cheaper option. Replacing the vector store means either a
 pure-JS index (losing the SQLite-side filtering and the shared transaction boundary with
@@ -84,9 +86,11 @@ persistence format, and a re-index migration for existing users).
 asserted end to end by the packaged smoke test, and replacing it would be a rewrite of the retrieval
 storage layer for no capability we currently lack.
 
-**Recorded follow-up (not in #62):** moving from `0.1.7-alpha.2` to the stable `0.1.9`. Because the
-pin is exact, that is a one-line manifest change plus a smoke run and the existing retrieval tests —
-worth doing as its own small change, so a `vec0` behaviour change cannot hide inside a bigger PR.
+**Recorded follow-up (not in #62), now done:** moving from `0.1.7-alpha.2` to the stable `0.1.9`.
+Because the pin is exact, that was a one-line manifest change plus a smoke run and the existing
+retrieval tests — done as its own small change, so a `vec0` behaviour change cannot hide inside a
+bigger PR. Verified end to end: the packaged app reports `vec_version()` → `v0.1.9`, the `vec0`
+upsert/KNN/delete round trip passes, and the scope-filtered query tests still pass.
 
 **Blast radius:** native addon, `asarUnpack` (`node_modules/sqlite-vec/**`,
 `node_modules/sqlite-vec-*/**`), and an entry in `dependencies`.
@@ -198,10 +202,10 @@ work in the build users actually run.
 Result from `npm run build:unpack && npm run smoke:packaged`:
 
 ```text
-[SmokeTest] ok   sqlite-vec reports version v0.1.7-alpha.2
+[SmokeTest] ok   sqlite-vec reports version v0.1.9
 [SmokeTest] ok   FTS5 is available and ranks: sqlite 3.53.2, ENABLE_FTS5 flag present,
                  bm25() = -9.447852760736198e-7
-[SmokeTest] PASS - 20 checks passed
+[SmokeTest] PASS - 29 checks passed
 ```
 
 **FTS5 is available: `ENABLE_FTS5` is compiled in, `MATCH` returned the expected row, and `bm25()`
