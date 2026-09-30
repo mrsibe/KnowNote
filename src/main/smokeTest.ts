@@ -353,8 +353,7 @@ async function runChecks(): Promise<string[]> {
   // #77 wants BM25 / hybrid retrieval, and SQLite's BM25 lives in the FTS5 module:
   // whether it exists is a property of the SQLite that better-sqlite3 bundles, not
   // of anything this app compiles or enables. Asking the *shipped* build is the
-  // only answer that means anything - better-sqlite3 is rebuilt against the Electron
-  // ABI, so it cannot even be loaded from plain Node to answer this off to the side.
+  // only answer that means anything.
   //
   // The check inserts and ranks rather than only reporting a compile flag: a flag is
   // not proof that MATCH and bm25() work in the build users actually run.

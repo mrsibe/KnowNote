@@ -10,7 +10,7 @@ name: Verify
 # it, so it is the step that actually catches those. It runs on all three
 # platforms because the native addons are arch-specific:
 #
-#   better_sqlite3.node, vec0.so/.dylib/.dll, skia.*.node
+#   better-sqlite3 (prebuilds/<platform>-<arch>.node), vec0.so/.dylib/.dll, skia.*.node
 #
 # `lint` is deliberately not part of this gate: it reports no errors but still
 # carries a large pre-existing `@typescript-eslint/no-explicit-any` baseline,

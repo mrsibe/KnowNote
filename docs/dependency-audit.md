@@ -50,9 +50,10 @@ Consequences that matter:
    `sharp` and `@mixmark-io/domino` are transitive dependencies of `@huggingface/transformers` and
    `turndown` respectively that are **deliberately promoted so they ship**; neither is imported by
    this repository's source.
-3. `better-sqlite3` is rebuilt against the Electron ABI during packaging. It **cannot be loaded
-   from plain Node** (`require('better-sqlite3')` fails), so any question about the shipped SQLite
-   has to be answered inside Electron — see the FTS5 section.
+3. `better-sqlite3` (>= 13) is N-API and ships a prebuild per platform/arch inside its own npm
+   package, so nothing compiles it and the same binary loads in plain Node and in Electron.
+   `npmRebuild` is off in `electron-builder.yml` and there is no `postinstall` rebuild step;
+   see the `npmRebuild` note there for why that is now the correct setting.
 
 ## 1. `sqlite-vec` — KEEP
 
@@ -160,8 +161,17 @@ harness runs real retrieval against a real model, so this is exercised rather th
 | `onnxruntime-node`     | **155 MB**, of which **152.7 MB is binaries** |
 | `@napi-rs`             | 32 MB                                         |
 | `@img` (sharp/libvips) | 19 MB                                         |
-| `better-sqlite3`       | 13 MB                                         |
+| `better-sqlite3`       | 27 MB                                         |
 | `sqlite-vec`           | 156 KB                                        |
+
+`better-sqlite3` grew from 13 MB to 27 MB with 13.x: it is N-API now and ships a prebuild for
+**every** supported platform/arch inside the npm package instead of one ABI-specific binary. That is
+the trade that removes the Electron-ABI rebuild, so the size is expected, not a regression.
+
+The `onnxruntime-node` row above is stale and predates the payload this build now carries:
+`libonnxruntime_providers_cuda.so` alone is ~260 MB on linux/x64, taking the package to ~416 MB
+packed. That is the same "ships binaries for the wrong platform" problem this section already
+describes, only larger, and pruning it remains its own follow-up.
 
 Of the 152.7 MB of onnxruntime binaries, only `linux/x64/libonnxruntime.so.1` (**43.7 MB**) is
 usable by this build. The remaining **~109 MB (72%) is for other platforms and architectures**:
@@ -192,8 +202,10 @@ in `dependencies`.
 
 #77 wants BM25/hybrid retrieval, and SQLite's BM25 lives in the FTS5 module. Whether FTS5 exists is
 a property of the SQLite that `better-sqlite3` bundles, not of anything this repository compiles, so
-it had to be answered against the **shipped** build. It cannot be answered from plain Node at all:
-`better-sqlite3` is rebuilt for the Electron ABI and fails to load there.
+it had to be answered against the **shipped** build. It used to have to run inside Electron
+because `better-sqlite3` was compiled against the Electron ABI and refused to load in plain Node;
+since `better-sqlite3` 13 (N-API) the same prebuild loads in both. The check still runs in the
+packaged app, because that is the build users actually run.
 
 The check now lives in the packaged smoke test (`src/main/smokeTest.ts`) and inserts, matches and
 ranks rather than only reading a compile flag, because a flag is not proof that `MATCH` and `bm25()`
@@ -203,13 +215,13 @@ Result from `npm run build:unpack && npm run smoke:packaged`:
 
 ```text
 [SmokeTest] ok   sqlite-vec reports version v0.1.9
-[SmokeTest] ok   FTS5 is available and ranks: sqlite 3.53.2, ENABLE_FTS5 flag present,
+[SmokeTest] ok   FTS5 is available and ranks: sqlite 3.53.4, ENABLE_FTS5 flag present,
                  bm25() = -9.447852760736198e-7
 [SmokeTest] PASS - 29 checks passed
 ```
 
 **FTS5 is available: `ENABLE_FTS5` is compiled in, `MATCH` returned the expected row, and `bm25()`
-produced a usable rank on SQLite 3.53.2.** #77 therefore has no blocker from the SQLite side, and
+produced a usable rank on SQLite 3.53.4.** #77 therefore has no blocker from the SQLite side, and
 BM25/hybrid is a design choice rather than a build constraint.
 
 ## How to reproduce

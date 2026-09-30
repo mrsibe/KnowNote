@@ -91,12 +91,27 @@ appImage:
 # electron-builder >= 26.16.0. Missing *optional* dependencies (e.g. fsevents on
 # Linux/Windows) are still allowed and never fail the build.
 allowMissingDependencies: false
-# `npmRebuild` is intentionally left at its default (true) so electron-builder
-# rebuilds better-sqlite3 against the target Electron ABI and target
-# architecture while packaging. Turning it off, as this project previously did,
-# makes the shipped binary depend on whatever ABI `postinstall` happened to
-# produce on the build host, which breaks cross-arch builds such as
-# `build:mac --arm64`. The postinstall hook is kept for `dev`/`preview`.
+# Every native dependency here is N-API, so electron-builder has nothing to
+# rebuild: `better-sqlite3` (>= 13) ships a prebuild per platform/arch inside its
+# own npm package, `onnxruntime-node` ships `bin/napi-v6/<platform>/<arch>`, and
+# `sharp` / `@napi-rs/canvas` ship platform packages. N-API binaries are stable
+# across Node and Electron versions, so rebuilding cannot improve them and can
+# only replace a correct prebuild with a locally compiled one.
+#
+# Leaving this at the default (true) is what broke `npm install` on a plain
+# Windows machine once the runtime moved to Electron 44 (ABI 149): published
+# better-sqlite3 12.x prebuilds stop at ABI 146, so @electron/rebuild fell back
+# to `node-gyp rebuild --build-from-source` and demanded Python + MSVC.
+#
+# Cross-arch still works because the prebuilds are shipped for every supported
+# target: `better-sqlite3` carries darwin/linux/win32 prebuilds for x64 and
+# arm64, and `onnxruntime-node` carries every platform in one package. The
+# release matrix builds each artifact on its own architecture.
+#
+# `postinstall` no longer runs `electron-builder install-app-deps`: that command
+# ignores this flag and always rebuilds, which would reintroduce the toolchain
+# requirement for `npm install` even though nothing needs compiling.
+npmRebuild: false
 # Published as a DRAFT: electron-builder uploads the artifacts, but the release
 # only becomes public after every platform built and the macOS artifact passed
 # the verification step in .github/workflows/release.yml.

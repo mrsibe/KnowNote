@@ -10,7 +10,8 @@
     <true/>
     <!--
       REQUIRED. The main process dlopen()s third-party prebuilt native modules
-      (better_sqlite3.node, vec0.dylib, skia.darwin-arm64.node) that are not
+      (better-sqlite3's prebuilds/darwin-arm64.node, vec0.dylib,
+      skia.darwin-arm64.node) that are not
       signed by the same team as this app. Hardened Runtime enforces that every
       loaded library shares the process Team ID, so without this entitlement the
       app aborts at launch with:

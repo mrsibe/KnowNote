@@ -176,7 +176,7 @@ jobs:
 
       # Inspect the artifact we just shipped. This is the check that was missing
       # when v1.2.0 went out ad-hoc signed, hardened-runtime, and unable to load
-      # better_sqlite3.node.
+      # its native module.
       - name: Verify macOS artifact (signature, entitlements, native modules)
         if: matrix.os == 'macos-latest'
         run: |
@@ -220,7 +220,7 @@ jobs:
             echo "::warning title=Unsigned macOS build::No identity was available, so the bundle carries no entitlements. This build is not notarized and cannot be launched on Apple Silicon until the user clears the quarantine flag; README.md documents the command."
           else
             echo "::error::shipped app is missing com.apple.security.cs.disable-library-validation."
-            echo "::error::It will crash on launch when the main process loads better_sqlite3.node."
+            echo "::error::It will crash on launch when the main process loads better-sqlite3's native module."
             exit 1
           fi
 
@@ -236,8 +236,11 @@ jobs:
             echo
           done
 
-          if ! echo "$NATIVES" | grep -q 'better_sqlite3.node'; then
-            echo "::error::better_sqlite3.node was not unpacked; the database will fail to open"
+          # better-sqlite3 >= 13 is N-API and ships its binary as
+          # `prebuilds/<platform>-<arch>.node`, not the old
+          # `build/Release/better_sqlite3.node`, and nothing rebuilds it.
+          if ! echo "$NATIVES" | grep -qE 'better-sqlite3/prebuilds/.+\.node'; then
+            echo "::error::a better-sqlite3 prebuild was not unpacked; the database will fail to open"
             exit 1
           fi
 

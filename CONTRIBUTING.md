@@ -28,10 +28,11 @@ Requirements:
   `electron-builder` is built around npm's `node_modules` layout and silently
   drops transitive dependencies under pnpm. See the `//dependencies` comment in
   `package.json` for the full story.
-- A working native build toolchain. `npm install` runs
-  `electron-builder install-app-deps` as a `postinstall` step, which compiles
-  the native addons (`better-sqlite3`, `sqlite-vec`), so the first install
-  takes a while.
+- **No native build toolchain.** Every native dependency is N-API and ships
+  prebuilt binaries, most of them inside the npm package itself
+  (`better-sqlite3` >= 13 carries `prebuilds/` for every supported
+  platform/arch), so `npm install` compiles nothing and `npmRebuild` is off.
+  See the `npmRebuild` note in `electron-builder.yml`.
 
 ```bash
 git clone https://github.com/MrSibe/KnowNote.git
