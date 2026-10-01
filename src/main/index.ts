@@ -6,8 +6,10 @@ import {
   runMigrations,
   initVectorStore,
   closeDatabase,
-  executeCheckpoint
+  executeCheckpoint,
+  getSqlite
 } from './db'
+import { markInterruptedIndexingFailed } from './db/interruptedIndexing'
 import { ConnectionManager } from './models/ConnectionManager'
 import { EmbeddingService } from './services/EmbeddingService'
 import { SessionAutoSwitchService } from './services/SessionAutoSwitchService'
@@ -93,6 +95,14 @@ app.whenReady().then(async () => {
   Logger.info('Main', 'Initializing database...')
   initDatabase()
   runMigrations()
+  // The ingestion queue is in memory. Leftover live statuses belong to the previous
+  // process; make them retryable before folder reconciliation can enqueue new jobs.
+  const sqlite = getSqlite()
+  if (!sqlite) throw new Error('Database unavailable during indexing recovery')
+  const interrupted = markInterruptedIndexingFailed(sqlite)
+  if (interrupted > 0) {
+    Logger.info('Main', `Marked ${interrupted} interrupted indexing task(s) as failed`)
+  }
   initVectorStore()
   // The resolver is lazy on purpose: `knowledgeService` is constructed further down, and
   // the protocol only ever answers requests from a renderer that loads after startup.

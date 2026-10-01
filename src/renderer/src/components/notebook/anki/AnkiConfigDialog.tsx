@@ -136,7 +136,7 @@ export default function AnkiConfigDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             {t('cancel')}
           </Button>
           <Button onClick={handleGenerate}>{t('startGenerate')}</Button>

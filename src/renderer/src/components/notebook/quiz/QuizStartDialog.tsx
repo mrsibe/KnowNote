@@ -131,7 +131,7 @@ export default function QuizStartDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={() => handleOpenChange(false)}>
             {t('cancel')}
           </Button>
           <Button onClick={handleStart} disabled={!canStart}>
