@@ -105,16 +105,33 @@ function MessageItem({ message }: MessageItemProps): ReactElement {
   const recoveryNotebookId = message.notebookId ?? currentNotebook?.id
   const handleContinue = (): void => {
     if (!recoveryNotebookId) return
-    void continueMessage(recoveryNotebookId, message.id).then((result) => {
-      // The main process refuses past the continuation bound (#179); say why the
-      // button did nothing instead of leaving it silent.
-      if (!result.started && result.reason === 'continuation-limit') {
-        toast.error(t('ui:continueLimitReached'))
-      }
-    })
+    void continueMessage(recoveryNotebookId, message.id)
+      .then((result) => {
+        // The main process refuses past the continuation bound (#179); say why the
+        // button did nothing instead of leaving it silent.
+        if (!result.started && result.reason === 'continuation-limit') {
+          toast.error(t('ui:continueLimitReached'))
+        }
+      })
+      .catch((error) => {
+        toast.error(
+          t('ui:generationFailed', {
+            error: error instanceof Error ? error.message : String(error)
+          }),
+          { duration: 10000 }
+        )
+      })
   }
   const handleRetry = (): void => {
-    if (recoveryNotebookId) void retryMessage(recoveryNotebookId, message.id)
+    if (recoveryNotebookId)
+      void retryMessage(recoveryNotebookId, message.id).catch((error) => {
+        toast.error(
+          t('ui:generationFailed', {
+            error: error instanceof Error ? error.message : String(error)
+          }),
+          { duration: 10000 }
+        )
+      })
   }
 
   const handleCopy = async () => {

@@ -1,4 +1,5 @@
 import { memo, useState, useEffect, useRef, ReactElement } from 'react'
+import { toast } from 'sonner'
 import {
   Send,
   StopCircle,
@@ -97,7 +98,12 @@ function ProcessPanel({
   const handleSend = (): void => {
     if (!canSend) return
 
-    sendMessage(currentSession.id, input.trim())
+    void sendMessage(currentSession.id, input.trim()).catch((error) => {
+      toast.error(
+        t('generationFailed', { error: error instanceof Error ? error.message : String(error) }),
+        { duration: 10000 }
+      )
+    })
     setInput('')
     // The reader may have scrolled up meanwhile: their own message must always
     // land in view, regardless of the follow state.

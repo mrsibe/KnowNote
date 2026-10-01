@@ -283,12 +283,20 @@ export default function NotePanel(): ReactElement {
     if (notebookId) {
       try {
         // 立即开始生成（异步）
-        window.api.mindmap.generate(notebookId).then((result) => {
-          if (result.success) {
-            // 生成完成后重新加载列表
-            loadItems(notebookId)
-          }
-        })
+        void window.api.mindmap
+          .generate(notebookId)
+          .then((result) => {
+            if (!result.success) throw new Error(result.error || t('ui:unknownError'))
+            return loadItems(notebookId)
+          })
+          .catch((error) => {
+            toast.error(
+              t('ui:generationFailed', {
+                error: error instanceof Error ? error.message : String(error)
+              }),
+              { duration: 10000 }
+            )
+          })
 
         // 等待一小段时间后刷新列表，以显示"正在生成"的 item
         setTimeout(() => {
@@ -296,6 +304,12 @@ export default function NotePanel(): ReactElement {
         }, 500)
       } catch (error) {
         console.error('[NotePanel] Failed to generate mind map:', error)
+        toast.error(
+          t('ui:generationFailed', {
+            error: error instanceof Error ? error.message : String(error)
+          }),
+          { duration: 10000 }
+        )
       }
     }
   }
@@ -322,10 +336,16 @@ export default function NotePanel(): ReactElement {
           customPrompt: params.customPrompt
         })
         .then((result) => {
-          if (result.success) {
-            // 生成完成后重新加载列表
-            loadItems(notebookId)
-          }
+          if (!result.success) throw new Error(result.error || t('ui:unknownError'))
+          return loadItems(notebookId)
+        })
+        .catch((error) => {
+          toast.error(
+            t('ui:generationFailed', {
+              error: error instanceof Error ? error.message : String(error)
+            }),
+            { duration: 10000 }
+          )
         })
 
       // 等待一小段时间后刷新列表，以显示"正在生成"的 item
@@ -334,6 +354,10 @@ export default function NotePanel(): ReactElement {
       }, 500)
     } catch (error) {
       console.error('[NotePanel] Failed to start quiz:', error)
+      toast.error(
+        t('ui:generationFailed', { error: error instanceof Error ? error.message : String(error) }),
+        { duration: 10000 }
+      )
     }
   }
 

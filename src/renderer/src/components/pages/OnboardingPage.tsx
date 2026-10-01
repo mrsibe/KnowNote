@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { ConnectionMap } from '../../../../shared/types'
+import ModelsSettings from '../settings/ModelsSettings'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useOnboardingStore } from '../../store/onboardingStore'
@@ -20,19 +22,58 @@ export default function OnboardingPage() {
   const { language, changeLanguage } = useI18nStore()
   const [selectedLanguage, setSelectedLanguage] = useState<Language>(language)
   const [isCompleting, setIsCompleting] = useState(false)
+  const [step, setStep] = useState(0)
+  const [connections, setConnections] = useState<ConnectionMap | null>(null)
+  const [error, setError] = useState('')
 
-  const handleComplete = async () => {
+  useEffect(() => {
+    window.api.connections
+      .getAll()
+      .then(setConnections)
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : String(err))
+      })
+  }, [])
+
+  const handleNext = async (skip = false) => {
     setIsCompleting(true)
-    await changeLanguage(selectedLanguage)
-    await completeOnboarding()
-    navigate('/')
+    setError('')
+    try {
+      if (step === 0) {
+        await changeLanguage(selectedLanguage)
+      } else if (!skip && connections) {
+        const capability = step === 1 ? 'embedding' : 'chat'
+        const connection = connections[capability]
+        if (connection) {
+          if (!connection.baseUrl.trim() || !connection.modelId.trim()) {
+            setError(t('onboardingIncompleteConnection'))
+            return
+          }
+          await window.api.connections.save(capability, connection)
+        } else {
+          await window.api.connections.remove(capability)
+        }
+      }
+      if (step < 2) {
+        // Reload persisted connections so skipped edits do not leak into later steps.
+        setConnections(await window.api.connections.getAll())
+        setStep(step + 1)
+      } else {
+        await completeOnboarding()
+        navigate('/')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsCompleting(false)
+    }
   }
 
   const selectedLangName = languages.find((l) => l.code === selectedLanguage)?.name
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-surface-sunken">
-      <div className="w-full max-w-md px-6 text-center">
+      <div className="w-full max-w-xl px-6 py-8 text-center">
         {/* Logo */}
         <div className="mb-8">
           <img src={logo} alt="KnowNote" className="w-24 h-24 mx-auto mb-4" />
@@ -44,29 +85,68 @@ export default function OnboardingPage() {
           <p className="text-sm text-muted-foreground">{t('onboardingTagline')}</p>
         </div>
 
-        {/* 语言选择 */}
-        <div className="mb-6">
-          <Select
-            value={selectedLanguage}
-            onValueChange={(value) => setSelectedLanguage(value as Language)}
+        <p className="text-sm text-muted-foreground mb-4">
+          {t('onboardingStep', { step: step + 1, total: 3 })}
+        </p>
+        {step === 0 ? (
+          <div className="mb-6">
+            <Select
+              value={selectedLanguage}
+              onValueChange={(value) => setSelectedLanguage(value as Language)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={t('selectLanguage')}>{selectedLangName}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {languages.map((lang) => (
+                  <SelectItem key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div className="mb-6 text-left">
+            <p className="text-sm text-muted-foreground mb-4">
+              {t(step === 1 ? 'onboardingEmbeddingHint' : 'onboardingChatHint')}
+            </p>
+            {connections && (
+              <ModelsSettings
+                key={step}
+                capability={step === 1 ? 'embedding' : 'chat'}
+                connections={connections}
+                onConnectionsChange={setConnections}
+              />
+            )}
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="text-sm text-destructive mb-4">
+            {error}
+          </p>
+        )}
+        <div className="flex gap-3">
+          {step > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => void handleNext(true)}
+              disabled={isCompleting || !connections}
+            >
+              {t('onboardingSkip')}
+            </Button>
+          )}
+          <Button
+            size="lg"
+            onClick={() => void handleNext()}
+            disabled={isCompleting || !connections}
+            className="flex-1"
           >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder={t('selectLanguage')}>{selectedLangName}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {languages.map((lang) => (
-                <SelectItem key={lang.code} value={lang.code}>
-                  {lang.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            {isCompleting
+              ? t('onboardingStarting')
+              : t(step === 2 ? 'onboardingGetStarted' : 'onboardingNext')}
+          </Button>
         </div>
-
-        {/* 确认按钮 */}
-        <Button size="lg" onClick={handleComplete} disabled={isCompleting} className="w-full">
-          {isCompleting ? t('onboardingStarting') : t('onboardingGetStarted')}
-        </Button>
       </div>
     </div>
   )

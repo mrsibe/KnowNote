@@ -110,6 +110,8 @@ export default function EmbeddingSettings({
       if (!result.success) {
         setError(result.error || 'Download failed')
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
       await refreshStatus()

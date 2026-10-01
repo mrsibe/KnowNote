@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { useAnkiStore } from '../../../store/ankiStore'
 import {
@@ -63,6 +64,12 @@ export default function AnkiConfigDialog({
       customPrompt: customPrompt || undefined
     }).catch((error) => {
       console.error('Failed to generate anki cards:', error)
+      toast.error(
+        t('generateFailed', {
+          error: error instanceof Error ? error.message : String(error)
+        }),
+        { duration: 10000 }
+      )
     })
 
     // 等待一小段时间后触发回调，以显示"正在生成"的 item

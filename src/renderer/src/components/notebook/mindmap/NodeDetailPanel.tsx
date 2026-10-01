@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useMindMapStore } from '../../../store/mindmapStore'
 import { useChatStore } from '../../../store/chatStore'
 import ReactMarkdown from 'react-markdown'
+import { toast } from 'sonner'
 
 export default function NodeDetailPanel() {
   const { t } = useTranslation('notebook')
@@ -23,10 +24,16 @@ export default function NodeDetailPanel() {
     if (!currentSession) return
 
     const question = `基于以下内容,请详细解释:\n\n${chunkContent}`
-    await sendMessage(currentSession.id, question)
-
-    // 关闭思维导图Dialog,聚焦到对话面板
-    setDialogOpen(false)
+    try {
+      await sendMessage(currentSession.id, question)
+      // 关闭思维导图Dialog,聚焦到对话面板
+      setDialogOpen(false)
+    } catch (error) {
+      toast.error(
+        t('ui:generationFailed', { error: error instanceof Error ? error.message : String(error) }),
+        { duration: 10000 }
+      )
+    }
   }
 
   return (

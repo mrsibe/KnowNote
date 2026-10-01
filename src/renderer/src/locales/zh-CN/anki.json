@@ -52,5 +52,6 @@
     "validatingData": "验证数据",
     "savingCards": "保存卡片",
     "completed": "完成"
-  }
+  },
+  "generateFailed": "卡片生成失败：{{error}}"
 }

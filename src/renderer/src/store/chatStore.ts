@@ -550,8 +550,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
 
     const result = await window.api.retryMessage(messageId)
     if (!result.success || !result.messageId) {
-      console.error('[ChatStore] Failed to retry the answer:', result.error)
-      return
+      throw new Error(result.error || 'Failed to retry the answer')
     }
 
     // A sibling: a new answer to the same question, next to the one that stopped. It
@@ -630,14 +629,17 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       // of leaving the spinner running.
       rollback()
       console.error('[ChatStore] Failed to continue the answer:', error)
-      return { started: false }
+      throw error
     }
 
     if (!result.success) {
       rollback()
       console.error('[ChatStore] Failed to continue the answer:', result.error)
-      // The caller owns the wording (#179): the store does not import i18n, so the
-      // reason is handed back rather than translated here.
+      // The continuation bound has dedicated UI wording; other failures preserve
+      // the main process's actual error for the caller to display.
+      if (result.reason !== 'continuation-limit') {
+        throw new Error(result.error || 'Failed to continue the answer')
+      }
       return { started: false, reason: result.reason }
     }
 

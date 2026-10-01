@@ -124,5 +124,12 @@
   "searchMatchingText": "匹配的文本",
   "searchRelatedPassages": "相关段落",
   "searchPage": "第 {{page}} 页",
-  "continueLimitReached": "这条回答已达到继续次数上限。"
+  "continueLimitReached": "这条回答已达到继续次数上限。",
+  "onboardingStep": "第 {{step}} / {{total}} 步",
+  "onboardingIncompleteConnection": "请填写服务地址和模型名称，或选择稍后配置。",
+  "onboardingEmbeddingHint": "下载内置嵌入模型后即可索引和检索文档，无需 API Key。也可以配置远程模型，或稍后在设置中完成。",
+  "onboardingChatHint": "对话模型用于问答、卡片和测验生成，不包含在嵌入模型中。可配置兼容服务或本地模型；稍后也可在设置中完成。",
+  "onboardingSkip": "稍后配置",
+  "onboardingNext": "保存并继续",
+  "generationFailed": "生成失败：{{error}}"
 }

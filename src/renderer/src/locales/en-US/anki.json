@@ -52,5 +52,6 @@
     "validatingData": "Validating data",
     "savingCards": "Saving cards",
     "completed": "Completed"
-  }
+  },
+  "generateFailed": "Card generation failed: {{error}}"
 }

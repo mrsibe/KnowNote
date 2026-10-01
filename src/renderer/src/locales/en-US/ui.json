@@ -125,5 +125,12 @@
   "searchMatchingText": "Matching text",
   "searchRelatedPassages": "Related passages",
   "searchPage": "p. {{page}}",
-  "continueLimitReached": "This answer has reached its continuation limit."
+  "continueLimitReached": "This answer has reached its continuation limit.",
+  "onboardingStep": "Step {{step}} of {{total}}",
+  "onboardingIncompleteConnection": "Enter a base URL and model name, or choose Set up later.",
+  "onboardingEmbeddingHint": "Download the built-in embedding model to index and search documents without an API key. You can also configure a remote model or set it up later in Settings.",
+  "onboardingChatHint": "A chat model powers answers, cards and quizzes; the embedding model cannot do this. Configure a compatible service or local model now, or later in Settings.",
+  "onboardingSkip": "Set up later",
+  "onboardingNext": "Save and continue",
+  "generationFailed": "Generation failed: {{error}}"
 }
