@@ -5,7 +5,8 @@
 
 import { z } from 'zod'
 import { API_PROTOCOLS, MODEL_CAPABILITIES, REASONING_EFFORTS } from '../../shared/types'
-import { Result, Err, Ok } from '../../shared/types/result'
+import { Err, Ok } from '../../shared/types/result'
+import type { Result } from '../../shared/types/result'
 import Logger from '../../shared/utils/logger'
 
 /**
@@ -185,6 +186,20 @@ export const KnowledgeSchemas = {
 
   getDocuments: z.object({
     notebookId: z.string().min(1, '笔记本 ID 不能为空')
+  }),
+
+  listLibrarySources: z.object({
+    notebookId: z.string().min(1)
+  }),
+
+  attachLibrarySource: z.object({
+    notebookId: z.string().min(1),
+    sourceId: z.string().min(1)
+  }),
+
+  deleteLibrarySource: z.object({
+    sourceId: z.string().min(1),
+    confirmed: z.literal(true)
   }),
 
   getDocument: z.object({

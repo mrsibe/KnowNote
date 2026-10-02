@@ -211,7 +211,10 @@ function DocumentItem({
               <span aria-hidden="true"> · </span>
               {t('chunks', { count: document.chunkCount ?? 0 })}
             </span>
-            {(document.status === 'processing' || document.status === 'pending') && (
+            {document.status === 'pending' && (
+              <span className="text-xs text-muted-foreground">{t('libraryIndexRequired')}</span>
+            )}
+            {document.status === 'processing' && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Loader2 className="w-3 h-3 animate-spin" />
                 {t('indexing')}
@@ -254,7 +257,7 @@ function DocumentItem({
             {t('retryDocument')}
           </DropdownMenuItem>
         )}
-        {document.status === 'indexed' && (
+        {(document.status === 'indexed' || document.status === 'pending') && (
           <DropdownMenuItem onSelect={() => onReindex(document.id)}>
             <RefreshCw className="w-4 h-4 text-muted-foreground" />
             {t('reindexDocument')}
@@ -277,7 +280,7 @@ function DocumentItem({
         onConfirm={handleConfirmDelete}
         title={t('deleteDocument')}
         description={t('confirmDeleteDocument')}
-        confirmLabel={t('common:delete')}
+        confirmLabel={t('removeSource')}
       />
     </DropdownMenu>
   )

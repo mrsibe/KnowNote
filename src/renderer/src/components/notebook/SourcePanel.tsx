@@ -12,7 +12,8 @@ import {
   Quote,
   ExternalLink,
   FolderOpen,
-  FolderSync
+  FolderSync,
+  Library
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useKnowledgeStore, setupKnowledgeListeners } from '../../store/knowledgeStore'
@@ -34,6 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Card } from '../ui/card'
 import { PanelHeader } from '../ui/panel-header'
 import DocumentList from './source/DocumentList'
+import LibrarySourceDialog from './source/LibrarySourceDialog'
 import SourceReader from './source/reader/SourceReader'
 import type { KnowledgeDocument, BatchImportOutcome } from '../../../../shared/types/knowledge'
 import type { ReaderAnchor, ReaderSelection } from '../../../../shared/types/source'
@@ -331,6 +333,7 @@ export default function SourcePanel(): ReactElement {
   const { t } = useTranslation('ui')
   const { id: notebookId } = useParams()
   const [showAddMenu, setShowAddMenu] = useState(false)
+  const [showLibraryDialog, setShowLibraryDialog] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [modalType, setModalType] = useState<AddSourceType | null>(null)
   const [hasEmbeddingModel, setHasEmbeddingModel] = useState(false)
@@ -812,11 +815,10 @@ export default function SourcePanel(): ReactElement {
               >
                 <Button
                   onClick={() => setShowAddMenu(!showAddMenu)}
-                  disabled={!hasEmbeddingModel}
                   variant="ghost"
                   size="icon"
                   className="w-8 h-8"
-                  title={!hasEmbeddingModel ? t('noEmbeddingModelConfigured') : t('addSource')}
+                  title={t('addSource')}
                 >
                   <Plus className="w-4 h-4" />
                 </Button>
@@ -825,6 +827,18 @@ export default function SourcePanel(): ReactElement {
                 {showAddMenu && (
                   <div className="absolute right-0 top-full mt-1 w-44 bg-surface-overlay border border-border rounded-lg shadow-elevation overflow-hidden p-1 z-10">
                     <Button
+                      onClick={() => {
+                        setShowLibraryDialog(true)
+                        setShowAddMenu(false)
+                      }}
+                      variant="ghost"
+                      className="w-full justify-start text-sm font-normal"
+                    >
+                      <Library className="w-4 h-4" />
+                      {t('fromLibrary')}
+                    </Button>
+                    <Button
+                      disabled={!hasEmbeddingModel}
                       onClick={handleFileUpload}
                       variant="ghost"
                       className="w-full justify-start text-sm font-normal"
@@ -833,6 +847,7 @@ export default function SourcePanel(): ReactElement {
                       {t('uploadFile')}
                     </Button>
                     <Button
+                      disabled={!hasEmbeddingModel}
                       onClick={() => void handleFolderUpload(false)}
                       variant="ghost"
                       className="w-full justify-start text-sm font-normal"
@@ -841,6 +856,7 @@ export default function SourcePanel(): ReactElement {
                       {t('uploadFolder')}
                     </Button>
                     <Button
+                      disabled={!hasEmbeddingModel}
                       onClick={() => void handleFolderUpload(true)}
                       variant="ghost"
                       className="w-full justify-start text-sm font-normal"
@@ -849,6 +865,7 @@ export default function SourcePanel(): ReactElement {
                       {t('watchFolder')}
                     </Button>
                     <Button
+                      disabled={!hasEmbeddingModel}
                       onClick={() => {
                         setModalType('url')
                         setShowAddMenu(false)
@@ -860,6 +877,7 @@ export default function SourcePanel(): ReactElement {
                       {t('importUrl')}
                     </Button>
                     <Button
+                      disabled={!hasEmbeddingModel}
                       onClick={() => {
                         setModalType('text')
                         setShowAddMenu(false)
@@ -871,6 +889,7 @@ export default function SourcePanel(): ReactElement {
                       {t('pasteText')}
                     </Button>
                     <Button
+                      disabled={!hasEmbeddingModel}
                       onClick={() => {
                         setModalType('note')
                         setShowAddMenu(false)
@@ -909,6 +928,20 @@ export default function SourcePanel(): ReactElement {
             </ScrollArea>
           )}
         </div>
+      )}
+
+      {showLibraryDialog && notebookId && (
+        <LibrarySourceDialog
+          key={notebookId}
+          notebookId={notebookId}
+          onClose={() => setShowLibraryDialog(false)}
+          onAdded={async () => {
+            if (useKnowledgeStore.getState().activeNotebookId === notebookId) {
+              await loadDocuments(notebookId)
+              await loadStats(notebookId)
+            }
+          }}
+        />
       )}
 
       {/* 添加来源弹窗 - 使用 key 强制在 type 变化时重新挂载组件 */}

@@ -28,7 +28,8 @@ import type {
   AddDocumentOptions,
   SearchOptions,
   IndexProgress,
-  BatchImportOutcome
+  BatchImportOutcome,
+  LibrarySourceSummary
 } from '../shared/types/knowledge'
 import type { UpdateState, UpdateCheckResult, UpdateOperationResult } from '../shared/types/update'
 import type { MindMap, Quiz, QuizSession, AnkiCard } from '../main/db/schema'
@@ -319,6 +320,15 @@ declare global {
 
         // 文档管理
         getDocuments: (notebookId: string) => Promise<KnowledgeDocument[]>
+        listLibrarySources: (notebookId: string) => Promise<LibrarySourceSummary[]>
+        attachLibrarySource: (
+          notebookId: string,
+          sourceId: string
+        ) => Promise<{ success: boolean; documentId?: string; indexed?: boolean; error?: string }>
+        deleteLibrarySource: (
+          sourceId: string,
+          confirmed: boolean
+        ) => Promise<{ success: boolean; error?: string }>
         getDocument: (documentId: string) => Promise<KnowledgeDocument | null>
         getDocumentChunks: (documentId: string) => Promise<KnowledgeChunk[]>
         getDocumentBlocks: (documentId: string) => Promise<SourceBlock[]>

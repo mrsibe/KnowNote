@@ -211,6 +211,12 @@ const api = {
     // 文档管理
     getDocuments: (notebookId: string) =>
       ipcRenderer.invoke('knowledge:get-documents', { notebookId }),
+    listLibrarySources: (notebookId: string) =>
+      ipcRenderer.invoke('knowledge:list-library-sources', { notebookId }),
+    attachLibrarySource: (notebookId: string, sourceId: string) =>
+      ipcRenderer.invoke('knowledge:attach-library-source', { notebookId, sourceId }),
+    deleteLibrarySource: (sourceId: string, confirmed: boolean) =>
+      ipcRenderer.invoke('knowledge:delete-library-source', { sourceId, confirmed }),
     getDocument: (documentId: string) =>
       ipcRenderer.invoke('knowledge:get-document', { documentId }),
     getDocumentChunks: (documentId: string) =>

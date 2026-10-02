@@ -208,6 +208,39 @@ export function registerKnowledgeHandlers(knowledgeService: KnowledgeService) {
     })
   )
 
+  ipcMain.handle(
+    'knowledge:list-library-sources',
+    validate(KnowledgeSchemas.listLibrarySources, async ({ notebookId }) => {
+      return knowledgeService.listLibrarySources(notebookId)
+    })
+  )
+
+  ipcMain.handle(
+    'knowledge:attach-library-source',
+    validate(KnowledgeSchemas.attachLibrarySource, async ({ notebookId, sourceId }) => {
+      try {
+        return {
+          success: true,
+          ...(await knowledgeService.attachLibrarySource(notebookId, sourceId))
+        }
+      } catch (error) {
+        return { success: false, error: (error as Error).message }
+      }
+    })
+  )
+
+  ipcMain.handle(
+    'knowledge:delete-library-source',
+    validate(KnowledgeSchemas.deleteLibrarySource, async ({ sourceId, confirmed }) => {
+      try {
+        await knowledgeService.deleteLibrarySource(sourceId, confirmed)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: (error as Error).message }
+      }
+    })
+  )
+
   // 获取单个文档
   ipcMain.handle(
     'knowledge:get-document',
