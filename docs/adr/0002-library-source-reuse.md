@@ -35,6 +35,14 @@ donor, add a pending membership and show that indexing is required; only the
 user's explicit reindex action may produce embeddings. Same dimensions alone
 are not proof of compatibility. Copying never invalidates other target sources.
 
+A remote embedding connection cannot report its vector width before the first
+embedding, so its space id is dimension-agnostic while `notebook_embedding_spaces.dimensions`
+carries the width measured during indexing. Reuse therefore compares the exact
+space id and, when the current width is known, that width; the donor's persisted
+width is separately checked against its own vector table and against every chunk's
+embedding row and vector row, and a vector copy that does not affect exactly one
+row fails the attach instead of producing a half-indexed membership.
+
 ## Removal and lifecycle
 
 Removing a source removes only that notebook's membership and derived index.

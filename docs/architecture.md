@@ -153,13 +153,15 @@ A document is an identity. Everything derived from it can be rebuilt:
 ```text
 PDF / DOCX / URL / Note
         ↓
-documents                 ← source identity (id, content, structure, localFilePath)
+library_sources          ← durable library snapshot (#99): content, structure, file
+        ↓
+documents                ← per-notebook membership: id, status, cached projection
         ↓
 document_blocks           ← derived: page / heading level / bbox / char span
         ↓
 chunks + chunk_blocks     ← derived: char offsets anchored to documents.content
         ↓
-embeddings + vectors      ← derived
+embeddings + vectors      ← derived, per notebook
 ```
 
 Two invariants hold across the whole chain:
@@ -171,6 +173,17 @@ Two invariants hold across the whole chain:
    `documents` row, so a citation that stored a `documentId` stays valid. The parse
    structure is persisted on the source row so a rebuild does not need to re-parse a
    file that may have changed on disk.
+
+`#99` splits identity in two. `library_sources` is the library-level snapshot — the
+canonical text, its parse structure and the library-owned copy of the original file —
+and `documents` is one notebook's membership of it, which keeps its own id and derived
+index. Attaching an existing snapshot to a second notebook copies a compatible donor's
+chunks, provenance and vectors with new membership-local ids instead of re-parsing or
+re-embedding; when the embedding space does not match, the membership lands `pending`
+and only an explicit re-index may embed it. Removing a membership never deletes the
+library snapshot or its file. A shared snapshot is immutable: refresh is copy-on-write,
+so one notebook's file change cannot move another's page and span citations. See
+[`adr/0002-library-source-reuse.md`](adr/0002-library-source-reuse.md).
 
 ## Retrieval seam
 
