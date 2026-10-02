@@ -146,6 +146,36 @@ export type NewNote = typeof notes.$inferInsert
 // ==================== RAG 相关表 ====================
 
 /**
+ * 库来源表（#99）
+ *
+ * 一个来源在库层面只存在一次：规范文本、解析结构、原始 URI 与本地文件都属于
+ * snapshot，与任何 notebook 无关。`documents` 行是某个 notebook 对这个 snapshot 的
+ * 一次挂载（membership），保留自己的 ID，所以历史 citation 不受迁移影响。
+ *
+ * snapshot 在共享期间不可变：刷新走 copy-on-write（新开一个 snapshot），重新索引
+ * 只读已持久化的 snapshot，不会碰到别的 notebook。文件生命周期也归 snapshot ——
+ * 删除 notebook / 解除挂载都不 unlink，只有显式删除未使用的 snapshot 才会。
+ */
+export const librarySources = sqliteTable('library_sources', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  type: text('type', { enum: ['file', 'note', 'url', 'text'] }).notNull(),
+  sourceUri: text('source_uri'), // 原始文件路径或 URL
+  localFilePath: text('local_file_path'), // 库持有的本地拷贝文件（可共享）
+  content: text('content'), // 规范文本
+  structure: text('structure', { mode: 'json' }).$type<DocumentStructure>(),
+  contentHash: text('content_hash'),
+  mimeType: text('mime_type'),
+  fileSize: integer('file_size'),
+  metadata: text('metadata', { mode: 'json' }).$type<Record<string, unknown>>(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
+})
+
+export type LibrarySource = typeof librarySources.$inferSelect
+export type NewLibrarySource = typeof librarySources.$inferInsert
+
+/**
  * 知识库文档表
  * 存储上传的文档元信息（知识来源）
  */
@@ -161,6 +191,9 @@ export const documents = sqliteTable(
     sourceUri: text('source_uri'), // 原始文件路径或 URL
     localFilePath: text('local_file_path'), // 本地拷贝文件路径
     sourceNoteId: text('source_note_id').references(() => notes.id, { onDelete: 'set null' }),
+    // 这个 membership 指向的库 snapshot（#99）。NULL = 迁移前/尚未解析的来源，
+    // 它还不能被别的 notebook 复用。
+    sourceId: text('source_id').references(() => librarySources.id, { onDelete: 'set null' }),
     content: text('content'), // 原始内容（可选存储）
     // 解析器给出的结构（页/章节）。这是 source record 的一部分,不是派生索引:
     // 重新索引必须能重建出与首次导入一致的 document_blocks,所以不能靠重新解析
@@ -189,7 +222,10 @@ export const documents = sqliteTable(
   },
   (table) => ({
     notebookIdx: index('idx_documents_notebook').on(table.notebookId, table.updatedAt),
-    statusIdx: index('idx_documents_status').on(table.status)
+    statusIdx: index('idx_documents_status').on(table.status),
+    // 同一个 notebook 不会重复挂载同一个 snapshot（#99）。NULL 在 SQLite 的唯一索引里
+    // 互不相同，所以尚未解析的 membership 不受约束。
+    sourceIdx: uniqueIndex('idx_documents_notebook_source').on(table.notebookId, table.sourceId)
   })
 )
 

@@ -455,13 +455,6 @@ export async function deleteNotebook(id: string) {
   const db = getDatabase()
 
   try {
-    // 先获取该笔记本下所有带本地文件的文档
-    const docsWithLocalFiles = db
-      .select({ localFilePath: documents.localFilePath })
-      .from(documents)
-      .where(eq(documents.notebookId, id))
-      .all()
-
     // 删除笔记本（外键级联会自动删除所有关联的 sessions、messages 和 documents）
     db.delete(notebooks).where(eq(notebooks.id, id)).run()
 
@@ -473,20 +466,8 @@ export async function deleteNotebook(id: string) {
       console.error(`[Database] Failed to drop vector table of notebook ${id}:`, error)
     }
 
-    // 删除本地文件（异步执行，不阻塞数据库操作）
-    if (docsWithLocalFiles.length > 0) {
-      const { unlink } = await import('fs/promises')
-      for (const doc of docsWithLocalFiles) {
-        if (doc.localFilePath) {
-          try {
-            await unlink(doc.localFilePath)
-            console.log(`[Database] Deleted local file: ${doc.localFilePath}`)
-          } catch (error) {
-            console.error(`[Database] Failed to delete local file: ${doc.localFilePath}`, error)
-          }
-        }
-      }
-    }
+    // 本地文件归库 snapshot（library_sources）所有，可能还被别的 notebook 复用（#99）。
+    // 删除 notebook 只解除挂载，绝不 unlink；库文件的生命周期由显式删除 snapshot 管理。
 
     // 执行 checkpoint 确保数据持久化
     executeCheckpoint('PASSIVE')

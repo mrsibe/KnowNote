@@ -7,11 +7,14 @@ import { createHash } from 'crypto'
 import { app } from 'electron'
 import { join, basename, sep } from 'path'
 import { mkdir, copyFile, unlink, stat } from 'fs/promises'
+import type Database from 'better-sqlite3'
 import {
   getDatabase,
   executeCheckpoint,
   getNotebookVectorTable,
-  rebuildNotebookVectorTable
+  createNotebookVectorTable,
+  rebuildNotebookVectorTable,
+  getSqlite
 } from '../db'
 import {
   documents,
@@ -34,6 +37,18 @@ import type {
 import { eq, desc, inArray, sql } from 'drizzle-orm'
 import { EmbeddingService } from './EmbeddingService'
 import type { EmbeddingSpace } from '../../shared/types'
+import type { LibrarySourceSummary, DocumentType } from '../../shared/types/knowledge'
+import {
+  attachLibrarySource as attachLibrarySourceMembership,
+  countMemberships,
+  deleteLibrarySource as deleteLibrarySourceRecord,
+  insertLibrarySource as insertLibrarySourceRow,
+  listLibrarySources as listLibrarySourceSummaries,
+  planSnapshotWrite,
+  updateLibrarySource as updateLibrarySourceRow,
+  type EmbeddingSpaceIdentity,
+  type VectorTableAccess
+} from './librarySources'
 import { ChunkingService, type ChunkOptions, type ChunkResult } from './ChunkingService'
 import { FileParserService } from './FileParserService'
 import type { DocumentStructure } from './loaders/types'
@@ -169,6 +184,23 @@ export interface BatchImportResult {
 }
 
 /**
+ * 一个库 snapshot 的可选字段（#99）。导入/刷新在解析或内容确定之后用它建 snapshot，
+ * membership 再缓存同一批字段，检索/阅读器继续读 `documents` 上的兼容投影。
+ */
+interface LibrarySnapshotFields {
+  title: string
+  type: DocumentType
+  sourceUri?: string
+  localFilePath?: string
+  content?: string
+  structure?: DocumentStructure
+  contentHash?: string
+  mimeType?: string
+  fileSize?: number
+  metadata?: Record<string, unknown>
+}
+
+/**
  * `RetrievedEvidence` → 兼容的 `SearchResult` 形状。
  *
  * 抽成纯函数是因为现在有两个调用点：legacy `search()`，以及 chat 的 RAG —— 后者直接
@@ -239,20 +271,21 @@ export class KnowledgeService {
   }
 
   /**
-   * 拷贝文件到知识库目录
+   * 拷贝文件到知识库目录。
+   *
+   * 文件按 `ownerId`（库 snapshot 的 id）命名，而不是 document id：文件归 snapshot 所有，
+   * 复制式刷新会为新 snapshot 生成新文件名，不会覆盖别的 notebook 正在用的物理文件。
+   *
    * @param sourceFilePath 源文件路径
-   * @param documentId 文档 ID
+   * @param ownerId 拥有这份拷贝的库 snapshot id
    * @returns 本地文件路径
    */
-  private async copyFileToKnowledgeDir(
-    sourceFilePath: string,
-    documentId: string
-  ): Promise<string> {
+  private async copyFileToKnowledgeDir(sourceFilePath: string, ownerId: string): Promise<string> {
     await this.ensureKnowledgeFilesDir()
 
     // 提取文件扩展名
     const extension = sourceFilePath.split('.').pop() || 'bin'
-    const localFileName = `${documentId}.${extension}`
+    const localFileName = `${ownerId}.${extension}`
     const localFilePath = join(this.knowledgeFilesDir, localFileName)
 
     // 拷贝文件
@@ -299,6 +332,19 @@ export class KnowledgeService {
     //    这一行，不会再生成新的 documentId。
     onProgress?.('creating_document', 0)
 
+    // 库 snapshot 在解析/内容确定之后、索引之前建立（#99）：这份内容从此可以被别的
+    // notebook 复用，且复用不依赖原始可变文件。
+    const sourceId = this.createLibrarySnapshot({
+      title: options.title,
+      type: options.type,
+      sourceUri: options.sourceUri,
+      content: options.content,
+      contentHash,
+      mimeType: options.mimeType,
+      fileSize: options.fileSize,
+      metadata: options.metadata
+    })
+
     const newDoc: NewDocument = {
       id: documentId,
       notebookId,
@@ -306,6 +352,7 @@ export class KnowledgeService {
       type: options.type,
       sourceUri: options.sourceUri,
       sourceNoteId: options.sourceNoteId,
+      sourceId,
       content: options.content,
       contentHash,
       mimeType: options.mimeType,
@@ -494,26 +541,63 @@ export class KnowledgeService {
   }
 
   /**
-   * 一条 ingestion pipeline：copy（可选）→ parse → chunk → embed → 写入派生索引。
+   * 一条 ingestion pipeline：copy（可选）→ parse → snapshot → chunk → embed → 写入派生索引。
    *
    * 导入与「解析阶段失败后的重试」共用它：后者已经有本地副本，直接解析副本，不再拷贝。
    * run 的生命周期也在这里维护（#95）—— 每条路径都必须留下一次完整的尝试记录。
+   *
+   * 库 snapshot 在**解析之后、索引之前**建立（#99）：内容一旦确定就能被复用，而索引
+   * 失败也不会留下一个空 snapshot。`refresh` 为真时走 copy-on-write，新开一个
+   * snapshot，旧 snapshot 与它正在服务的别的 notebook 完全不受影响。
    */
   private async ingestFile(
     documentId: string,
     filePath: string,
-    options: { copyFrom?: string; chunkOptions?: ChunkOptions },
+    options: { copyFrom?: string; chunkOptions?: ChunkOptions; refresh?: boolean },
     kind: IngestionRunKind,
     onProgress?: IndexProgressCallback
   ): Promise<void> {
     const db = getDatabase()
+    const existing = this.getDocument(documentId)
+    if (!existing) throw new Error(`Document ${documentId} not found`)
+
     const runId = startRun(documentId, kind)
 
+    // snapshot 计划：刷新/首次/被共享 -> 新开；一份从未解析成功的独占空快照 -> 原地补齐；
+    // 已解析且独占 -> 保持不动。共享期间快照不可变，任何路径都不会原地改写别人的快照。
+    const plan = planSnapshotWrite({
+      refresh: options.refresh === true,
+      hasSourceId: Boolean(existing.sourceId),
+      hasContent: Boolean(existing.content),
+      membershipCount: existing.sourceId
+        ? countMemberships(this.requireRawSqlite(), existing.sourceId)
+        : 0
+    })
+    const isNewSnapshot = plan === 'new'
+    const sourceId = isNewSnapshot ? this.newLibrarySourceId() : existing.sourceId!
+
     try {
+      if (plan === 'keep') {
+        // 当前调用图不会走到这里（retryDocument 对已解析来源直接转 reindexDocument），但保留
+        // 这条路径：已解析的独占快照按 ADR 从持久化快照重建，绝不因重试而漂移。
+        await this.indexDocument(
+          documentId,
+          runId,
+          existing.content!,
+          existing.structure ?? undefined,
+          { chunkOptions: options.chunkOptions },
+          onProgress
+        )
+        completeRun(runId)
+        return
+      }
+
+      let localFilePath = existing.localFilePath
       if (options.copyFrom) {
         advanceRun(runId, 'copying', 0)
         onProgress?.('copying', 0)
-        const localFilePath = await this.copyFileToKnowledgeDir(options.copyFrom, documentId)
+        // 文件归 snapshot 所有：新 snapshot 得到新文件名，不会覆盖共享的物理文件。
+        localFilePath = await this.copyFileToKnowledgeDir(options.copyFrom, sourceId)
         db.update(documents)
           .set({ localFilePath, updatedAt: new Date() })
           .where(eq(documents.id, documentId))
@@ -526,15 +610,39 @@ export class KnowledgeService {
 
       // 计算内容哈希
       const contentHash = createHash('md5').update(parseResult.content).digest('hex')
-      const docType =
+      const docType: DocumentType =
         parseResult.mimeType === 'text/plain' || parseResult.mimeType === 'text/markdown'
           ? 'text'
           : 'file'
+      const title = parseResult.title || basename(filePath) || 'Untitled'
+      const sourceMtimeMs = (await stat(filePath).catch(() => null))?.mtimeMs
+
+      // 解析完成之后、索引之前：先落 snapshot，再让 membership 指向它。
+      const snapshotFields: LibrarySnapshotFields = {
+        title,
+        type: docType,
+        sourceUri: existing.sourceUri ?? filePath,
+        localFilePath: localFilePath ?? undefined,
+        content: parseResult.content,
+        structure: parseResult.structure ?? undefined,
+        contentHash,
+        mimeType: parseResult.mimeType,
+        fileSize: parseResult.metadata?.fileSize as number | undefined,
+        metadata: parseResult.metadata
+      }
+      if (isNewSnapshot) {
+        this.insertLibrarySnapshot(sourceId, snapshotFields)
+      } else {
+        // plan === 'fill'：升级前解析失败、迁移只给它一个空的独占 snapshot（content = NULL）。
+        // 重试成功后原地补齐，这份快照才真正可复用；空快照没有任何 citation 引用。
+        this.updateLibrarySnapshot(sourceId, snapshotFields)
+      }
 
       db.update(documents)
         .set({
-          title: parseResult.title || basename(filePath) || 'Untitled',
+          title,
           type: docType,
+          sourceId,
           content: parseResult.content,
           // 结构随 source 一起持久化，重新索引才能不加解析地重建同一批块
           structure: parseResult.structure ?? undefined,
@@ -545,7 +653,7 @@ export class KnowledgeService {
           errorMessage: null,
           // 文件回到 available，并记下这次看到的 mtime：watch（#158）靠它判断是否被改过。
           sourceState: 'available',
-          sourceMtimeMs: (await stat(filePath).catch(() => null))?.mtimeMs,
+          sourceMtimeMs,
           updatedAt: new Date()
         })
         .where(eq(documents.id, documentId))
@@ -953,6 +1061,18 @@ export class KnowledgeService {
     const now = new Date()
     const contentHash = createHash('md5').update(options.content).digest('hex')
 
+    // 内容已经可用，snapshot 立刻建立（#99）：列表里这一行就是可复用的库来源。
+    const sourceId = this.createLibrarySnapshot({
+      title: options.title,
+      type: options.type,
+      sourceUri: options.sourceUri,
+      content: options.content,
+      contentHash,
+      mimeType: options.mimeType,
+      fileSize: options.fileSize,
+      metadata: options.metadata
+    })
+
     const newDoc: NewDocument = {
       id: documentId,
       notebookId,
@@ -960,6 +1080,7 @@ export class KnowledgeService {
       type: options.type,
       sourceUri: options.sourceUri,
       sourceNoteId: options.sourceNoteId,
+      sourceId,
       content: options.content,
       contentHash,
       mimeType: options.mimeType,
@@ -1061,17 +1182,31 @@ export class KnowledgeService {
           jobProgress('fetching_url', 0)
           const fetchResult = await this.webFetchService.fetchUrl(url)
           const content = fetchResult.content
+          const title = fetchResult.title || url
+          const metadata = {
+            ...fetchResult.metadata,
+            description: fetchResult.description
+          }
+
+          // 抓取完成之后、索引之前建立 snapshot（#99）。
+          const sourceId = this.createLibrarySnapshot({
+            title,
+            type: 'url',
+            sourceUri: url,
+            content,
+            contentHash: createHash('md5').update(content).digest('hex'),
+            mimeType: fetchResult.mimeType,
+            metadata
+          })
 
           db.update(documents)
             .set({
-              title: fetchResult.title || url,
+              title,
+              sourceId,
               content,
               contentHash: createHash('md5').update(content).digest('hex'),
               mimeType: fetchResult.mimeType,
-              metadata: {
-                ...fetchResult.metadata,
-                description: fetchResult.description
-              },
+              metadata,
               updatedAt: new Date()
             })
             .where(eq(documents.id, documentId))
@@ -1321,27 +1456,145 @@ export class KnowledgeService {
   }
 
   /**
-   * 删除文档
+   * 从一个 notebook 解除挂载（#99）。
+   *
+   * 只删这个 membership 及其派生索引：库 snapshot 与它的物理文件保留（可能还有别的
+   * notebook 在用，也可能只是留着以后复用）。永久删除库来源是另一个显式、已确认的
+   * 操作（`deleteLibrarySource`）。notebook 删除走同样的 detach-only 语义。
    */
   async deleteDocument(documentId: string): Promise<void> {
     const db = getDatabase()
 
-    // 获取文档信息
     const doc = db.select().from(documents).where(eq(documents.id, documentId)).get()
     if (!doc) return
 
-    // 删除全部派生索引（向量、映射、chunks、embeddings、blocks）
+    // 删除全部派生索引（向量、映射、chunks、embeddings、blocks）。
     await this.clearDerivedIndex(documentId)
 
-    // 删除本地拷贝的文件（如果存在）
-    if (doc.localFilePath) {
-      await this.deleteLocalFile(doc.localFilePath)
-    }
-
+    // 只删 membership 行：文件名归库 snapshot 所有，这里绝不能 unlink。
     db.delete(documents).where(eq(documents.id, documentId)).run()
 
     executeCheckpoint('PASSIVE')
-    Logger.info('KnowledgeService', `Document deleted: ${documentId}`)
+    Logger.info('KnowledgeService', `Document detached: ${documentId}`)
+  }
+
+  /**
+   * 列出这个 notebook 还没挂载的库 snapshot（#99）。
+   *
+   * `canReuseIndex` 需要「当前配置的 space」，所以它是异步的：只有 donor 持久化的
+   * space 与当前模型一致、且目标 notebook 能接住时，才可能不调用 embedding 直接复用。
+   */
+  async listLibrarySources(notebookId: string): Promise<LibrarySourceSummary[]> {
+    const space = await this.embeddingService.getSpace()
+    return listLibrarySourceSummaries(
+      this.requireRawSqlite(),
+      notebookId,
+      this.embeddingSpaceIdentity(space),
+      this.vectorTableAccess()
+    )
+  }
+
+  /**
+   * 把一个库 snapshot 挂载到 notebook（#99）。
+   *
+   * 可复用时只复制 donor 的派生索引与向量，**绝不调用 embedding**；不可复用（模型/
+   * 维度不匹配，或没有 donor）时落一个 pending membership，等用户显式重新索引（这条
+   * 路径不碰任何已有向量）。重复挂载幂等。所有 DB 操作在 `getSpace()` 之后同步完成，
+   * 所以挂载与删除不会交错。
+   */
+  async attachLibrarySource(
+    notebookId: string,
+    sourceId: string
+  ): Promise<{ documentId: string; indexed: boolean }> {
+    const space = await this.embeddingService.getSpace()
+    const result = attachLibrarySourceMembership(this.requireRawSqlite(), {
+      notebookId,
+      sourceId,
+      currentSpace: this.embeddingSpaceIdentity(space),
+      tables: this.vectorTableAccess()
+    })
+    // 空目标会在 attach 里新建向量表，而 vectorStoreManager 可能已经缓存了一个
+    // 无向量表的 store（初始化时读过 vec_metadata 为空）。丢掉缓存，下一次检索/写入
+    // 会从新的元数据重新初始化，否则会以为目标还没有向量表。
+    await vectorStoreManager.closeStore(notebookId)
+    Logger.info(
+      'KnowledgeService',
+      `Library source attached: ${sourceId} -> ${notebookId} (indexed: ${result.indexed})`
+    )
+    return { documentId: result.documentId, indexed: result.indexed }
+  }
+
+  /**
+   * 永久删除一个库 snapshot（#99）。未确认或仍被挂载时拒绝；删成功后 unlink 它的
+   * 本地文件。这是唯一会删库文件的路径。
+   */
+  async deleteLibrarySource(sourceId: string, confirmed: boolean): Promise<void> {
+    const { localFilePath, deleted } = deleteLibrarySourceRecord(
+      this.requireRawSqlite(),
+      sourceId,
+      confirmed
+    )
+    if (deleted && localFilePath) {
+      await this.deleteLocalFile(localFilePath)
+    }
+    Logger.info('KnowledgeService', `Library source deleted: ${sourceId}`)
+  }
+
+  /** 当前 embedding 空间的身份，库复用用它判断向量可比性。 */
+  private embeddingSpaceIdentity(space: EmbeddingSpace): EmbeddingSpaceIdentity {
+    return { id: space.id, dimensions: space.dimensions }
+  }
+
+  /** 库复用边界需要的向量表读写，从 db 层注入。 */
+  private vectorTableAccess(): VectorTableAccess {
+    return {
+      read: (notebookId) => getNotebookVectorTable(notebookId),
+      ensure: (notebookId, dimensions) => createNotebookVectorTable(notebookId, dimensions)
+    }
+  }
+
+  private requireRawSqlite(): Database.Database {
+    const sqlite = getSqlite()
+    if (!sqlite) throw new Error('Database not initialized')
+    return sqlite
+  }
+
+  private newLibrarySourceId(): string {
+    return `lib_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+  }
+
+  private createLibrarySnapshot(fields: LibrarySnapshotFields): string {
+    const id = this.newLibrarySourceId()
+    this.insertLibrarySnapshot(id, fields)
+    return id
+  }
+
+  /** 插入一个库 snapshot 行。调用方负责在解析/内容确定之后、索引之前调用。 */
+  private insertLibrarySnapshot(id: string, fields: LibrarySnapshotFields): void {
+    insertLibrarySourceRow(this.requireRawSqlite(), id, this.snapshotRowFields(fields))
+  }
+
+  /** 原地补齐一份从没有过内容的 snapshot（迁移回填的解析失败来源）。 */
+  private updateLibrarySnapshot(id: string, fields: LibrarySnapshotFields): void {
+    updateLibrarySourceRow(this.requireRawSqlite(), id, this.snapshotRowFields(fields))
+  }
+
+  /** `LibrarySnapshotFields` → 落库字段；structure/metadata 与 drizzle 的 json 模式一致。 */
+  private snapshotRowFields(
+    fields: LibrarySnapshotFields
+  ): Parameters<typeof insertLibrarySourceRow>[2] {
+    return {
+      title: fields.title,
+      type: fields.type,
+      sourceUri: fields.sourceUri ?? null,
+      localFilePath: fields.localFilePath ?? null,
+      content: fields.content ?? null,
+      structure: fields.structure ? JSON.stringify(fields.structure) : null,
+      contentHash: fields.contentHash ?? null,
+      mimeType: fields.mimeType ?? null,
+      fileSize: fields.fileSize ?? null,
+      metadata: fields.metadata ? JSON.stringify(fields.metadata) : null
+    }
   }
 
   /**
@@ -1448,13 +1701,15 @@ export class KnowledgeService {
   }
 
   /**
-   * 来源文件变了：重新拷贝、解析并索引**同一个** documentId（#158）。
+   * 来源文件变了：重新拷贝、解析并索引**同一个** membership（#158）。
    *
    * 与 reindex 的区别：reindex 用的是已持久化的 content，而这里文件本身被改过，必须
-   * 重新解析。来源身份不变，所以历史 citation 与摘录仍然指向同一个来源。
+   * 重新解析。刷新是 copy-on-write（#99）：新开一个库 snapshot（新文件、新 id），旧
+   * snapshot 与它正在服务的别的 notebook 的文本/页偏移完全不变。membership 的 ID
+   * 不变，所以历史 citation 与摘录仍然指向同一个来源行。
    */
   async refreshDocumentFromFile(documentId: string, filePath: string): Promise<void> {
-    await this.ingestFile(documentId, filePath, { copyFrom: filePath }, 'reindex')
+    await this.ingestFile(documentId, filePath, { copyFrom: filePath, refresh: true }, 'reindex')
   }
 
   /**

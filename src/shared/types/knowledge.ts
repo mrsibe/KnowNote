@@ -21,6 +21,22 @@ export type KnowledgeChunk = Chunk
 export type DocumentType = 'file' | 'note' | 'url' | 'text'
 
 /**
+ * 库来源摘要（#99）。
+ *
+ * "从库中添加"只看得见这些字段：snapshot 的身份、能否复用已有向量。`membershipCount`
+ * 是已经挂载它的 notebook 数；`canReuseIndex` 表示目标 notebook 能直接复制一份已索引
+ * 的 donor（不调用 embedding），否则新成员先落成 pending，等用户显式重新索引。
+ */
+export interface LibrarySourceSummary {
+  id: string
+  title: string
+  type: DocumentType
+  mimeType: string | null
+  membershipCount: number
+  canReuseIndex: boolean
+}
+
+/**
  * 文档状态枚举
  */
 export type DocumentStatus = 'pending' | 'processing' | 'indexed' | 'failed'
