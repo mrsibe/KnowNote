@@ -22,6 +22,7 @@
 import type Database from 'better-sqlite3'
 import type { DocumentType, LibrarySourceSummary } from '../../shared/types/knowledge'
 import { safeIdentifier } from '../vectorstore/vectorTableSql'
+import { createChunksFtsSql, insertChunksFtsSql } from './ftsSql'
 
 /** 决定向量可比性的最小 space 身份：模型/维度一致才允许复制向量。 */
 export interface EmbeddingSpaceIdentity {
@@ -84,6 +85,7 @@ interface DonorRow {
   notebook_id: string
   space_id: string
   dimensions: number
+  chunk_count: number
 }
 
 const newId = (prefix: string): string =>
@@ -199,11 +201,12 @@ function findIndexedDonor(
   sqlite: Database.Database,
   sourceId: string,
   targetNotebookId: string,
-  currentSpace: EmbeddingSpaceIdentity
+  currentSpace: EmbeddingSpaceIdentity,
+  tables: VectorTableAccess
 ): DonorRow | undefined {
   const rows = sqlite
     .prepare(
-      `SELECT d.id AS document_id, d.notebook_id, s.space_id, s.dimensions
+      `SELECT d.id AS document_id, d.notebook_id, s.space_id, s.dimensions, d.chunk_count
        FROM documents d
        JOIN notebook_embedding_spaces s ON s.notebook_id = d.notebook_id
        WHERE d.source_id = ?
@@ -214,9 +217,37 @@ function findIndexedDonor(
     )
     .all(sourceId, targetNotebookId) as DonorRow[]
 
-  return rows.find(
-    (row) => row.space_id === currentSpace.id && row.dimensions === currentSpace.dimensions
-  )
+  return rows.find((row) => {
+    // Remote configuration can report unknown width (0) without inference. The
+    // exact space identity still has to match; validate the measured stored width
+    // against both vector tables and every embedding before copying anything.
+    if (row.space_id !== currentSpace.id) return false
+    if (currentSpace.dimensions !== 0 && row.dimensions !== currentSpace.dimensions) return false
+    const table = tables.read(row.notebook_id)
+    if (!table || table.dimensions !== row.dimensions) return false
+    const coverage = sqlite
+      .prepare(
+        `SELECT c.id, COUNT(e.id) AS embeddings, COUNT(v.embedding_id) AS vectors,
+              SUM(CASE WHEN e.notebook_id = ? AND e.dimensions = ? THEN 1 ELSE 0 END) AS compatible
+       FROM chunks c
+       LEFT JOIN embeddings e ON e.chunk_id = c.id
+       LEFT JOIN ${safeIdentifier(table.tableName)} v ON v.embedding_id = e.id AND v.chunk_id = c.id
+       WHERE c.document_id = ?
+       GROUP BY c.id`
+      )
+      .all(row.notebook_id, row.dimensions, row.document_id) as Array<{
+      id: string
+      embeddings: number
+      vectors: number
+      compatible: number
+    }>
+    return (
+      coverage.length === row.chunk_count &&
+      coverage.every(
+        (chunk) => chunk.embeddings === 1 && chunk.vectors === 1 && chunk.compatible === 1
+      )
+    )
+  })
 }
 
 /**
@@ -250,7 +281,7 @@ function resolveReuse(
   currentSpace: EmbeddingSpaceIdentity,
   tables: VectorTableAccess
 ): { donor: DonorRow | undefined; reusable: boolean } {
-  const donor = findIndexedDonor(sqlite, sourceId, targetNotebookId, currentSpace)
+  const donor = findIndexedDonor(sqlite, sourceId, targetNotebookId, currentSpace, tables)
   return {
     donor,
     reusable: donor ? targetAcceptsDonor(sqlite, targetNotebookId, donor, tables) : false
@@ -272,8 +303,7 @@ export function listLibrarySources(
       `SELECT ls.*,
               (SELECT COUNT(*) FROM documents d WHERE d.source_id = ls.id) AS membership_count
        FROM library_sources ls
-       WHERE ls.content IS NOT NULL
-         AND NOT EXISTS (
+       WHERE NOT EXISTS (
          SELECT 1 FROM documents d2
          WHERE d2.source_id = ls.id AND d2.notebook_id = ?
        )
@@ -287,6 +317,7 @@ export function listLibrarySources(
     type: row.type as DocumentType,
     mimeType: row.mime_type,
     membershipCount: row.membership_count,
+    hasContent: row.content !== null,
     canReuseIndex: resolveReuse(sqlite, row.id, notebookId, currentSpace, tables).reusable
   }))
 }
@@ -321,7 +352,10 @@ function insertMembership(
       source.content_hash,
       source.mime_type,
       source.file_size,
-      source.metadata,
+      JSON.stringify({
+        ...(source.metadata ? JSON.parse(source.metadata) : {}),
+        librarySnapshotOnly: true
+      }),
       source.id,
       status,
       chunkCount,
@@ -534,6 +568,8 @@ export function cloneIndexedMembership(
     )
   }
 
+  sqlite.exec(createChunksFtsSql())
+  const insertFts = sqlite.prepare(insertChunksFtsSql())
   const insertChunk = sqlite.prepare(
     `INSERT INTO chunks
        (id, document_id, notebook_id, content, chunk_index, start_offset, end_offset,
@@ -557,6 +593,7 @@ export function cloneIndexedMembership(
       chunk.token_count,
       nowSec
     )
+    insertFts.run(chunk.content, id, params.targetNotebookId, params.targetDocumentId)
   }
 
   const insertMapping = sqlite.prepare(
@@ -590,7 +627,9 @@ export function cloneIndexedMembership(
       embedding.dimensions,
       nowSec
     )
-    copyVector.run(embeddingId, chunkId, embedding.id)
+    if (copyVector.run(embeddingId, chunkId, embedding.id).changes !== 1) {
+      throw new Error(`Missing donor vector for chunk ${embedding.chunk_id}`)
+    }
   }
 
   return chunks.length

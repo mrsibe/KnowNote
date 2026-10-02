@@ -149,7 +149,13 @@ export default function LibrarySourceDialog({
                       {source.title}
                     </p>
                     <p className="text-xs text-subtle-foreground">
-                      {t(source.canReuseIndex ? 'libraryIndexReusable' : 'libraryIndexRequired')}
+                      {t(
+                        !source.hasContent
+                          ? 'libraryNotParsed'
+                          : source.canReuseIndex
+                            ? 'libraryIndexReusable'
+                            : 'libraryIndexRequired'
+                      )}
                     </p>
                     <p className="text-xs text-subtle-foreground">
                       {t('libraryMemberships', { count: source.membershipCount })}
@@ -158,7 +164,7 @@ export default function LibrarySourceDialog({
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={busy}
+                    disabled={busy || !source.hasContent}
                     onClick={() => void attach(source)}
                   >
                     {t('add')}

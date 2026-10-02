@@ -77,6 +77,7 @@
   "removeSource": "移除",
   "fromLibrary": "从资料库添加",
   "fromLibraryDesc": "复用已有来源，不复制文件。兼容的索引会直接复用，否则添加后需手动重新索引。",
+  "libraryNotParsed": "尚未解析，请重试原始导入，或先移除来源再删除库文件",
   "libraryNoSources": "暂无可添加的其他来源。请先在任意笔记本中导入来源。",
   "libraryIndexReusable": "已就绪，将复用现有索引",
   "libraryIndexRequired": "尚未索引，请使用「重新索引」启用检索",

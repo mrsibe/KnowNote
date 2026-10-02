@@ -575,6 +575,8 @@ export class KnowledgeService {
     })
     const isNewSnapshot = plan === 'new'
     const sourceId = isNewSnapshot ? this.newLibrarySourceId() : existing.sourceId!
+    let localFilePath = existing.localFilePath
+    let snapshotCommitted = false
 
     try {
       if (plan === 'keep') {
@@ -592,16 +594,13 @@ export class KnowledgeService {
         return
       }
 
-      let localFilePath = existing.localFilePath
       if (options.copyFrom) {
         advanceRun(runId, 'copying', 0)
         onProgress?.('copying', 0)
         // 文件归 snapshot 所有：新 snapshot 得到新文件名，不会覆盖共享的物理文件。
         localFilePath = await this.copyFileToKnowledgeDir(options.copyFrom, sourceId)
-        db.update(documents)
-          .set({ localFilePath, updatedAt: new Date() })
-          .where(eq(documents.id, documentId))
-          .run()
+        // Stage the file until parsing succeeds: failed refresh must keep the old
+        // canonical text and the matching old file together.
       }
 
       advanceRun(runId, 'parsing', 5)
@@ -643,6 +642,8 @@ export class KnowledgeService {
           title,
           type: docType,
           sourceId,
+          localFilePath,
+          status: 'processing',
           content: parseResult.content,
           // 结构随 source 一起持久化，重新索引才能不加解析地重建同一批块
           structure: parseResult.structure ?? undefined,
@@ -659,6 +660,7 @@ export class KnowledgeService {
         .where(eq(documents.id, documentId))
         .run()
 
+      snapshotCommitted = true
       await this.indexDocument(
         documentId,
         runId,
@@ -671,6 +673,30 @@ export class KnowledgeService {
       completeRun(runId)
     } catch (error) {
       const message = (error as Error).message
+      if (!snapshotCommitted && localFilePath) {
+        if (existing.content) {
+          // A failed refresh never publishes its staged file over the old snapshot.
+          if (localFilePath !== existing.localFilePath) await this.deleteLocalFile(localFilePath)
+        } else {
+          // Keep failed imports library-owned too, so detach/notebook deletion
+          // cannot strand a file with no path to confirmed permanent deletion.
+          const emptySnapshot: LibrarySnapshotFields = {
+            title: existing.title,
+            type: existing.type,
+            sourceUri: existing.sourceUri ?? filePath,
+            localFilePath,
+            mimeType: existing.mimeType ?? undefined,
+            fileSize: existing.fileSize ?? undefined,
+            metadata: existing.metadata ?? undefined
+          }
+          if (isNewSnapshot) this.insertLibrarySnapshot(sourceId, emptySnapshot)
+          else this.updateLibrarySnapshot(sourceId, emptySnapshot)
+          db.update(documents)
+            .set({ sourceId, localFilePath })
+            .where(eq(documents.id, documentId))
+            .run()
+        }
+      }
       // 保留 source 行与本地副本：来源身份在一次失败的 run 后依然存在，重试可以直接
       // 解析副本，不必再向用户要一次文件。
       db.update(documents)
@@ -1679,13 +1705,18 @@ export class KnowledgeService {
         documentId: documents.id,
         sourceUri: documents.sourceUri,
         sourceMtimeMs: documents.sourceMtimeMs,
-        sourceState: documents.sourceState
+        sourceState: documents.sourceState,
+        metadata: documents.metadata
       })
       .from(documents)
       .where(eq(documents.notebookId, notebookId))
       .all()
+      .map(({ metadata, ...row }) => ({
+        ...row,
+        snapshotOnly: metadata?.librarySnapshotOnly === true
+      }))
       .filter(
-        (row): row is WatchedDocument =>
+        (row): row is WatchedDocument & { snapshotOnly: boolean } =>
           typeof row.sourceUri === 'string' &&
           (row.sourceUri === folderPath || row.sourceUri.startsWith(prefix))
       )

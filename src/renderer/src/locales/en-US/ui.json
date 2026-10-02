@@ -79,6 +79,7 @@
   "removeSource": "Remove",
   "fromLibrary": "From library",
   "fromLibraryDesc": "Reuse an existing source without copying its file. Compatible indexes are reused; otherwise index it explicitly after adding.",
+  "libraryNotParsed": "Not parsed — retry the original import, or remove it to delete the library file",
   "libraryNoSources": "No other sources to add. Import a source in any notebook first.",
   "libraryIndexReusable": "Ready — existing index will be reused",
   "libraryIndexRequired": "Not indexed — use Reindex to enable search",

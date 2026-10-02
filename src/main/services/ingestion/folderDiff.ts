@@ -15,6 +15,8 @@ export interface WatchedDocument {
   sourceUri: string
   sourceMtimeMs: number | null
   sourceState: 'available' | 'missing' | 'changed'
+  /** Reused library snapshots are not enrolled in mutable-file watching. */
+  snapshotOnly?: boolean
 }
 
 export interface FolderDiff {
@@ -48,6 +50,8 @@ export function diffFolder(
       continue
     }
 
+    if (document.snapshotOnly) continue
+
     const mtimeChanged = document.sourceMtimeMs === null || document.sourceMtimeMs !== file.mtimeMs
     if (mtimeChanged) {
       changed.push(file)
@@ -56,6 +60,8 @@ export function diffFolder(
     }
   }
 
-  const missing = existing.filter((document) => !seen.has(document.sourceUri))
+  const missing = existing.filter(
+    (document) => !document.snapshotOnly && !seen.has(document.sourceUri)
+  )
   return { added, changed, missing, restored }
 }

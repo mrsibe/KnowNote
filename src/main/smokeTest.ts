@@ -28,7 +28,7 @@
 
 import Logger from '../shared/utils/logger'
 import { readFile, readdir } from 'fs/promises'
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, copyFileSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { net, BrowserWindow } from 'electron'
@@ -711,6 +711,102 @@ async function runChecks(): Promise<string[]> {
     'evidence lost the paragraph bbox needed to highlight it (#72)'
   )
   pass('DenseRetriever returns retrieved evidence with a page/block locator')
+
+  // Reuse must work through the real service, reader protocol and retriever, not
+  // just through isolated clone SQL (#99). The attach service's embedding backend
+  // throws if called, proving that sharing a ready index never re-embeds it.
+  const libraryA = queries.createNotebook('Library smoke A')
+  const libraryB = queries.createNotebook('Library smoke B')
+  const libraryDocA = await knowledge.addDocumentFromFile(libraryA.id, join(fixtures, 'sample.pdf'))
+  const sharedSource = knowledge.getDocument(libraryDocA)!
+  assert(
+    sharedSource.sourceId && sharedSource.localFilePath,
+    'import did not persist a library snapshot'
+  )
+  const librarySourceId = sharedSource.sourceId!
+  const libraryFile = sharedSource.localFilePath!
+  const originalBytes = await readFile(libraryFile)
+  const noEmbedding = new KnowledgeService(failingEmbeddingService())
+  const attached = await noEmbedding.attachLibrarySource(libraryB.id, librarySourceId)
+  assert(attached.indexed, 'matching library index was not reused')
+  assert(
+    knowledge.getDocument(attached.documentId)?.localFilePath === libraryFile,
+    'reuse copied the file'
+  )
+  const reused = await new DenseRetriever(fakeEmbeddingService()).search({
+    notebookId: libraryB.id,
+    query: 'sample query'
+  })
+  assert(reused.evidence.length > 0, 'reused vectors are not searchable')
+  const donorChunks = knowledge.getDocumentChunks(libraryDocA)
+  const reusedChunks = knowledge.getDocumentChunks(attached.documentId)
+  const donorLocator = resolveChunkProvenance(getDatabase(), donorChunks[0].id)!
+  const reusedLocator = resolveChunkProvenance(getDatabase(), reusedChunks[0].id)!
+  assert(
+    JSON.stringify(donorLocator.blocks.map(({ blockId: _id, ...span }) => span)) ===
+      JSON.stringify(reusedLocator.blocks.map(({ blockId: _id, ...span }) => span)),
+    'reuse changed page/span provenance'
+  )
+  assert(
+    (await net.fetch(documentUrl(attached.documentId))).ok,
+    'reused source is not readable through the document protocol'
+  )
+  pass(
+    'library reuse shares the file and preserves searchable vectors and page/span citations without embedding'
+  )
+
+  await knowledge.refreshDocumentFromFile(libraryDocA, join(fixtures, 'sample.md'))
+  const refreshedSourceId = knowledge.getDocument(libraryDocA)!.sourceId!
+  assert(refreshedSourceId !== librarySourceId, 'refresh mutated the shared snapshot')
+  assert(
+    (await readFile(libraryFile)).equals(originalBytes),
+    'refresh overwrote the shared library file'
+  )
+  assert(
+    knowledge.getDocument(attached.documentId)?.content === sharedSource.content,
+    'refresh changed the peer text'
+  )
+  await knowledge.deleteDocument(libraryDocA)
+  assert(existsSync(libraryFile), 'membership removal deleted a shared file')
+  const afterDetach = await new DenseRetriever(fakeEmbeddingService()).search({
+    notebookId: libraryB.id,
+    query: 'sample query'
+  })
+  assert(afterDetach.evidence.length > 0, 'removing one membership broke peer retrieval')
+  await queries.deleteNotebook(libraryA.id)
+  assert(existsSync(libraryFile), 'notebook deletion removed a shared file')
+  let refusedLibraryDelete = false
+  try {
+    await knowledge.deleteLibrarySource(librarySourceId, true)
+  } catch {
+    refusedLibraryDelete = true
+  }
+  assert(refusedLibraryDelete, 'permanent deletion accepted an attached source')
+  await queries.deleteNotebook(libraryB.id)
+  assert(
+    !knowledge.getDocument(attached.documentId),
+    'notebook deletion did not remove its memberships'
+  )
+  assert(
+    existsSync(libraryFile),
+    'last notebook deletion removed the library file without confirmation'
+  )
+  let refusedUnconfirmedDelete = false
+  try {
+    await knowledge.deleteLibrarySource(librarySourceId, false)
+  } catch {
+    refusedUnconfirmedDelete = true
+  }
+  assert(
+    refusedUnconfirmedDelete && existsSync(libraryFile),
+    'library deletion did not require confirmation'
+  )
+  await knowledge.deleteLibrarySource(librarySourceId, true)
+  assert(!existsSync(libraryFile), 'confirmed library deletion left the file behind')
+  await knowledge.deleteLibrarySource(refreshedSourceId, true)
+  pass(
+    'library refresh is copy-on-write; detach and notebook deletion preserve peers and library deletion requires confirmation'
+  )
 
   // --- the literal signal has its own index (#96) ----------------------------
   // FTS is written with the chunks and deleted with them, so a re-index must leave

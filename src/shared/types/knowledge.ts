@@ -33,6 +33,7 @@ export interface LibrarySourceSummary {
   type: DocumentType
   mimeType: string | null
   membershipCount: number
+  hasContent: boolean
   canReuseIndex: boolean
 }
 

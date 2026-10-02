@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import ts from 'typescript'
 
 /**
  * 库来源复用里「不调用 embedding」「只解除挂载」「不 unlink」这些约束。
@@ -14,38 +15,35 @@ const KNOWLEDGE = 'src/main/services/KnowledgeService.ts'
 const LIBRARY_MODULE = 'src/main/services/librarySources.ts'
 const QUERIES = 'src/main/db/queries.ts'
 
-/** 从 `signature` 处开始，按花括号配对取出整个方法体（跳过参数表里的对象类型）。 */
+/** Parse the actual method body, not an object-shaped return type. */
 function methodBody(source: string, signature: string): string {
-  const start = source.indexOf(signature)
-  assert.ok(start >= 0, `signature not found: ${signature}`)
-
-  // 先跳过参数表（对象类型字面量的 `{}` 不是方法体）。
-  let cursor = source.indexOf('(', start)
-  let paren = 0
-  for (; cursor < source.length; cursor++) {
-    if (source[cursor] === '(') paren++
-    else if (source[cursor] === ')') {
-      paren--
-      if (paren === 0) {
-        cursor++
-        break
-      }
+  const name = signature.match(/(\w+)\($/)?.[1]
+  assert.ok(name, `invalid signature: ${signature}`)
+  const file = ts.createSourceFile('guard.ts', source, ts.ScriptTarget.Latest, true)
+  let body: string | undefined
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isMethodDeclaration(node) || ts.isFunctionDeclaration(node)) &&
+      node.name?.getText(file) === name &&
+      node.body
+    ) {
+      body = node.body.getText(file)
     }
+    ts.forEachChild(node, visit)
   }
-
-  const open = source.indexOf('{', cursor)
-  assert.ok(open >= 0, `opening brace not found after: ${signature}`)
-
-  let depth = 0
-  for (let i = open; i < source.length; i++) {
-    if (source[i] === '{') depth++
-    else if (source[i] === '}') {
-      depth--
-      if (depth === 0) return source.slice(open, i + 1)
-    }
-  }
-  throw new Error(`unbalanced braces for: ${signature}`)
+  visit(file)
+  assert.ok(body, `method body not found: ${signature}`)
+  return body
 }
+
+test('the embedding guard inspects code after an object-shaped Promise return type', () => {
+  const body = methodBody(
+    'class Service { async attachLibrarySource(): Promise<{ indexed: boolean }> { await this.embedBatch(); } }',
+    'async attachLibrarySource('
+  )
+  assert.match(body, /this\.embedBatch\(\)/)
+  assert.doesNotMatch(body, /indexed: boolean/)
+})
 
 test('attaching a library source never reaches for the embedding provider', () => {
   const knowledge = readFileSync(KNOWLEDGE, 'utf8')

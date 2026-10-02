@@ -632,7 +632,7 @@ test('deleteLibrarySource refuses unconfirmed or attached sources and reports th
   assert.deepEqual(deleteLibrarySource(db, 'lib_1', true), { localFilePath: null, deleted: false })
 })
 
-test('a snapshot with no parsed content is hidden and cannot be reused', () => {
+test('an unparsed snapshot is visible for cleanup but cannot be reused', () => {
   const { db, tables } = fixture()
   addNotebook(db, 'nbA')
   // 迁移回填一个解析前就失败的来源：content 为 NULL。
@@ -654,10 +654,10 @@ test('a snapshot with no parsed content is hidden and cannot be reused', () => {
     NOW
   )
 
-  assert.deepEqual(
-    listLibrarySources(db, 'nbA', { id: SPACE_ID, dimensions: DIMENSIONS }, tables),
-    []
-  )
+  const unparsed = listLibrarySources(db, 'nbA', { id: SPACE_ID, dimensions: DIMENSIONS }, tables)
+  assert.equal(unparsed[0].id, 'lib_empty')
+  assert.equal(unparsed[0].hasContent, false)
+  assert.equal(unparsed[0].canReuseIndex, false)
   assert.throws(
     () =>
       attachLibrarySource(db, {
@@ -670,7 +670,7 @@ test('a snapshot with no parsed content is hidden and cannot be reused', () => {
     /no parsed content/
   )
 
-  // 重试成功后原地补齐，这份来源才重新出现在库里。
+  // Retry fills the snapshot and makes it attachable.
   updateLibrarySource(
     db,
     'lib_empty',
@@ -693,6 +693,7 @@ test('a snapshot with no parsed content is hidden and cannot be reused', () => {
     listed.map((s) => s.id),
     ['lib_empty']
   )
+  assert.equal(listed[0].hasContent, true)
   assert.equal(listed[0].canReuseIndex, false)
 })
 
@@ -864,4 +865,99 @@ test('refresh copy-on-write leaves the shared snapshot and its peers untouched',
     .get('lib_refreshed') as { content: string; local_file_path: string }
   assert.equal(refreshed.content, 'refreshed text')
   assert.notEqual(refreshed.local_file_path, original.local_file_path)
+})
+
+for (const missing of ['vector', 'metadata', 'chunk'] as const) {
+  test(`incomplete donor ${missing} coverage creates only a pending membership`, () => {
+    const { db, tables } = fixture()
+    addNotebook(db, 'nbA')
+    addNotebook(db, 'nbB')
+    addSnapshot(db, 'lib_1')
+    seedIndexedMembership(db, { documentId: 'docA', notebookId: 'nbA', sourceId: 'lib_1' })
+    if (missing === 'vector')
+      db.prepare('DELETE FROM vec_nbA WHERE embedding_id = ?').run('docA_e1')
+    if (missing === 'metadata') db.prepare('DELETE FROM embeddings WHERE id = ?').run('docA_e1')
+    if (missing === 'chunk') db.prepare('DELETE FROM chunks WHERE id = ?').run('docA_c1')
+    const currentSpace = { id: SPACE_ID, dimensions: DIMENSIONS }
+    assert.equal(listLibrarySources(db, 'nbB', currentSpace, tables)[0].canReuseIndex, false)
+    const result = attachLibrarySource(db, {
+      notebookId: 'nbB',
+      sourceId: 'lib_1',
+      currentSpace,
+      tables
+    })
+    assert.equal(result.indexed, false)
+    assert.equal(result.chunkCount, 0)
+    assert.equal(tables.read('nbB'), undefined)
+    db.close()
+  })
+}
+
+test('a membership being refreshed is not offered or used as a reusable donor', () => {
+  // The refresh window (#99 review): the membership already points at its new
+  // snapshot while the old index is still live. It must not be copied.
+  const { db, tables } = fixture()
+  addNotebook(db, 'nbA')
+  addNotebook(db, 'nbB')
+  addSnapshot(db, 'lib_1')
+  seedIndexedMembership(db, { documentId: 'docA', notebookId: 'nbA', sourceId: 'lib_1' })
+  db.prepare("UPDATE documents SET status = 'processing' WHERE id = 'docA'").run()
+
+  const currentSpace = { id: SPACE_ID, dimensions: DIMENSIONS }
+  assert.equal(listLibrarySources(db, 'nbB', currentSpace, tables)[0].canReuseIndex, false)
+  const result = attachLibrarySource(db, {
+    notebookId: 'nbB',
+    sourceId: 'lib_1',
+    currentSpace,
+    tables
+  })
+  assert.equal(result.indexed, false)
+  assert.equal(result.chunkCount, 0)
+  assert.equal(
+    count(db, "SELECT COUNT(*) AS c FROM chunks WHERE notebook_id = 'nbB'"),
+    0,
+    'a half-refreshed donor leaked its stale index into another notebook'
+  )
+  db.close()
+})
+
+test('remote unknown current width can reuse a complete donor with the exact persisted configuration identity', () => {
+  const { db, tables } = fixture()
+  addNotebook(db, 'nbA')
+  addNotebook(db, 'nbB')
+  addSnapshot(db, 'lib_1')
+  seedIndexedMembership(db, { documentId: 'docA', notebookId: 'nbA', sourceId: 'lib_1' })
+  const currentSpace = { id: SPACE_ID, dimensions: 0 }
+  assert.equal(listLibrarySources(db, 'nbB', currentSpace, tables)[0].canReuseIndex, true)
+  assert.equal(
+    attachLibrarySource(db, { notebookId: 'nbB', sourceId: 'lib_1', currentSpace, tables }).indexed,
+    true
+  )
+  db.close()
+})
+
+test('clone immediately indexes its chunks for sparse chat and marks attached sources snapshot-only', () => {
+  const { db, tables } = fixture()
+  addNotebook(db, 'nbA')
+  addNotebook(db, 'nbB')
+  addSnapshot(db, 'lib_1')
+  seedIndexedMembership(db, { documentId: 'docA', notebookId: 'nbA', sourceId: 'lib_1' })
+  const result = attachLibrarySource(db, {
+    notebookId: 'nbB',
+    sourceId: 'lib_1',
+    currentSpace: { id: SPACE_ID, dimensions: DIMENSIONS },
+    tables
+  })
+  const hits = db
+    .prepare(
+      "SELECT document_id FROM chunks_fts WHERE chunks_fts MATCH 'paragraph' AND notebook_id = 'nbB'"
+    )
+    .all() as Array<{ document_id: string }>
+  assert.equal(hits.length, 2)
+  assert.ok(hits.every((hit) => hit.document_id === result.documentId))
+  const row = db.prepare('SELECT metadata FROM documents WHERE id = ?').get(result.documentId) as {
+    metadata: string
+  }
+  assert.equal(JSON.parse(row.metadata).librarySnapshotOnly, true)
+  db.close()
 })

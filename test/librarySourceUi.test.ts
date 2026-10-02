@@ -30,6 +30,7 @@ test('library reuse IPC validates identities and requires explicit permanent-del
 
 test('library picker only offers permanent deletion for unused sources and never auto-reindexes', () => {
   const picker = read('src/renderer/src/components/notebook/source/LibrarySourceDialog.tsx')
+  assert.match(picker, /disabled=\{busy \|\| !source\.hasContent\}/)
   assert.match(picker, /source\.membershipCount === 0/)
   assert.match(picker, /deleteLibrarySource\(deleting\.id, true\)/)
   assert.match(picker, /ConfirmActionDialog/)
