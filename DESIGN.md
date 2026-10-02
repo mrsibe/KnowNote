@@ -235,7 +235,9 @@ Rules:
 - **Never invent a background colour.** `bg-white`, `bg-black`, `bg-gray-*`,
   `bg-slate-*`, `bg-[…]` and raw `oklch()`/`hsl()` in a component are all
   violations. If the surface you need is not in the table, the table is wrong —
-  extend it here.
+  extend it here. The one narrow, deliberate exception is the four [tool
+  fills](#tool-fills): a coloured card background on the Notes creation tools and
+  nothing else.
 - `surface-hover` and `surface-selected` are translucent so that they adapt to
   whatever they are drawn on. Do not add alpha to them again (`bg-surface-hover/50`
   is a bug).
@@ -271,6 +273,42 @@ literals rather than aliases, nothing rendered them (`Button` and `Badge`
 blue-tinted neutral in the palette. They have been deleted; do not reintroduce
 them — the `secondary` **variant** name is unrelated to a `--secondary` colour
 and is spelled with `bg-muted`.
+
+### Tool fills
+
+Implementation: `components/notebook/noteTools.ts` (the token on each tool),
+`assets/theme.css` (values and Tailwind mappings), and
+`components/notebook/NotePanel.tsx` (the only consumer).
+
+These four tokens exist for the Notes panel's creation tools — create note, mind
+map, quiz, Anki — which are the one place a **card** carries colour. They are not
+a surface tier, not an accent and not chart colours: a decorative pastel fill that
+lets the four action cards be told apart at a glance. The grid is `2 x 2`, in the
+order create note, mind map, quiz, Anki.
+
+| Token            | Tailwind          | Light                    | Dark                   | Tool        |
+| ---------------- | ----------------- | ------------------------ | ---------------------- | ----------- |
+| `--tool-note`    | `bg-tool-note`    | `oklch(0.935 0.045 250)` | `oklch(0.32 0.04 250)` | Create note |
+| `--tool-mindmap` | `bg-tool-mindmap` | `oklch(0.935 0.045 300)` | `oklch(0.32 0.04 300)` | Mind map    |
+| `--tool-quiz`    | `bg-tool-quiz`    | `oklch(0.935 0.045 150)` | `oklch(0.32 0.04 150)` | Quiz        |
+| `--tool-anki`    | `bg-tool-anki`    | `oklch(0.935 0.045 85)`  | `oklch(0.32 0.045 85)` | Anki        |
+
+Rules:
+
+- **Scope is exactly these four cards.** A fifth use — a badge, a tinted list row,
+  a status chip — is a rule change and belongs in this document before it belongs in
+  the code. `--chart-*` and `--primary` may not be borrowed for this either; the
+  chart guard stays as it is.
+- **Text and icons stay neutral.** The icon stays `text-muted-foreground` (T2,
+  neutral) and the label stays `text-foreground` (T1, `text-sm font-medium`). Colour
+  carries the tool's identity; the glyph and the word carry the meaning, so colour is
+  never the only carrier of anything.
+- **Low saturation on purpose.** Chroma stays at 0.04–0.05 so a pastel tile never
+  competes with the `--primary` action or a chart. They sit deliberately outside the
+  surface ladder: light values are a step _below_ `--surface-base` (a recessed tile)
+  and dark values a step _above_ it (a muted raise), so the card reads as a distinct
+  tile rather than as a panel in either scheme. Both stay above `--border`, so the
+  card's hairline is visible in both themes.
 
 ## Window chrome
 
@@ -1038,6 +1076,54 @@ In a narrow panel the dashed outline is visual noise around an already empty
 area, so a panel-level empty state opts out with `border-none`
 (`DocumentList`). The primitive keeps its dashed hairline — that opt-out is the
 exception, and it belongs to the panel that asked for it, not to `Empty`.
+
+### Tool card
+
+Implementation: `components/notebook/NotePanel.tsx`, over the four
+[Tool fills](#tool-fills). The Notes panel's creation grid is a `2 x 2` of these,
+rendered as the first block **inside** the panel's content scroll area so a short
+window scrolls the cards and the item list together. The panel header keeps the
+`Notes` title only — it carries no tool buttons.
+
+```tsx
+<div className="grid grid-cols-2 gap-2 p-2">
+  <Button
+    type="button"
+    variant="ghost"
+    className="group relative h-auto w-full overflow-hidden flex-col items-start justify-start gap-2 whitespace-normal rounded-lg border border-border bg-tool-note p-3 text-left hover:bg-tool-note"
+  >
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 bg-surface-hover opacity-0 transition-opacity group-hover:opacity-100"
+    />
+    <span className="relative flex flex-col items-start gap-2">
+      <Icon className="text-muted-foreground" />
+      <span className="text-sm font-medium text-foreground">{label}</span>
+    </span>
+  </Button>
+</div>
+```
+
+- **Density:** `p-3` card padding; `gap-2` between icon and label and between
+  cards. Height is content-driven (never `h-9`): a wrapped English label
+  ("Generate Anki Cards") sets the row height in a 260px panel.
+- **Radius:** `rounded-lg` (8px), the container radius — a card is a container even
+  though it is a button. Border `border border-border`; **no shadow**.
+- **Label never truncates:** `whitespace-normal` overrides `Button`'s default
+  `whitespace-nowrap`, which would clip the label at the panel minimum. The icon
+  sits above a left-aligned label (`flex-col items-start`), not beside it.
+- **Hover is composited, not swapped.** The tool fill is opaque, so
+  `hover:bg-surface-hover` would replace it; the sanctioned overlay from
+  [Raised card](#raised-card) adds the translucent fill on top instead, and
+  each card's matching `hover:bg-tool-*` keeps its opaque fill instead of the
+  `ghost` variant's default hover fill.
+- **Focus and disabled** come from `Button`:
+  `focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background`
+  and `disabled:pointer-events-none disabled:opacity-50`.
+- **No selected state.** These are actions, not a mode switch: pressing one runs and
+  returns (a blank note opens the editor; the other three generate an artifact), so
+  no card stays pressed. That state is unreachable and is recorded here rather than
+  invented.
 
 ### Form field
 

@@ -81,6 +81,22 @@
   --chart-4: oklch(0.8249 0.097 82.2597);
   --chart-5: oklch(0.6936 0.1635 318.2073);
 
+  /*
+   * Tool fills. Four low-saturation card backgrounds used **only** by the Notes
+   * panel's creation-tool cards (create note / mind map / quiz / Anki), in that
+   * order. This is a sanctioned, narrow exception to the surface ladder: the tool
+   * cards are a decorative grid of action buttons, and a pastel tint is what lets
+   * the four be told apart at a glance. Nothing else may use these tokens, they
+   * carry neutral text and icons (the icon stays T2 and the label T1), and they
+   * are not chart colours — see DESIGN.md, "Tool fills". Light values sit a step
+   * below `--surface-base` (a recessed tile); the dark values below are the
+   * matching muted raise above it.
+   */
+  --tool-note: oklch(0.935 0.045 250);
+  --tool-mindmap: oklch(0.935 0.045 300);
+  --tool-quiz: oklch(0.935 0.045 150);
+  --tool-anki: oklch(0.935 0.045 85);
+
   /* Elevation: floating layers, plus a small lift for knobs and handles. */
   --shadow-elevation: 0 6px 16px -4px hsl(0 0% 0% / 0.12), 0 2px 4px -1px hsl(0 0% 0% / 0.06);
   --shadow-control: 0 1px 2px 0 hsl(0 0% 0% / 0.16);
@@ -202,6 +218,14 @@
   --chart-4: oklch(0.8249 0.097 82.2597);
   --chart-5: oklch(0.6936 0.1635 318.2073);
 
+  /* Tool fills (Notes creation cards). A muted raise above `--surface-base`, and
+     above `--border` (0.3052), so the card's hairline stays visible in dark mode
+     the same way the light tile's does. */
+  --tool-note: oklch(0.32 0.04 250);
+  --tool-mindmap: oklch(0.32 0.04 300);
+  --tool-quiz: oklch(0.32 0.04 150);
+  --tool-anki: oklch(0.32 0.045 85);
+
   --shadow-elevation: 0 8px 22px -6px hsl(0 0% 0% / 0.55), 0 2px 4px -1px hsl(0 0% 0% / 0.35);
   --shadow-control: 0 1px 2px 0 hsl(0 0% 0% / 0.5);
 
@@ -259,6 +283,10 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-tool-note: var(--tool-note);
+  --color-tool-mindmap: var(--tool-mindmap);
+  --color-tool-quiz: var(--tool-quiz);
+  --color-tool-anki: var(--tool-anki);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

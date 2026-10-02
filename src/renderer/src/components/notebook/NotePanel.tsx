@@ -1,13 +1,15 @@
 import { ReactElement, useEffect, useRef, useState } from 'react'
-import { Save, Trash2, ArrowLeft, Network, FileText, ClipboardCheck, Layers } from 'lucide-react'
+import { Save, Trash2, ArrowLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useParams } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import { useItemStore } from '../../store/itemStore'
 import { useUIStore } from '../../store/uiStore'
 import { setupMindMapListeners } from '../../store/mindmapStore'
 import NoteEditor from './note/NoteEditor'
 import ItemList from './item/ItemList'
+import { NOTE_TOOLS, type NoteTool, type NoteToolId } from './noteTools'
 import QuizStartDialog, { QuizStartParams } from './quiz/QuizStartDialog'
 import AnkiConfigDialog from './anki/AnkiConfigDialog'
 import { ScrollArea } from '../ui/scroll-area'
@@ -134,6 +136,40 @@ function NoteEditorPanel({
         <NoteEditor noteId={note.id} content={editContent} onChange={setEditContent} />
       </div>
     </div>
+  )
+}
+
+// 创建工具卡片：图标在上、左对齐标签在下。悬停用合成填充（半透明 surface-hover
+// 叠在彩色卡片上），不替换彩色底色。这些是动作按钮，没有持续选中态。
+function NoteToolCard({
+  tool,
+  label,
+  onClick
+}: {
+  tool: NoteTool
+  label: string
+  onClick: () => void
+}): ReactElement {
+  const { Icon } = tool
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={onClick}
+      className={cn(
+        'group relative h-auto w-full overflow-hidden flex-col items-start justify-start gap-2 whitespace-normal rounded-lg border border-border p-3 text-left',
+        tool.surfaceClassName
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-surface-hover opacity-0 transition-opacity group-hover:opacity-100"
+      />
+      <span className="relative flex flex-col items-start gap-2">
+        <Icon className="text-muted-foreground" />
+        <span className="text-sm font-medium text-foreground">{label}</span>
+      </span>
+    </Button>
   )
 }
 
@@ -324,6 +360,14 @@ export default function NotePanel(): ReactElement {
     setShowQuizStartDialog(true)
   }
 
+  // 四张工具卡片的动作，按 noteTools 中的顺序引用
+  const toolActions: Record<NoteToolId, () => void> = {
+    note: handleCreateNote,
+    mindmap: handleGenerateMindMap,
+    quiz: handleGenerateQuiz,
+    anki: handleGenerateAnki
+  }
+
   // 开始生成答题
   const handleQuizStart = async (params: QuizStartParams) => {
     if (!notebookId) return
@@ -378,7 +422,7 @@ export default function NotePanel(): ReactElement {
       ) : (
         // 列表页面
         <>
-          {/* 顶部工具栏 */}
+          {/* 顶部标题栏：只保留标题，工具入口移到下方内容区 */}
           <PanelHeader
             draggable
             left={
@@ -386,54 +430,20 @@ export default function NotePanel(): ReactElement {
                 {t('notes')}
               </span>
             }
-            right={
-              <>
-                <Button
-                  onClick={handleGenerateMindMap}
-                  variant="ghost"
-                  size="icon"
-                  className="w-8 h-8"
-                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                  title={t('generateMindMap')}
-                >
-                  <Network className="w-4 h-4" />
-                </Button>
-                <Button
-                  onClick={handleGenerateQuiz}
-                  variant="ghost"
-                  size="icon"
-                  className="w-8 h-8"
-                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                  title={t('generateQuiz')}
-                >
-                  <ClipboardCheck className="w-4 h-4" />
-                </Button>
-                <Button
-                  onClick={handleGenerateAnki}
-                  variant="ghost"
-                  size="icon"
-                  className="w-8 h-8"
-                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                  title={t('generateAnki')}
-                >
-                  <Layers className="w-4 h-4" />
-                </Button>
-                <Button
-                  onClick={handleCreateNote}
-                  variant="ghost"
-                  size="icon"
-                  className="w-8 h-8"
-                  style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                  title={t('createNote')}
-                >
-                  <FileText className="w-4 h-4" />
-                </Button>
-              </>
-            }
           />
 
-          {/* Items 列表（笔记 + 思维导图等） */}
+          {/* 内容区：工具卡片与条目列表共用同一个滚动区，矮窗口下一起滚动 */}
           <ScrollArea className="flex-1">
+            <div className="grid grid-cols-2 gap-2 p-2">
+              {NOTE_TOOLS.map((tool) => (
+                <NoteToolCard
+                  key={tool.id}
+                  tool={tool}
+                  label={t(tool.labelKey)}
+                  onClick={toolActions[tool.id]}
+                />
+              ))}
+            </div>
             <ItemList
               items={items}
               currentNote={currentNote}

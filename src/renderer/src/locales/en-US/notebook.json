@@ -20,7 +20,7 @@
   "noteSaved": "Saved",
   "excerptSourceMissing": "This excerpt's source is no longer available.",
   "noNotesYet": "No notes yet",
-  "noNotesYetDesc": "Click the \"+\" button in the top right to create a note",
+  "noNotesYetDesc": "Use the Create Note card above to add a note",
   "unsavedChangesWarning": "You have unsaved changes. Are you sure you want to leave?",
   "unsavedChangesTitle": "Unsaved Changes",
   "unsavedChangesMessage": "You have unsaved changes. Are you sure you want to switch to another Notebook?",
